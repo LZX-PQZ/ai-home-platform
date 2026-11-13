@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, C, Card, DataDisclosure, Empty, LinkButton, Note, PageHeader } from "./ui";
+import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader } from "./ui";
 import {
   STAGES,
   demandHref,
@@ -13,8 +13,8 @@ import {
   statusLabel,
   statusTone,
 } from "./demand-list";
-import { listSourceNote, itemSourceBadge } from "./demand-source";
-import { useDemandList } from "./useDemandList";
+import { listSourceNote } from "./demand-source";
+import { useDemandList, type DemandListState } from "./useDemandList";
 
 /** 加载骨架：让「正在取数据」和「没有数据」在视觉上区分开 */
 function SkeletonCard() {
@@ -56,7 +56,12 @@ function StageBar({ status }: { status: Parameters<typeof stageIndex>[0] }) {
 }
 
 export function DemandListPanel() {
-  const { phase, items, source, error, reload } = useDemandList();
+  const { reload, ...state } = useDemandList();
+  return <DemandListContent state={state} reload={reload} />;
+}
+
+export function DemandListContent({ state, reload }: { state: DemandListState; reload: () => void }) {
+  const { phase, items, source, error } = state;
 
   return (
     <div>
@@ -64,20 +69,29 @@ export function DemandListPanel() {
         title="我的装修"
         subtitle="一份需求单贯穿澄清、匹配、报价与施工；点开任意一条可以看完整信息。"
         aside={
-          <LinkButton href="/owner/demand/chat">发起新需求</LinkButton>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={reload} disabled={phase === "loading"}>
+              {phase === "loading" ? "刷新中…" : "刷新列表"}
+            </Button>
+            <LinkButton href="/owner/demand/chat">发起新需求</LinkButton>
+          </div>
         }
       />
 
-      <DataDisclosure what="需求列表" />
-
       <div className="mt-3 mb-3 flex flex-wrap items-center gap-2">
-        <Badge tone={source === "live" ? "brand" : "accent"}>
+        <Badge tone={source === "live" ? "brand" : source === "mock" ? "accent" : "neutral"}>
           列表接口来源：{source ?? "未确认"}
         </Badge>
         <span className={C.meta}>
-          GET /api/demand · {phase === "ready" ? `${items.length} 条` : "加载中"}
+          {phase === "ready" ? `${items.length} 条需求` : phase === "loading" ? "加载中" : "加载失败"}
         </span>
       </div>
+
+      {phase === "ready" && (
+        <div className="mb-3">
+          <Note tone={source === "mock" ? "warn" : "info"}>{listSourceNote(source)}</Note>
+        </div>
+      )}
 
       {phase === "loading" && (
         <div className="grid gap-3 md:grid-cols-2">
@@ -100,7 +114,7 @@ export function DemandListPanel() {
       {phase === "ready" && items.length === 0 && (
         <Empty
           title="还没有需求单"
-          hint="先用一句话把房子的情况和想改的地方说清楚，AI 会帮您整理成结构化需求单"
+          hint="先描述房子的情况和想改的地方，再核对并填写需求单；当前聊天为 mock 固定追问。"
           action={
             <LinkButton href="/owner/demand/chat" size="sm">去发起需求</LinkButton>
           }
@@ -118,7 +132,6 @@ export function DemandListPanel() {
                     <p className={`!mb-0 ${C.meta}`}>需求编号：{demand.id}</p>
                   </div>
                   <Badge tone={statusTone(demand.status)}>{statusLabel(demand.status)}</Badge>
-                  {itemSourceBadge(demand) ? <Badge tone="neutral">{itemSourceBadge(demand)}</Badge> : null}
                 </div>
 
                 <p className="!mb-0 line-clamp-2 text-[13px] leading-relaxed text-[#4A5A60]">
@@ -166,7 +179,6 @@ export function DemandListPanel() {
             ))}
           </div>
 
-          <p className={`mt-4 !mb-0 ${C.meta}`}>{listSourceNote(source)}</p>
         </>
       )}
     </div>
