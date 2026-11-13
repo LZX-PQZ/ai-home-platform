@@ -16,12 +16,16 @@ const input = {
 
 const row = { id: "demand-test", ...input, status: "published", ownerId: "demo-owner", createdAt: new Date() };
 
-function fakeDb(rows: typeof row[] = [row]): DemandDatabase {
+function fakeDb(rows: typeof row[] = [row], related: Record<string, number> = {}): DemandDatabase {
   return {
     user: { upsert: async () => ({}) },
     demandOrder: {
       findMany: async () => rows as never,
-      findUnique: async ({ where }: { where: { id: string } }) => (rows.find((value) => value.id === where.id) ?? null) as never,
+      findUnique: async ({ where, include }: { where: { id: string }; include?: unknown }) => {
+        const found = rows.find((value) => value.id === where.id);
+        if (!found) return null as never;
+        return (include ? { ...found, _count: related } : found) as never;
+      },
       create: async () => row as never,
       update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
         const current = rows.find((value) => value.id === where.id);
@@ -77,8 +81,11 @@ test("需求更新和删除只允许 draft 或未签约 published，并保留来
 
   const demo = { ...row, id: "demo-demand" };
   const demoDb = fakeDb([demo]);
-  const deleted = await deleteDemand("demo-demand", demoDb);
-  assert.deepEqual(deleted, { kind: "ok", data: { id: "demo-demand", deleted: true }, source: "mock" });
+  assert.deepEqual(await updateDemand("demo-demand", input, demoDb), { kind: "demo-read-only" });
+  assert.deepEqual(await deleteDemand("demo-demand", demoDb), { kind: "demo-read-only" });
+
+  const relatedDb = fakeDb([row], { quotes: 1, schedules: 0, payments: 0, reviews: 0, tickets: 0 });
+  assert.deepEqual((await deleteDemand("demand-test", relatedDb)).kind, "has-related-records");
 
   for (const status of ["contracted", "in_progress", "completed"]) {
     const lockedDb = fakeDb([{ ...row, status }]);

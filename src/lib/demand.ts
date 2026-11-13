@@ -72,7 +72,10 @@ export async function createDemand(input: DemandInputDTO, db: DemandDatabase = p
 export type DemandMutationResult<T> =
   | { kind: "ok"; data: T; source: "mock" | "live" }
   | { kind: "not-found" }
-  | { kind: "invalid-state"; status: string };
+  | { kind: "invalid-state"; status: string }
+  | { kind: "demo-read-only" };
+
+export type DemandDeleteResult = DemandMutationResult<{ id: string; deleted: true }> | { kind: "has-related-records"; related: string[] };
 
 export async function updateDemand(
   id: string,
@@ -81,6 +84,7 @@ export async function updateDemand(
 ): Promise<DemandMutationResult<DemandDTO>> {
   const existing = await db.demandOrder.findUnique({ where: { id } });
   if (!existing) return { kind: "not-found" };
+  if (id === DEMO_DEMAND_ID) return { kind: "demo-read-only" };
   if (!isEditableDemandStatus(existing.status)) return { kind: "invalid-state", status: existing.status };
 
   const row = await db.demandOrder.update({ where: { id }, data: input });
@@ -90,10 +94,19 @@ export async function updateDemand(
 export async function deleteDemand(
   id: string,
   db: DemandDatabase = prisma,
-): Promise<DemandMutationResult<{ id: string; deleted: true }>> {
-  const existing = await db.demandOrder.findUnique({ where: { id } });
+): Promise<DemandDeleteResult> {
+  const existing = await db.demandOrder.findUnique({
+    where: { id },
+    include: { _count: { select: { quotes: true, schedules: true, payments: true, reviews: true, tickets: true } } },
+  });
   if (!existing) return { kind: "not-found" };
+  if (id === DEMO_DEMAND_ID) return { kind: "demo-read-only" };
   if (!isEditableDemandStatus(existing.status)) return { kind: "invalid-state", status: existing.status };
+
+  const related = Object.entries(existing._count)
+    .filter(([, count]) => count > 0)
+    .map(([name]) => name);
+  if (related.length > 0) return { kind: "has-related-records", related };
 
   await db.demandOrder.delete({ where: { id } });
   return { kind: "ok", data: { id, deleted: true }, source: demandSource([existing]) };

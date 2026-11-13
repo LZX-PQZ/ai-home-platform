@@ -52,6 +52,9 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     if (result.kind === "invalid-state") {
       return Response.json({ ok: false, error: { code: "INVALID_STATE", message: "当前状态的需求不可更新。" } }, { status: 409 });
     }
+    if (result.kind === "demo-read-only") {
+      return Response.json({ ok: false, error: { code: "DEMO_DEMAND_READ_ONLY", message: "演示需求只读，不能更新。" } }, { status: 409 });
+    }
     return dataResponse(result.data, result.source);
   } catch {
     return Response.json(
@@ -74,6 +77,15 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     }
     if (result.kind === "invalid-state") {
       return Response.json({ ok: false, error: { code: "INVALID_STATE", message: "当前状态的需求不可删除。" } }, { status: 409 });
+    }
+    if (result.kind === "demo-read-only") {
+      return Response.json({ ok: false, error: { code: "DEMO_DEMAND_READ_ONLY", message: "演示需求只读，不能删除。" } }, { status: 409 });
+    }
+    if (result.kind === "has-related-records") {
+      return Response.json(
+        { ok: false, error: { code: "DEMAND_HAS_RELATED_RECORDS", message: "需求已有报价、排期、付款、评价或工单记录，不能删除。" } },
+        { status: 409 },
+      );
     }
     return dataResponse(result.data, result.source);
   } catch {
