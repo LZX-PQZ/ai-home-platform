@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { Button } from "@/components/ui";
 import { MatchResults } from "@/features/b/MatchResults";
 import { loadMatches, matchLoadErrorMessage, MatchDemandNotFound } from "@/features/b/load-matches";
 
@@ -12,7 +13,7 @@ type MatchPageState =
   | { status: "error"; message: string };
 
 export function MatchPageContent({ state, retry }: { state: MatchPageState; retry: () => void }) {
-  if (state.status === "ready") return <MatchResults data={state.data} />;
+  if (state.status === "ready") return <div className="space-y-4"><div className="flex justify-end"><Button variant="secondary" onClick={retry}>刷新匹配</Button></div><MatchResults data={state.data} /></div>;
   return (
     <section className="card" aria-busy={state.status === "loading"}>
       <span className="badge">规则匹配 · 服务方接口当前提供模拟资料</span>
