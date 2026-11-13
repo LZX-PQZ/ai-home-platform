@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Button, C, Card, Empty, Note, PageHeader, SectionHead } from "./ui";
+import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
 import { GanttChart } from "@/components/GanttChart";
 import {
   activeTasks,
@@ -70,11 +70,7 @@ export function SchedulePanel({ id }: { id: string }) {
           title="接口没有返回任何工序"
           hint="排期由签约后生成（GET /api/schedule 目前返回固定演示数据）。本页不会凭空画一份计划出来。"
           action={
-            <Link href={`/owner/demand/${id}`} className="mt-1">
-              <Button size="sm" variant="secondary">
-                返回需求详情
-              </Button>
-            </Link>
+            <LinkButton href={`/owner/demand/${id}`} size="sm" variant="secondary">返回需求详情</LinkButton>
           }
         />
       </div>

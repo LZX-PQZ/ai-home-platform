@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Button, C, Card, Empty, Note, PageHeader, SectionHead } from "./ui";
+import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
 import { formatYuan } from "./demand-list";
 import {
   detectPaymentIssues,
@@ -64,11 +64,7 @@ export function PaymentsPanel({ id }: { id: string }) {
           title="接口没有返回付款节点"
           hint="付款计划在签约后由合同生成（GET /api/payment 目前返回演示数据）。本页不会自己编一套节点出来。"
           action={
-            <Link href={`/owner/demand/${id}`} className="mt-1">
-              <Button size="sm" variant="secondary">
-                返回需求详情
-              </Button>
-            </Link>
+            <LinkButton href={`/owner/demand/${id}`} size="sm" variant="secondary">返回需求详情</LinkButton>
           }
         />
       </div>

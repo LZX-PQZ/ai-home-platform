@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { Badge, Button, C, Card, Empty, Note, PageHeader } from "./ui";
+import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader } from "./ui";
 import {
   STAGES,
   demandTitle,
@@ -61,9 +60,7 @@ export function DemandListPanel() {
         title="我的装修"
         subtitle="一份需求单贯穿澄清、匹配、报价与施工；点开任意一条可以看完整信息。"
         aside={
-          <Link href="/owner/demand/chat">
-            <Button>发起新需求</Button>
-          </Link>
+          <LinkButton href="/owner/demand/chat">发起新需求</LinkButton>
         }
       />
 
@@ -99,9 +96,7 @@ export function DemandListPanel() {
           title="还没有需求单"
           hint="先用一句话把房子的情况和想改的地方说清楚，AI 会帮您整理成结构化需求单"
           action={
-            <Link href="/owner/demand/chat" className="mt-1">
-              <Button size="sm">去发起需求</Button>
-            </Link>
+            <LinkButton href="/owner/demand/chat" size="sm">去发起需求</LinkButton>
           }
         />
       )}
@@ -147,34 +142,16 @@ export function DemandListPanel() {
                 </dl>
 
                 <div className="mt-auto flex flex-wrap gap-2 pt-1">
-                  <Link href={`/owner/demand/${demand.id}`}>
-                    <Button size="sm">查看需求详情</Button>
-                  </Link>
+                  <LinkButton href={`/owner/demand/${demand.id}`} size="sm">查看需求详情</LinkButton>
                   {isPostContract(demand.status) ? (
                     <>
-                      <Link href={`/owner/project/${demand.id}`}>
-                        <Button variant="secondary" size="sm">
-                          施工进度
-                        </Button>
-                      </Link>
-                      <Link href={`/owner/payments/${demand.id}`}>
-                        <Button variant="ghost" size="sm">
-                          节点付款
-                        </Button>
-                      </Link>
+                      <LinkButton href={`/owner/project/${demand.id}`} variant="secondary" size="sm">施工进度</LinkButton>
+                      <LinkButton href={`/owner/payments/${demand.id}`} variant="ghost" size="sm">节点付款</LinkButton>
                     </>
                   ) : (
                     <>
-                      <Link href={`/owner/matches/${demand.id}`}>
-                        <Button variant="secondary" size="sm">
-                          找服务方
-                        </Button>
-                      </Link>
-                      <Link href={`/owner/quotes/${demand.id}`}>
-                        <Button variant="ghost" size="sm">
-                          看报价
-                        </Button>
-                      </Link>
+                      <LinkButton href={`/owner/matches/${demand.id}`} variant="secondary" size="sm">找服务方</LinkButton>
+                      <LinkButton href={`/owner/quotes/${demand.id}`} variant="ghost" size="sm">看报价</LinkButton>
                     </>
                   )}
                 </div>

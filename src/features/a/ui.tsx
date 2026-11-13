@@ -10,6 +10,8 @@
  * 约束：只写完整字面量类名，禁止拼接字符串，否则 Tailwind 扫描不到。
  */
 
+import Link from "next/link";
+
 /** 色板：与 app-preview 原型一致，墨绿主色 + 暖橙强调 + 中性灰 */
 export const T = {
   brand: "#0F6E56",
@@ -133,6 +135,13 @@ export function Badge({
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
+const BUTTON_VARIANT: Record<ButtonVariant, string> = {
+  primary: C.btnPrimary,
+  secondary: C.btnSecondary,
+  ghost: C.btnGhost,
+  danger: C.btnDanger,
+};
+
 export function Button({
   children,
   onClick,
@@ -150,21 +159,45 @@ export function Button({
   type?: "button" | "submit";
   className?: string;
 }) {
-  const map: Record<ButtonVariant, string> = {
-    primary: C.btnPrimary,
-    secondary: C.btnSecondary,
-    ghost: C.btnGhost,
-    danger: C.btnDanger,
-  };
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`${C.btnBase} ${map[variant]} ${size === "sm" ? C.btnSm : ""} ${className}`}
+      className={`${C.btnBase} ${BUTTON_VARIANT[variant]} ${size === "sm" ? C.btnSm : ""} ${className}`}
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * 长得像按钮的链接。
+ *
+ * 为什么不用 <Link><Button/></Link>：<a> 里套 <button> 是非法嵌套，
+ * 键盘用户会落到两个可聚焦元素上，屏幕阅读器会念成「按钮 链接」。
+ * 这里直接渲染成 <Link>（即 <a>），复用按钮的视觉类名。
+ */
+export function LinkButton({
+  href,
+  children,
+  variant = "primary",
+  size = "md",
+  className = "",
+}: {
+  href: string;
+  children: React.ReactNode;
+  variant?: ButtonVariant;
+  size?: "md" | "sm";
+  className?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`${C.btnBase} ${BUTTON_VARIANT[variant]} ${size === "sm" ? C.btnSm : ""} ${className}`}
+    >
+      {children}
+    </Link>
   );
 }
 
