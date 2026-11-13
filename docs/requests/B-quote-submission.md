@@ -1,11 +1,20 @@
 # B → D：报价查询与提交契约交接
 
 - 申请角色：B
-- D 处理状态：待讨论，尚未实现。
+- D 处理状态：PR #23 已冻结 QuoteSubmissionInput 及逐行计价规则；B 已接入提交校验与计价，身份、权限、幂等和写入尚未接通。
 - 用户场景：C 提交服务方报价后，A/B 按同一 demandId 查看已提交报价；不能由客户端冒充服务方或决定合计金额。
 - 共享文件：src/contracts/index.ts、docs/API.md、D 的鉴权/数据库/查询基础设施、共享 mock 和契约测试。由 D 修改，B 本 PR 不改这些文件。
 
-## 本次可独立交付
+## 2026-11-14：提交校验与计价
+
+- B 的 `src/lib/quote-engine/submission.ts` 使用公共 QuoteSubmissionInput 校验，再按 D 约定的 `Math.round(quantity * unitPriceCents)` 逐行计算人民币分，最后汇总；单行金额及累计金额均通过公共 Money 校验，溢出即拒绝。
+- 未知单价保持 null，行金额也为 null，不参与已知小计。零元明确保留为 0。同名但不同 code 的未知项目在 pendingItems 中保留多个名称条目。
+- 计价函数只返回现有 Quote 的需求、明细、工期、已知小计和待确认字段；不生成身份、报价 ID、submitted 状态或成功信封，不查询或写入数据库。
+- POST /api/quote：非法 JSON 返回 400/INVALID_JSON；公共输入校验失败、客户端伪造字段或计算溢出返回 400/VALIDATION_ERROR。合法输入仍返回 501/NOT_IMPLEMENTED，不返回计算结果或成功信封，不能称为提交成功。
+- GET /api/quote、现有报价展示和历史明细计算规则保持原行为；不会用新输入计价规则补齐历史报价的 null 金额。页面及 C 的提交表单本次未修改。
+- 请 D 在 docs/API.md 中同步上述校验行为；公共字段和成功响应形状没有新增。
+
+## 已交付的报价读取与对比
 
 B 的报价页通过已开放的 GET /api/demand/[id] 验证当前需求，再调用现有无参数 GET /api/quote，仅展示同一 demandId 的 submitted/accepted 报价；有报价时通过 GET /api/provider 取得服务方资料。三类数据分别标来源。GET /api/quote 继续沿用演示数据和 envelope(Quote[])；本次不新增查询参数协议，不接入写入。
 
@@ -17,14 +26,14 @@ B 的报价页通过已开放的 GET /api/demand/[id] 验证当前需求，再�
 
 ## 请求 D 确认并合入的字段与行为
 
-1. 新增公共 QuoteSubmissionInput，建议必填字段：demandId（复用 Id）、items（至少一项）、estimatedDays（正整数，天）。每项建议复用 QuoteItem 的 code、name、unit、quantity、unitPriceCents、note 字段；金额为人民币分的安全非负整数或 null，数量为有限非负数，code 在同一报价内唯一。字符串长度、数量精度及上限由 D 明确定义。
-2. 请求体不接受 providerId、amountCents、knownTotalCents、pendingItems、status。服务端从鉴权身份确定 providerId、确认该身份可报价，再按明细计算金额和待确认项，状态设为 submitted。
-3. 请明确小数数量乘整数分的舍入规则（建议逐项四舍五入到分后求和），约束安全整数范围，并确定固定套餐金额如何表达；未确认规则前 B 不自行推算现有明细金额。
-4. 提供授权的报价持久化服务，返回现有 envelope(Quote)；明确重复提交是新版本、更新还是 409，保证原子写入与失败不落库。C 的表单使用同一个公共输入契约。
-5. 提供按 demandId 读取需求与报价的服务或 API，建议 GET /api/quote?demandId=... 返回 envelope(Quote[])；已知需求暂无报价时为 []，未知需求 404，非法参数 400，无权限按 D 的统一约定处理。业主只读 submitted/accepted，草稿和已拒绝报价不进入当前对比。
+1. 已完成：公共 QuoteSubmissionInput 和 DTO，含 demandId、1–20 项 items、正安全整数 estimatedDays；行 code 唯一，quantity 为正数、至多三位小数且不超过 1,000,000，金额用安全整数分或 null。具体限制直接使用公共 Schema，不复制替代 DTO。
+2. 输入已禁止 providerId、amountCents、knownTotalCents、pendingItems、status 等服务端字段。仍需 D 明确并提供可复用的服务端身份入口：从已验证会话取得服务方 ID，不能信任请求体、普通请求头或角色导航。身份入口还需规定未登录/非服务方的 401/403 行为以及需求读取和报价权限。
+3. 已完成：按 PR #23 的逐行 Math.round 规则实现提交计价和安全整数校验；该规则仅用于新的提交输入，不推算历史报价未列明的金额。
+4. 按 D 的交接，报价路由、业务计价、幂等与 Prisma 写入由 B 实现。待服务端身份入口就绪后，B 将在本模块实现需求状态校验与原子写入；请 D 确认重复提交协议（新版本、更新还是 409，以及超时重试如何识别），涉及公共请求头/契约或 schema 由 D 合入。成功才返回 envelope(Quote) 和 submitted，失败不得落库。
+5. 报价查询仍待确定协议，建议 GET /api/quote?demandId=... 返回 envelope(Quote[])；已知需求暂无报价时为 []，未知需求 404，非法参数 400，无权限按 D 的统一约定处理。业主只读 submitted/accepted，草稿和已拒绝报价不进入当前对比。`findDemand` 的导入边界目前仅开放给 match 目录；请 D 同样允许 B 的 quote API/quote-engine 服务端模块复用，保持客户端不得导入需求数据库服务。
 6. 与已有 B-demand-query.md 一并明确需求和服务方名称查询的来源。真实查询失败不得回退为模拟成功；仅完整数据链路接通后标 live。
 
-## 建议请求示例（待 D 确认，不代表接口已支持）
+## 已冻结输入示例（目前合法输入仍返回 501，不会写入）
 
 ```json
 {
@@ -37,7 +46,7 @@ B 的报价页通过已开放的 GET /api/demand/[id] 验证当前需求，再�
 }
 ```
 
-成功响应复用 envelope(Quote)：服务端生成 id、providerId 和 submitted 状态，计算 knownTotalCents=1200000，保留清运的 null 单价/金额及 pendingItems=["垃圾清运"]。来源必须反映实际持久化和查询链路。
+本例计价结果为 knownTotalCents=1200000，保留清运的 null 单价/金额及 pendingItems=["垃圾清运"]；当前不会返回这些结果作为提交成功。后续成功响应复用 envelope(Quote)：服务端生成 id、providerId 和 submitted 状态，来源必须反映实际持久化和查询链路。
 
 ## 兼容与验收
 

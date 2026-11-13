@@ -113,7 +113,11 @@ test("报价 GET 保持公共契约和 mock 来源，POST 的 501 不视为成�
   assert.deepEqual(body.data.map((value) => value.knownTotalCents), [1200000, 1300000]);
   assert.equal(body.data[0].items[1].amountCents, null);
   assert.deepEqual(body.data[0].pendingItems, ["垃圾清运"]);
-  const failure = POST();
+  const failure = await POST(new Request("http://localhost/api/quote", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ demandId: demoDemand.id, estimatedDays: 10, items: [{ code: "test", name: "测试", unit: "job", quantity: 1, unitPriceCents: 100, note: "" }] }),
+  }));
   assert.equal(failure.status, 501);
   assert.equal((await failure.json()).ok, false);
 });
