@@ -100,11 +100,13 @@ test("网络失败后用户可重试，不自动重复请求", async (t) => {
   assert.equal(request.mock.callCount(), 2);
 });
 
-test("加载和失败状态没有虚假的来源说明或旧需求链接", () => {
+test("加载时提示可能包含模拟数据，加载和失败均不提前断言来源或展示旧需求链接", () => {
   const loading = render({ phase: "loading", items: [], source: null, error: null });
   assert.match(loading, /加载中/);
   assert.match(loading, /刷新中…/);
-  assert.doesNotMatch(loading, /模拟数据|真实数据库|查看需求详情/);
+  assert.match(loading, /本页数据可能包含模拟数据，加载完成后显示具体来源/);
+  assert.match(loading, /列表接口来源：未确认/);
+  assert.doesNotMatch(loading, /本次列表标记为 mock|真实数据库|查看需求详情/);
   const failed = render({ phase: "failed", items: [], source: null, error: "测试失败" });
   assert.match(failed, /加载失败/);
   assert.match(failed, /role="alert"/);

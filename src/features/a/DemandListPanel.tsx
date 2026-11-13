@@ -94,10 +94,13 @@ export function DemandListContent({ state, reload }: { state: DemandListState; r
       )}
 
       {phase === "loading" && (
-        <div className="grid gap-3 md:grid-cols-2">
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
+        <>
+          <p className={C.meta} role="status">本页数据可能包含模拟数据，加载完成后显示具体来源。</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        </>
       )}
 
       {phase === "failed" && (
