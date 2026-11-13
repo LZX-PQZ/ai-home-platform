@@ -31,6 +31,46 @@ export const Quote = z.object({
   knownTotalCents: Money, pendingItems: z.array(z.string()), estimatedDays: z.number().int().positive(),
   status: z.enum(["draft", "submitted", "accepted", "rejected"]),
 });
+const QUOTE_SUBMISSION_MAX_ITEMS = 20;
+const QUOTE_SUBMISSION_MAX_NAME_LENGTH = 100;
+const QUOTE_SUBMISSION_MAX_NOTE_LENGTH = 1000;
+const QUOTE_SUBMISSION_MAX_QUANTITY = 1_000_000;
+
+function hasAtMostThreeDecimalPlaces(value: number) {
+  const [coefficient, exponentText] = value.toString().toLowerCase().split("e");
+  const exponent = exponentText ? Number(exponentText) : 0;
+  const decimalDigits = coefficient.split(".")[1]?.length ?? 0;
+  return Math.max(0, decimalDigits - exponent) <= 3;
+}
+
+export const QuoteSubmissionItemInput = z.object({
+  code: z.string().trim().min(1).max(100),
+  name: z.string().trim().min(1).max(QUOTE_SUBMISSION_MAX_NAME_LENGTH),
+  unit: QuoteItem.shape.unit,
+  quantity: z.number().finite().positive().safe()
+    .max(QUOTE_SUBMISSION_MAX_QUANTITY)
+    .refine(hasAtMostThreeDecimalPlaces, { message: "数量最多保留三位小数" }),
+  unitPriceCents: Money.nullable(),
+  note: z.string().trim().max(QUOTE_SUBMISSION_MAX_NOTE_LENGTH),
+}).strict();
+
+export const QuoteSubmissionInput = z.object({
+  demandId: Id.refine(value => value.trim().length > 0),
+  items: QuoteSubmissionItemInput.array().min(1).max(QUOTE_SUBMISSION_MAX_ITEMS),
+  estimatedDays: z.number().int().positive().safe(),
+}).strict().superRefine((value, context) => {
+  const codes = new Set<string>();
+  value.items.forEach((item, index) => {
+    if (codes.has(item.code)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items", index, "code"],
+        message: "报价明细 code 必须唯一",
+      });
+    }
+    codes.add(item.code);
+  });
+});
 export const ScheduleTask = z.object({
   id: Id, name: z.string(), startDay: z.number().int().nonnegative(),
   durationDays: z.number().int().positive(), dependsOn: z.array(Id),
@@ -57,6 +97,8 @@ export type DemandInputDTO = z.infer<typeof DemandInput>;
 export type DemandStatus = DemandDTO["status"];
 export type ProviderDTO = z.infer<typeof Provider>;
 export type QuoteDTO = z.infer<typeof Quote>;
+export type QuoteSubmissionItemInputDTO = z.infer<typeof QuoteSubmissionItemInput>;
+export type QuoteSubmissionInputDTO = z.infer<typeof QuoteSubmissionInput>;
 export type ScheduleDTO = z.infer<typeof Schedule>;
 export type ChatInputDTO = z.infer<typeof ChatInput>;
 export type ChatResultDTO = z.infer<typeof ChatResult>;
