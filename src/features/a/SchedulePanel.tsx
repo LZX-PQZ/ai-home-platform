@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
+import { Badge, Button, C, Card, DataDisclosure, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
+import { demandHref } from "./demand-list";
 import { GanttChart } from "@/components/GanttChart";
 import {
   activeTasks,
@@ -34,6 +35,7 @@ export function SchedulePanel({ id }: { id: string }) {
     return (
       <div>
         <PageHeader title="施工进度" subtitle={`正在读取需求 ${id} 的排期…`} />
+        <DataDisclosure what="排期" />
         <Card className="animate-pulse">
           <div className="mb-4 h-4 w-1/3 rounded bg-[#EDF2F3]" />
           <div className="grid gap-2">
@@ -50,6 +52,7 @@ export function SchedulePanel({ id }: { id: string }) {
     return (
       <div>
         <PageHeader title="施工进度" subtitle="读取排期失败" />
+        <DataDisclosure what="排期" />
         <Note tone="danger" title="接口请求失败">
           <p>{error}</p>
           <div className="mt-2">
@@ -66,11 +69,12 @@ export function SchedulePanel({ id }: { id: string }) {
     return (
       <div>
         <PageHeader title="施工进度" subtitle="这条需求还没有排期" />
+        <DataDisclosure what="排期" />
         <Empty
           title="接口没有返回任何工序"
           hint="排期由签约后生成（GET /api/schedule 目前返回固定演示数据）。本页不会凭空画一份计划出来。"
           action={
-            <LinkButton href={`/owner/demand/${id}`} size="sm" variant="secondary">返回需求详情</LinkButton>
+            <LinkButton href={demandHref(id)} size="sm" variant="secondary">返回需求详情</LinkButton>
           }
         />
       </div>
@@ -104,6 +108,8 @@ export function SchedulePanel({ id }: { id: string }) {
           </Badge>
         }
       />
+
+      <DataDisclosure what="排期" />
 
       {mismatch ? (
         <div className="mb-4">

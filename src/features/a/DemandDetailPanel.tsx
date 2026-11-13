@@ -1,8 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
-import { demandTitle, findDemand, formatBudget, isPostContract, statusLabel, statusTone } from "./demand-list";
+import { Badge, Button, C, Card, DataDisclosure, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
+import {
+  demandTitle,
+  findDemand,
+  formatBudget,
+  isPostContract,
+  paymentsHref,
+  projectHref,
+  statusLabel,
+  statusTone,
+} from "./demand-list";
 import { renovationLabel } from "./demand-chat";
 import { useDemandList } from "./useDemandList";
 
@@ -18,6 +27,7 @@ export function DemandDetailPanel({ id }: { id: string }) {
     return (
       <div>
         <PageHeader title="需求详情" subtitle={`正在读取需求 ${id}…`} />
+        <DataDisclosure what="需求" />
         <Card className="animate-pulse">
           <div className="mb-3 h-4 w-1/2 rounded bg-[#EDF2F3]" />
           <div className="mb-2 h-3 w-full rounded bg-[#F4F7F8]" />
@@ -31,6 +41,7 @@ export function DemandDetailPanel({ id }: { id: string }) {
     return (
       <div>
         <PageHeader title="需求详情" subtitle="读取需求失败" />
+        <DataDisclosure what="需求" />
         <Note tone="danger" title="接口请求失败">
           <p>{error}</p>
           <div className="mt-2">
@@ -47,6 +58,7 @@ export function DemandDetailPanel({ id }: { id: string }) {
     return (
       <div>
         <PageHeader title="需求详情" subtitle="没有找到这条需求" />
+        <DataDisclosure what="需求" />
         <Empty
           title={`接口未返回需求「${id}」`}
           hint="GET /api/demand 当前只返回演示需求；按 ID 查询的接口由 D 负责，尚未实现。本页不会用其他样例数据冒充这条需求。"
@@ -71,6 +83,8 @@ export function DemandDetailPanel({ id }: { id: string }) {
         subtitle={`需求编号 ${demand.id} · 来源 ${source ?? "未知"}`}
         aside={<Badge tone={statusTone(demand.status)}>{statusLabel(demand.status)}</Badge>}
       />
+
+      <DataDisclosure what="需求" />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <Card>
@@ -101,8 +115,8 @@ export function DemandDetailPanel({ id }: { id: string }) {
               需求已结构化，接着去找匹配的服务方；这两页由 B 负责，用同一个需求 ID 打开。
             </p>
             <div className="grid gap-2">
-              <LinkButton href={`/owner/matches/${demand.id}`} className="w-full">匹配服务方</LinkButton>
-              <LinkButton href={`/owner/quotes/${demand.id}`} variant="secondary" className="w-full">查看报价对比</LinkButton>
+              <LinkButton href={`/owner/matches/${encodeURIComponent(demand.id)}`} className="w-full">匹配服务方</LinkButton>
+              <LinkButton href={`/owner/quotes/${encodeURIComponent(demand.id)}`} variant="secondary" className="w-full">查看报价对比</LinkButton>
               <LinkButton href="/owner/demand/chat" variant="ghost" className="w-full">继续补充需求</LinkButton>
             </div>
           </Card>
@@ -116,8 +130,8 @@ export function DemandDetailPanel({ id }: { id: string }) {
               排期由签约后的施工方提交，付款按节点走；两页都只读接口数据，不做本地假状态。
             </p>
             <div className="grid gap-2">
-              <LinkButton href={`/owner/project/${demand.id}`} variant={isPostContract(demand.status) ? "primary" : "secondary"} className="w-full">查看施工进度</LinkButton>
-              <LinkButton href={`/owner/payments/${demand.id}`} variant="secondary" className="w-full">查看节点付款</LinkButton>
+              <LinkButton href={projectHref(demand.id)} variant={isPostContract(demand.status) ? "primary" : "secondary"} className="w-full">查看施工进度</LinkButton>
+              <LinkButton href={paymentsHref(demand.id)} variant="secondary" className="w-full">查看节点付款</LinkButton>
             </div>
             {!isPostContract(demand.status) ? (
               <div className="mt-3">

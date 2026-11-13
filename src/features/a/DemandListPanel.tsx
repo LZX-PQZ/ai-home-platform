@@ -1,11 +1,14 @@
 "use client";
 
-import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader } from "./ui";
+import { Badge, Button, C, Card, DataDisclosure, Empty, LinkButton, Note, PageHeader } from "./ui";
 import {
   STAGES,
+  demandHref,
   demandTitle,
   formatBudget,
   isPostContract,
+  paymentsHref,
+  projectHref,
   stageIndex,
   statusLabel,
   statusTone,
@@ -64,7 +67,9 @@ export function DemandListPanel() {
         }
       />
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <DataDisclosure what="需求列表" />
+
+      <div className="mt-3 mb-3 flex flex-wrap items-center gap-2">
         <Badge tone={source === "live" ? "brand" : "accent"}>
           列表接口来源：{source ?? "未确认"}
         </Badge>
@@ -142,16 +147,16 @@ export function DemandListPanel() {
                 </dl>
 
                 <div className="mt-auto flex flex-wrap gap-2 pt-1">
-                  <LinkButton href={`/owner/demand/${demand.id}`} size="sm">查看需求详情</LinkButton>
+                  <LinkButton href={demandHref(demand.id)} size="sm">查看需求详情</LinkButton>
                   {isPostContract(demand.status) ? (
                     <>
-                      <LinkButton href={`/owner/project/${demand.id}`} variant="secondary" size="sm">施工进度</LinkButton>
-                      <LinkButton href={`/owner/payments/${demand.id}`} variant="ghost" size="sm">节点付款</LinkButton>
+                      <LinkButton href={projectHref(demand.id)} variant="secondary" size="sm">施工进度</LinkButton>
+                      <LinkButton href={paymentsHref(demand.id)} variant="ghost" size="sm">节点付款</LinkButton>
                     </>
                   ) : (
                     <>
-                      <LinkButton href={`/owner/matches/${demand.id}`} variant="secondary" size="sm">找服务方</LinkButton>
-                      <LinkButton href={`/owner/quotes/${demand.id}`} variant="ghost" size="sm">看报价</LinkButton>
+                      <LinkButton href={`/owner/matches/${encodeURIComponent(demand.id)}`} variant="secondary" size="sm">找服务方</LinkButton>
+                      <LinkButton href={`/owner/quotes/${encodeURIComponent(demand.id)}`} variant="ghost" size="sm">看报价</LinkButton>
                     </>
                   )}
                 </div>

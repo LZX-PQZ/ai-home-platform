@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
-import { formatYuan } from "./demand-list";
+import { Badge, Button, C, Card, DataDisclosure, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
+import { demandHref, formatYuan, projectHref } from "./demand-list";
 import {
   detectPaymentIssues,
   paymentSummary,
@@ -28,6 +28,7 @@ export function PaymentsPanel({ id }: { id: string }) {
     return (
       <div>
         <PageHeader title="节点付款" subtitle={`正在读取需求 ${id} 的付款计划…`} />
+        <DataDisclosure what="付款节点" />
         <Card className="animate-pulse">
           <div className="mb-4 h-4 w-1/3 rounded bg-[#EDF2F3]" />
           <div className="grid gap-3">
@@ -44,6 +45,7 @@ export function PaymentsPanel({ id }: { id: string }) {
     return (
       <div>
         <PageHeader title="节点付款" subtitle="读取付款计划失败" />
+        <DataDisclosure what="付款节点" />
         <Note tone="danger" title="接口请求失败">
           <p>{error}</p>
           <div className="mt-2">
@@ -60,11 +62,12 @@ export function PaymentsPanel({ id }: { id: string }) {
     return (
       <div>
         <PageHeader title="节点付款" subtitle="这条需求还没有付款计划" />
+        <DataDisclosure what="付款节点" />
         <Empty
           title="接口没有返回付款节点"
           hint="付款计划在签约后由合同生成（GET /api/payment 目前返回演示数据）。本页不会自己编一套节点出来。"
           action={
-            <LinkButton href={`/owner/demand/${id}`} size="sm" variant="secondary">返回需求详情</LinkButton>
+            <LinkButton href={demandHref(id)} size="sm" variant="secondary">返回需求详情</LinkButton>
           }
         />
       </div>
@@ -80,7 +83,7 @@ export function PaymentsPanel({ id }: { id: string }) {
   return (
     <div>
       <div className="mb-3">
-        <Link href={`/owner/project/${id}`} className="text-[13px] font-medium text-[#0F6E56]">
+        <Link href={projectHref(id)} className="text-[13px] font-medium text-[#0F6E56]">
           ← 返回施工进度
         </Link>
       </div>
@@ -90,6 +93,8 @@ export function PaymentsPanel({ id }: { id: string }) {
         subtitle={`需求 ${id} · ${summary.count} 个节点 · 数据来源 ${source ?? "未知"}`}
         aside={allSimulated ? <Badge tone="accent">全部为模拟数据</Badge> : null}
       />
+
+      <DataDisclosure what="付款节点" />
 
       {mismatch ? (
         <div className="mb-4">

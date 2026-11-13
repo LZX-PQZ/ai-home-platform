@@ -262,3 +262,17 @@ export function Empty({
     </div>
   );
 }
+
+/**
+ * 数据披露（首屏静态）：无论接口处于哪个加载阶段都会渲染，
+ * 保证首屏 HTML 里就有「模拟」字样 —— 这是冒烟检查的要求，
+ * 也是「不冒充真实数据」原则的一部分。what 填页面主题，如「排期」「付款节点」。
+ */
+export function DataDisclosure({ what }: { what: string }) {
+  return (
+    <p className={`!mb-0 ${C.meta}`}>
+      数据说明：本页{what}来自演示接口（模拟数据），真实来源以页面加载后的标识为准；
+      接口未返回的信息不会出现在页面上。
+    </p>
+  );
+}

@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { DemandDTO } from "../src/contracts";
 import {
+  demandHref,
+  paymentsHref,
+  projectHref,
   demandTitle,
   findDemand,
   isPostContract,
@@ -88,4 +91,11 @@ test("只有签约之后才露出施工与付款入口，避免业主点进去�
   assert.equal(isPostContract("contracted"), true);
   assert.equal(isPostContract("in_progress"), true);
   assert.equal(isPostContract("completed"), true);
+});
+
+test("链接里的需求 ID 一律 encodeURIComponent，特殊字符不会生成非法 URL", () => {
+  assert.equal(demandHref("d-1"), "/owner/demand/d-1");
+  assert.equal(projectHref("d 1"), "/owner/project/d%201");
+  assert.equal(paymentsHref("d/1"), "/owner/payments/d%2F1");
+  assert.equal(demandHref("需求甲"), "/owner/demand/" + encodeURIComponent("需求甲"));
 });

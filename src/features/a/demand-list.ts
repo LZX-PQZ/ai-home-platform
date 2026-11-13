@@ -68,3 +68,20 @@ export function stageIndex(status: DemandDTO["status"]): number {
 export function isPostContract(status: DemandDTO["status"]): boolean {
   return status === "contracted" || status === "in_progress" || status === "completed";
 }
+
+/**
+ * 链接里的需求 ID 一律 encodeURIComponent（与 B/C 的做法一致）。
+ * ID 目前是 cuid，但契约只约束非空字符串，未来若允许中文或特殊字符，
+ * 不转义会直接生成非法 URL。
+ */
+export function demandHref(id: string): string {
+  return `/owner/demand/${encodeURIComponent(id)}`;
+}
+
+export function projectHref(id: string): string {
+  return `/owner/project/${encodeURIComponent(id)}`;
+}
+
+export function paymentsHref(id: string): string {
+  return `/owner/payments/${encodeURIComponent(id)}`;
+}
