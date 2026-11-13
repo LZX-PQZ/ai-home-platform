@@ -73,4 +73,6 @@ fontFamily: { sans: ['system-ui', '"Microsoft YaHei"', "sans-serif"] },
 
 ## 六、过渡期方案（D 未合并前）
 
-A 已在 `src/features/a/ui.tsx` 内自建同名 API 的组件，类名常量集中在 `C` 与 `T`。D 落地全局 token 后，A 只需把该文件的类名替换为语义类（`bg-brand` 等），**调用方零改动**。B/C 可暂时直接 import `@/features/a/ui`（只读复用，不修改），避免三套样式并行。
+A 已在 `src/features/a/ui.tsx` 内自建同名 API 的组件，类名常量集中在 `C` 与 `T`，但**仅限 A 自己的页面使用**——B/C 不得跨模块 import `@/features/a/ui`（跨角色 import 会违反 `scripts/ownership.mjs` 的边界规则，「只读复用」也不能绕过检查）。
+
+正确路径：**D 先把 Button / Card / Badge / Field / Note / Empty 放入 `src/components/ui/`（共享 ui 归 D），然后 B/C 从 `@/components/ui` 复用**。在 D 落地之前，B/C 维持现有样式不动，避免三套样式并行、也避免违规导入；A 侧组件的接口签名以本文件第二节为准，D 迁移时保持一致即可，A 迁移到全局组件的改动量为零。

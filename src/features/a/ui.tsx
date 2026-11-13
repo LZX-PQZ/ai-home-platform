@@ -58,7 +58,7 @@ export const C = {
   label: "grid gap-1.5 text-[12.5px]",
   labelText: "font-medium text-[#4A5A60]",
   input:
-    "w-full rounded-[9px] border border-[#E2E9EB] bg-white px-3 py-2 text-[13.5px] text-[#16242B] outline-none placeholder:text-[#A8B4B8] focus:border-[#0F6E56] focus:ring-2 focus:ring-[#0F6E56]/12",
+    "w-full rounded-[9px] border border-[#E2E9EB] bg-white px-3 py-2 text-[13.5px] text-[#16242B] outline-none placeholder:text-[#A8B4B8] focus:border-[#0F6E56] focus:ring-2 focus:ring-[#0F6E561F]",
 
   note: "rounded-[10px] px-3 py-2.5 text-[12.5px] leading-relaxed",
   noteWarn: "bg-[#FEF6E7] text-[#8A5A06]",
@@ -68,6 +68,27 @@ export const C = {
 } as const;
 
 /* ---------- 基础组件 ---------- */
+
+/** 页面头部：标题 + 说明 + 右侧动作，统一所有业主端页面的开屏样式 */
+export function PageHeader({
+  title,
+  subtitle,
+  aside,
+}: {
+  title: string;
+  subtitle?: string;
+  aside?: React.ReactNode;
+}) {
+  return (
+    <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className={`!mb-1 ${C.pageTitle}`}>{title}</h1>
+        {subtitle ? <p className={`!mb-0 ${C.pageSub}`}>{subtitle}</p> : null}
+      </div>
+      {aside}
+    </header>
+  );
+}
 
 export function Card({
   children,
