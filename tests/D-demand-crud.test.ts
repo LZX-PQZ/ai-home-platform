@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { POST } from "../src/app/api/demand/route";
-import { GET as detailGET } from "../src/app/api/demand/[id]/route";
-import { createDemand, findDemand, listDemands, type DemandDatabase } from "../src/lib/demand";
+import { DELETE as detailDELETE, GET as detailGET, PUT as detailPUT } from "../src/app/api/demand/[id]/route";
+import { createDemand, deleteDemand, findDemand, listDemands, updateDemand, type DemandDatabase } from "../src/lib/demand";
 
 const input = {
   description: "测试需求：浴室防滑改造。",
@@ -23,6 +23,17 @@ function fakeDb(rows: typeof row[] = [row]): DemandDatabase {
       findMany: async () => rows as never,
       findUnique: async ({ where }: { where: { id: string } }) => (rows.find((value) => value.id === where.id) ?? null) as never,
       create: async () => row as never,
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const current = rows.find((value) => value.id === where.id);
+        if (!current) throw new Error("missing row");
+        Object.assign(current, data);
+        return current as never;
+      },
+      delete: async ({ where }: { where: { id: string } }) => {
+        const index = rows.findIndex((value) => value.id === where.id);
+        if (index < 0) throw new Error("missing row");
+        return rows.splice(index, 1)[0] as never;
+      },
     },
   } as unknown as DemandDatabase;
 }
@@ -53,4 +64,43 @@ test("GET /api/demand/[id] 拒绝空 ID，服务详情对未知 ID 返回空", a
   assert.equal(invalid.status, 400);
   const missing = await findDemand("missing", fakeDb([]));
   assert.equal(missing, null);
+});
+
+test("需求更新和删除只允许 draft 或未签约 published，并保留来源", async () => {
+  const db = fakeDb();
+  const updated = await updateDemand("demand-test", { ...input, city: "广州" }, db);
+  assert.equal(updated.kind, "ok");
+  if (updated.kind === "ok") {
+    assert.equal(updated.data.city, "广州");
+    assert.equal(updated.source, "live");
+  }
+
+  const demo = { ...row, id: "demo-demand" };
+  const demoDb = fakeDb([demo]);
+  const deleted = await deleteDemand("demo-demand", demoDb);
+  assert.deepEqual(deleted, { kind: "ok", data: { id: "demo-demand", deleted: true }, source: "mock" });
+
+  for (const status of ["contracted", "in_progress", "completed"]) {
+    const lockedDb = fakeDb([{ ...row, status }]);
+    assert.deepEqual((await updateDemand("demand-test", input, lockedDb)).kind, "invalid-state");
+    assert.deepEqual((await deleteDemand("demand-test", lockedDb)).kind, "invalid-state");
+  }
+});
+
+test("PUT/DELETE 路由拒绝空 ID、无效 JSON 与未知字段", async () => {
+  const invalidId = await detailPUT(new Request("http://localhost/api/demand/%20", { method: "PUT" }), { params: { id: " " } });
+  assert.equal(invalidId.status, 400);
+
+  const invalidJson = await detailPUT(new Request("http://localhost/api/demand/demand-test", { method: "PUT", body: "{" }), { params: { id: "demand-test" } });
+  assert.equal(invalidJson.status, 400);
+  assert.deepEqual(await invalidJson.json(), { ok: false, error: { code: "INVALID_JSON", message: "请求不是有效 JSON。" } });
+
+  const unknownField = await detailPUT(new Request("http://localhost/api/demand/demand-test", {
+    method: "PUT",
+    body: JSON.stringify({ ...input, status: "published" }),
+  }), { params: { id: "demand-test" } });
+  assert.equal(unknownField.status, 400);
+
+  const deleteInvalidId = await detailDELETE(new Request("http://localhost/api/demand/%20", { method: "DELETE" }), { params: { id: " " } });
+  assert.equal(deleteInvalidId.status, 400);
 });
