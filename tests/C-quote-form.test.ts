@@ -102,13 +102,14 @@ test("空单价不是零元或自动待确认；取消待确认后重新校验�
 });
 
 test("数量与工期须有效，不接受静默截断、非有限数或不安全整数", () => {
-  for (const value of ["", "0", "-1", "1.0001", "Infinity", "1e3", "2abc", "9007199254740991", "9007199254740.991"]) {
+  for (const value of ["", "0", "-1", "1.0001", "1000000.001", "1000001", "Infinity", "1e3", "2abc", "9007199254740991", "9007199254740.991"]) {
     assert.ok(invalid(fields([line({ quantity: value })]))["line-1-quantity"], value);
   }
   for (const value of ["", "0", "-1", "1.5", "1e2", "NaN", "9007199254740992"]) {
     assert.ok(invalid(fields([line()], value)).estimatedDays, value);
   }
   assert.equal(preview(fields([line({ quantity: "0.001", priceYuan: "10" })])).items[0].amountCents, 1);
+  assert.equal(preview(fields([line({ quantity: "1000000", priceYuan: "0.01" })])).items[0].amountCents, 1000000);
 });
 
 test("单行金额溢出与累计溢出均阻止预览，未知费用不参与累计", () => {
@@ -122,6 +123,8 @@ test("明细不能为空、超量或重复编号；删除后新增项目可用�
   assert.ok(invalid(fields([])).lines);
   assert.ok(invalid(fields(Array.from({ length: MAX_QUOTE_LINES + 1 }, (_, i) => line({ code: `line-${i + 1}` })))).lines);
   assert.ok(invalid(fields([line(), line()])).lines);
+  assert.ok(invalid(fields([line(), line({ code: " line-1 " })])).lines);
+  for (const code of [" ", "x".repeat(101)]) assert.ok(invalid(fields([line({ code })])).lines);
   const remaining = line({ code: "line-2", quantity: "2", priceYuan: "5" });
   const next = line({ ...emptyQuoteLine(3), name: "新增项目", quantity: "1", priceYuan: "3" });
   const data = preview(fields([remaining, next]));
@@ -143,12 +146,12 @@ test("名称与备注长度校验，预览安全转义用户文本，不修改�
   assert.doesNotMatch(html, /<script|<b>/);
 });
 
-test("表单初始为空并绑定需求，禁用真实提交；校验与预览不调用任何网络接口", (t) => {
+test("表单初始为空并绑定需求，预览前禁用提交；校验与预览不调用网络接口", (t) => {
   const fetchMock = t.mock.method(globalThis, "fetch", async () => { throw new Error("本地预览不应发请求"); });
   const html = renderToStaticMarkup(createElement(QuoteForm, { demandId: "C-test-demand" }));
-  for (const text of ["C-test-demand", "本地预览", "刷新详情或离开页面会丢失", "业主暂时无法查看", "不会发送报价", "检查并预览报价"]) assert.ok(html.includes(text), text);
-  assert.match(html, /<button[^>]*disabled=""[^>]*>提交报价（暂未开放）/);
-  assert.doesNotMatch(html, /name="providerId"|name="status"|提交成功|本地报价预览 · 未提交/);
+  for (const text of ["C-test-demand", "本地预览", "刷新详情或离开页面会丢失", "接口返回 501 表示尚未开放", "预览不会发送报价", "检查并预览报价", "上限 1,000,000"]) assert.ok(html.includes(text), text);
+  assert.match(html, /<button[^>]*disabled=""[^>]*>尝试提交报价/);
+  assert.doesNotMatch(html, /name="providerId"|name="status"|报价已提交（live）|本地报价预览 · 未提交/);
   invalid({ lines: [emptyQuoteLine(1)], estimatedDays: "" });
   preview(fields());
   assert.equal(fetchMock.mock.callCount(), 0);
