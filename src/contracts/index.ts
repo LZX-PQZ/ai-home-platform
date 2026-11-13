@@ -88,6 +88,36 @@ export const Ticket = z.object({
   category: z.enum(["quality", "schedule", "payment", "attitude"]),
   responsibleProviderId: Id.nullable(), status: z.enum(["open", "assigned", "resolved"]),
 });
+export const PHOTO_INSPECTION_DISCLAIMER = "照片只能辅助提示疑点，不能替代现场检测或证明施工合格。";
+export const PhotoInspectionImageRef = z.string().trim().min(1).max(2048);
+export const PhotoInspectionInput = z.object({
+  demandId: Id.refine(value => value.trim().length > 0),
+  imageRefs: PhotoInspectionImageRef.array().min(1).max(10),
+}).strict().superRefine((value, context) => {
+  const refs = new Set<string>();
+  value.imageRefs.forEach((imageRef, index) => {
+    if (refs.has(imageRef)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["imageRefs", index],
+        message: "图片引用不能重复",
+      });
+    }
+    refs.add(imageRef);
+  });
+});
+export const PhotoInspectionSeverity = z.enum(["low", "medium", "high"]);
+export const PhotoInspectionFinding = z.object({
+  imageRef: PhotoInspectionImageRef,
+  severity: PhotoInspectionSeverity,
+  message: z.string().trim().min(1).max(1000),
+}).strict();
+export const PhotoInspectionResult = z.object({
+  demandId: Id,
+  findings: PhotoInspectionFinding.array().max(50),
+  reviewedAt: z.string().datetime({ offset: true }).optional(),
+  disclaimer: z.literal(PHOTO_INSPECTION_DISCLAIMER),
+}).strict();
 export const ChatInput = z.object({ messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(4000) })).min(1).max(30) });
 export const ChatResult = z.object({ reply: z.string(), ready: z.boolean(), draft: DemandInput.nullable(), missingFields: z.array(z.string()) });
 export const ReviewInput = z.object({ demandId: Id, providerId: Id, rating: z.number().int().min(1).max(5), comment: z.string().max(2000) });
@@ -103,6 +133,9 @@ export type QuoteDTO = z.infer<typeof Quote>;
 export type QuoteSubmissionItemInputDTO = z.infer<typeof QuoteSubmissionItemInput>;
 export type QuoteSubmissionInputDTO = z.infer<typeof QuoteSubmissionInput>;
 export type ScheduleDTO = z.infer<typeof Schedule>;
+export type PhotoInspectionInputDTO = z.infer<typeof PhotoInspectionInput>;
+export type PhotoInspectionFindingDTO = z.infer<typeof PhotoInspectionFinding>;
+export type PhotoInspectionResultDTO = z.infer<typeof PhotoInspectionResult>;
 export type ChatInputDTO = z.infer<typeof ChatInput>;
 export type ChatResultDTO = z.infer<typeof ChatResult>;
 export type ApiFailure = { ok: false; error: { code: string; message: string } };
