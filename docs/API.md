@@ -57,15 +57,15 @@ D 需要实现模型调用、超时、有限重试、JSON 校验与来源追踪�
 
 ## 需求 CRUD 契约
 
-对应请求：docs/requests/D-demand-contracts.md。POST 创建和 GET 详情已经实现；PUT、DELETE 等待后续路由 PR。
+对应请求：docs/requests/D-demand-contracts.md。需求创建、详情、更新和删除路由均已实现。
 
 | 方法 | 输入 | 成功返回 | 当前实现 |
 |---|---|---|---|
 | POST /api/demand | DemandInput | 201 envelope(Demand)，初始 published | 已实现；写入 Prisma，返回 live |
 | GET /api/demand/[id] | DemandIdParams | 200 envelope(Demand) | 已实现；按 ID 查询 Prisma，不存在 404 |
-| PUT /api/demand/[id] | DemandIdParams + DemandUpdateInput | 200 envelope(Demand) | 尚未建立 |
-| DELETE /api/demand/[id] | DemandIdParams | 200 envelope(DemandDeleteResult) | 尚未建立 |
+| PUT /api/demand/[id] | DemandIdParams + DemandUpdateInput | 200 envelope(Demand) | 已实现；仅允许 draft/未签约 published |
+| DELETE /api/demand/[id] | DemandIdParams | 200 envelope(DemandDeleteResult) | 已实现；仅允许 draft/未签约 published |
 
 PUT 完整替换可编辑字段，全部必填，不提供 PATCH。创建/更新禁止客户端设置 id、status 或未知字段；description/city 去除首尾空白后不可为空，面积为有限正数，预算为非负安全整数分且下限不超过上限。更新/删除允许 draft 或尚未签约的 published 需求；进入 contracted、in_progress 或 completed 后返回 409/INVALID_STATE。不存在返回 404/DEMAND_NOT_FOUND，非法输入返回 400/VALIDATION_ERROR。删除结果为 {id,deleted:true}，仍须包含来源信封。
 
-后续 PUT/DELETE 路由必须实现鉴权与数据隔离，不得将查询失败回退成 mock。当前需求列表、创建和详情读取 Prisma；聊天仍为 mock；PUT/DELETE 尚未实现，状态流转仍由后续业务层负责。
+需求路由必须实现鉴权与数据隔离，不得将查询失败回退成 mock。当前需求列表、创建、详情、更新和删除均访问 Prisma；聊天仍为 mock；状态流转仍由后续业务层负责。

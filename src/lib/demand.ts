@@ -1,14 +1,22 @@
 import type { DemandOrder } from "@prisma/client";
-import { Demand, type DemandDTO, type DemandInputDTO } from "@/contracts";
+import { Demand, type DemandDTO, type DemandInputDTO, type DemandUpdateInputDTO } from "@/contracts";
 import { prisma } from "@/lib/prisma";
 
 export type DemandDatabase = {
   user: Pick<typeof prisma.user, "upsert">;
-  demandOrder: Pick<typeof prisma.demandOrder, "findMany" | "findUnique" | "create">;
+  demandOrder: Pick<
+    typeof prisma.demandOrder,
+    "findMany" | "findUnique" | "create" | "update" | "delete"
+  >;
 };
 
 export const DEMO_OWNER_ID = "demo-owner";
 export const DEMO_DEMAND_ID = "demo-demand";
+export const EDITABLE_DEMAND_STATUSES = ["draft", "published"] as const;
+
+export function isEditableDemandStatus(status: string): status is (typeof EDITABLE_DEMAND_STATUSES)[number] {
+  return EDITABLE_DEMAND_STATUSES.includes(status as (typeof EDITABLE_DEMAND_STATUSES)[number]);
+}
 
 /** 只把数据库字段映射为公共 Demand 契约，避免路由暴露 Prisma 记录。 */
 export function toDemandDTO(row: Pick<
@@ -59,4 +67,34 @@ export async function createDemand(input: DemandInputDTO, db: DemandDatabase = p
     },
   });
   return toDemandDTO(row);
+}
+
+export type DemandMutationResult<T> =
+  | { kind: "ok"; data: T; source: "mock" | "live" }
+  | { kind: "not-found" }
+  | { kind: "invalid-state"; status: string };
+
+export async function updateDemand(
+  id: string,
+  input: DemandUpdateInputDTO,
+  db: DemandDatabase = prisma,
+): Promise<DemandMutationResult<DemandDTO>> {
+  const existing = await db.demandOrder.findUnique({ where: { id } });
+  if (!existing) return { kind: "not-found" };
+  if (!isEditableDemandStatus(existing.status)) return { kind: "invalid-state", status: existing.status };
+
+  const row = await db.demandOrder.update({ where: { id }, data: input });
+  return { kind: "ok", data: toDemandDTO(row), source: demandSource([row]) };
+}
+
+export async function deleteDemand(
+  id: string,
+  db: DemandDatabase = prisma,
+): Promise<DemandMutationResult<{ id: string; deleted: true }>> {
+  const existing = await db.demandOrder.findUnique({ where: { id } });
+  if (!existing) return { kind: "not-found" };
+  if (!isEditableDemandStatus(existing.status)) return { kind: "invalid-state", status: existing.status };
+
+  await db.demandOrder.delete({ where: { id } });
+  return { kind: "ok", data: { id, deleted: true }, source: demandSource([existing]) };
 }
