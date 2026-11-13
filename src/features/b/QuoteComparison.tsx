@@ -13,7 +13,7 @@ export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof load
         <Link className="text-sm" href={`/owner/matches/${id}`}>← 返回服务方匹配</Link>
         <div className="mb-3 mt-6 flex flex-wrap items-center gap-3">
           <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-semibold text-teal-800">透明报价</span>
-          <span className="badge">{quoteSource === "mock" ? "模拟数据 · 非真实市场报价" : response.meta.source === "mock" ? "含模拟需求或服务方资料" : "报价数据"}</span>
+          <span className="badge">{quoteSource === "mock" ? "模拟数据 · 非真实市场报价" : demandSource === undefined && providerSource !== "mock" ? "需求来源未知" : response.meta.source === "mock" ? "整体响应含模拟数据" : "报价数据"}</span>
         </div>
         <h1>先看清每一项，再比较报价</h1>
         <p className="max-w-2xl text-slate-600">已知费用从列明金额逐项汇总，待确认项目单独保留。套餐名称相同，也需要核对实际施工范围。</p>
@@ -21,7 +21,7 @@ export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof load
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6" aria-labelledby="quote-demand">
         <h2 id="quote-demand">这次改造的需求</h2>
-        <p className="text-sm text-ink-3">需求来源：{demandSource === "mock" ? "模拟数据" : "已保存的需求数据"}</p>
+        <p className="text-sm text-ink-3">需求来源：{demandSource === "mock" ? "模拟数据" : demandSource === "live" ? "已保存的需求数据" : "未知（接口未提供逐条来源）"}</p>
         <p className="text-slate-600">{demand.description}</p>
         <dl className="grid gap-5 border-t border-slate-100 pt-5 sm:grid-cols-3">
           <div><dt className="text-xs text-slate-500">城市 / 面积</dt><dd className="mt-1 font-semibold">{demand.city} · {demand.areaM2}㎡</dd></div>

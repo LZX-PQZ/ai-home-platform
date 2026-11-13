@@ -16,7 +16,7 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
         <Link className="text-sm" href={`/owner/demand/${encodeURIComponent(demand.id)}`}>← 返回需求详情</Link>
         <div className="mb-3 mt-6 flex flex-wrap items-center gap-3">
           <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-semibold text-teal-800">服务方匹配</span>
-          <span className="badge">{isMock ? "含模拟数据 · 规则匹配" : "规则匹配"}</span>
+          <span className="badge">{demandSource === undefined && providerSource === "live" ? "需求来源未知 · 规则匹配" : isMock ? "含模拟数据 · 规则匹配" : "规则匹配"}</span>
         </div>
         <h1>为这次改造，找到合适的施工团队</h1>
         <p className="max-w-2xl text-slate-600">先确认服务城市与工种，再按改造经验和评分排序。每一项推荐都有可查看的依据。</p>
@@ -24,7 +24,7 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6" aria-labelledby="demand-summary">
         <h2 id="demand-summary">你的改造需求</h2>
-        <p className="text-sm text-slate-500">需求来源：{demandSource === "mock" ? "模拟数据" : "已保存的需求数据"}</p>
+        <p className="text-sm text-slate-500">需求来源：{demandSource === "mock" ? "模拟数据" : demandSource === "live" ? "已保存的需求数据" : "未知（接口未提供逐条来源）"}</p>
         <p className="text-slate-600">{demand.description}</p>
         <dl className="grid grid-cols-2 gap-5 border-t border-slate-100 pt-5 md:grid-cols-4">
           <div><dt className="text-xs text-slate-500">城市 / 面积</dt><dd className="mt-1 font-semibold">{demand.city} · {demand.areaM2}㎡</dd></div>
