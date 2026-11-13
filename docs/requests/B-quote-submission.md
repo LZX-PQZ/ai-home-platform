@@ -11,6 +11,8 @@ B 的报价页验证已知演示需求 ID，只展示该需求的 submitted/acce
 
 已知费用按现有 QuoteItem.amountCents 累加；null 不推算成零或自动用数量乘单价填充。amountCents 或 unitPriceCents 为 null 的项目，以及报价中声明的额外 pendingItems，均保留为待确认。空明细不构成完整报价；已知费用不能直接作为最终总价或最低价。
 
+待确认明细按现有 items[].code 区分，不按名称合并。同名不同编号的两项在公共 pendingItems 名称数组中保留两个条目，页面从明细读取编号并分别展示。重复汇总不会将名称数组再次计为额外项目。现有 pendingItems 中无法对应待确认明细的名称继续保留；该字段没有编号，不能可靠区分同名额外费用与明细，仍需 D 在后续契约中明确关联方式。本次未修改公共字段。
+
 ## 请求 D 确认并合入的字段与行为
 
 1. 新增公共 QuoteSubmissionInput，建议必填字段：demandId（复用 Id）、items（至少一项）、estimatedDays（正整数，天）。每项建议复用 QuoteItem 的 code、name、unit、quantity、unitPriceCents、note 字段；金额为人民币分的安全非负整数或 null，数量为有限非负数，code 在同一报价内唯一。字符串长度、数量精度及上限由 D 明确定义。

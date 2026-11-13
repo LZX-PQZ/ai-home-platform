@@ -6,6 +6,7 @@ import { QuoteTable } from "../src/components/QuoteTable";
 import { QuoteComparison } from "../src/features/b/QuoteComparison";
 import { formatQuoteMoney } from "../src/features/b/format-quote";
 import { loadQuoteData } from "../src/lib/quote-engine/data";
+import { prepareQuotes } from "../src/lib/quote-engine";
 import { providers, quotes } from "../src/lib/mock-data";
 
 test("报价金额展示区分未知与零，并保留安全整数范围内的分位", () => {
@@ -33,6 +34,23 @@ test("报价组件重算缓存合计并保留未知项目，不显示虚构总�
   assert.ok(!html.includes("¥999,999.00"));
   assert.ok(html.includes("待确认项目"));
   assert.ok(html.includes("名称待确认"));
+});
+
+test("同名待确认项目分别显示编号和正确数量，能对应到各自明细", () => {
+  const prepared = prepareQuotes(quotes[0].demandId, [{ ...quotes[0], pendingItems: ["垃圾清运"], items: [
+    { ...quotes[0].items[1], code: "haul-bathroom" },
+    { ...quotes[0].items[1], code: "haul-kitchen" },
+  ] }]);
+  const html = renderToStaticMarkup(createElement(QuoteTable, { quotes: prepared }));
+  assert.ok(html.includes("待确认项目 · 2 项"));
+  const pendingList = /<ul\b[^>]*>([\s\S]*?)<\/ul>/.exec(html)?.[1];
+  assert.ok(pendingList);
+  assert.equal((pendingList.match(/<li\b/g) ?? []).length, 2);
+  for (const code of ["haul-bathroom", "haul-kitchen"]) {
+    assert.ok(pendingList.includes(`项目编号：${code}`));
+    assert.equal(html.split(`项目编号：${code}`).length - 1, 2);
+  }
+  assert.ok(html.includes("小计不是最终总价"));
 });
 
 test("暂无报价与缺少明细给出各自提示，不把空报价描述为完整定价", () => {
