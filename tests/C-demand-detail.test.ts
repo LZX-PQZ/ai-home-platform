@@ -41,7 +41,7 @@ test("拒绝不同 ID 的有效响应，不回退到 demo、不忽略大小写�
       assert.equal(error.code, "INVALID_RESPONSE");
       const html = render(demandDetailFailureState(error), id);
       assert.match(html, /需求详情加载失败/);
-      assert.doesNotMatch(html, /<article|<form|数据来源：/);
+      assert.doesNotMatch(html, /<article|<form|来源：/);
       return true;
     });
   }
@@ -54,7 +54,7 @@ test("非已发布需求不展示字段或报价表单，区别于 404 并保留
     const response = await loadDemandDetail(demand.id);
     assert.equal(response.data, null);
     const html = render({ status: "ready", response });
-    for (const text of ["当前需求暂不可报价", "不是已发布状态", "返回需求大厅", "刷新详情", "数据来源：实时接口（live）"]) assert.ok(html.includes(text), text);
+    for (const text of ["当前需求暂不可报价", "不是已发布状态", "返回需求大厅", "刷新详情", "接口来源：实时接口（live）"]) assert.ok(html.includes(text), text);
     assert.doesNotMatch(html, /<article|测试模拟需求|<form|需求不存在|当前列表/);
     fetchMock.mock.restore();
   }
@@ -69,7 +69,7 @@ test("404 DEMAND_NOT_FOUND 展示不存在或不可查看，不伪造来源或�
     assert.deepEqual(state, { status: "not-found" });
     const html = render(state, "missing-demand");
     for (const text of ["需求不存在或不可查看", "可能已删除", "返回需求大厅", "刷新详情"]) assert.ok(html.includes(text), text);
-    assert.doesNotMatch(html, /<article|<form|数据来源：|暂不可报价|加载失败/);
+    assert.doesNotMatch(html, /<article|<form|来源：|暂不可报价|加载失败/);
     return true;
   });
   assert.equal(fetchMock.mock.callCount(), 1);
@@ -80,7 +80,7 @@ test("已发布详情展示公共字段、分转元、mock 来源和本地报价
   const html = render({ status: "ready", response: await loadDemandDetail(demand.id) });
   for (const text of [
     demand.id, demand.description, demand.city, "局部改造", "25.5 平方米", "0.00", "30,000.50", "15 天", "已发布",
-    "数据来源：模拟数据（mock）", "不代表真实客户需求", "角色导航不代表登录鉴权",
+    "接口来源：模拟标识（mock）", "需求来源：未知（接口未提供）", "不代表真实客户需求", "角色导航不代表登录鉴权",
     "报价提交和接单功能待接入", "填写报价 · 本地预览", "本地预览不代表保存或提交",
   ]) assert.ok(html.includes(text), text);
   assert.match(html, /href="\/provider"/);
@@ -92,9 +92,9 @@ test("live 详情不因列表包含 demo 而标成 mock，空描述有占位且�
   for (const description of ["", "<script>alert('test')</script>"]) {
     const fetchMock = t.mock.method(globalThis, "fetch", async () => Response.json(payload({ ...demand, description }, "live")));
     const html = render({ status: "ready", response: await loadDemandDetail(demand.id) });
-    assert.match(html, /数据来源：实时接口（live）/);
+    assert.match(html, /接口来源：实时接口（live）/);
     assert.match(html, /数据来源标识不代表已完成身份鉴权/);
-    assert.doesNotMatch(html, /数据来源：模拟数据|<script/);
+    assert.doesNotMatch(html, /接口来源：模拟标识|<script/);
     assert.match(html, description ? /&lt;script&gt;/ : /业主暂未填写需求描述/);
     fetchMock.mock.restore();
   }
@@ -145,7 +145,7 @@ test("400、401、403、501、503 按 HTTP 状态说明问题，不当作成功�
       assert.ok(html.includes(message));
       assert.match(html, /role="alert"/);
       assert.match(html, /重新加载/);
-      assert.doesNotMatch(html, /<article|<form|数据来源：|需求不存在|内部详情/);
+      assert.doesNotMatch(html, /<article|<form|来源：|需求不存在|内部详情/);
       return true;
     });
     fetchMock.mock.restore();
@@ -166,7 +166,7 @@ test("网络、坏 JSON、500 和不符合约定的 404 均为可重试错误，
       const html = render(demandDetailFailureState(error));
       assert.match(html, /需求详情加载失败/);
       assert.match(html, /重新加载/);
-      assert.doesNotMatch(html, /<article|<form|需求不存在|数据来源：/);
+      assert.doesNotMatch(html, /<article|<form|需求不存在|来源：/);
       return true;
     });
     fetchMock.mock.restore();
@@ -192,7 +192,7 @@ test("刷新重新查询最新内容，转为不可报价或删除时不保留�
 test("加载中禁用刷新并披露演示性质，空白 ID 在请求前拒绝", async (t) => {
   const html = render({ status: "loading" });
   for (const text of ['disabled=""', 'role="status"', "正在读取需求详情", "模拟数据仅用于演示"]) assert.ok(html.includes(text));
-  assert.doesNotMatch(html, /<article|<form|数据来源：|需求不存在/);
+  assert.doesNotMatch(html, /<article|<form|来源：|需求不存在/);
   const fetchMock = t.mock.method(globalThis, "fetch", async () => { throw new Error("不应发送请求"); });
   for (const id of ["", " ", "\t\n"]) {
     await assert.rejects(loadDemandDetail(id), (error: unknown) => {

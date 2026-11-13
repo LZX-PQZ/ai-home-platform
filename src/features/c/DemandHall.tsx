@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DemandSource } from "./DemandSource";
 import {
   demandHallErrorMessage,
   formatBudget,
@@ -62,15 +63,13 @@ export function DemandHallContent({
             <StatusBadge
               label={
                 state.response.meta.source === "mock"
-                  ? "数据来源：模拟数据（mock）"
-                  : "数据来源：实时接口（live）"
+                  ? "列表接口来源：模拟标识（mock）"
+                  : "列表接口来源：实时接口（live）"
               }
             />
             <p className="mt-2 text-sm text-slate-600">
-              {state.response.meta.source === "mock"
-                ? "以下为接口返回的固定演示数据，不代表真实客户需求。"
-                : "以下为需求接口返回的数据。"}
-              仅展示已发布需求，共 {state.response.data.length} 条。
+              接口来源标记针对整批返回数据；本页筛选后仅展示已发布需求。各条需求来源以卡片标识为准，未提供时显示未知；模拟需求不代表真实客户需求。
+              当前共 {state.response.data.length} 条。
             </p>
           </div>
 
@@ -86,6 +85,7 @@ export function DemandHallContent({
                   <article aria-labelledby={`demand-${demand.id}`}>
                     <div className="mb-4 flex flex-wrap items-center gap-2">
                       <StatusBadge label="已发布" />
+                      <DemandSource source={demand.source} />
                       <span className="text-sm text-slate-600">
                         {renovationLabels[demand.renovationType]}
                       </span>

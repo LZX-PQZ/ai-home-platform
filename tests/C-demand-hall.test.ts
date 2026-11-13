@@ -50,14 +50,14 @@ test("需求大厅接受空数组和 live 来源，不添加模拟兜底数据",
   assert.deepEqual(response.data, []);
   const html = render({ status: "ready", response });
   assert.match(html, /暂无已发布需求/);
-  assert.match(html, /数据来源：实时接口（live）/);
-  assert.doesNotMatch(html, /数据来源：模拟数据|<article/);
+  assert.match(html, /列表接口来源：实时接口（live）/);
+  assert.doesNotMatch(html, /需求来源：|<article/);
 });
 
 test("需求大厅渲染预算、工期和 mock 来源，不冒充真实需求或已接单", async (t) => {
   t.mock.method(globalThis, "fetch", async () => Response.json({ ok: true, data: [demand], meta: { source: "mock" } }));
   const html = render({ status: "ready", response: await loadDemandHall() });
-  for (const text of ["模拟数据（mock）", "不代表真实客户需求", "深圳", "60 平方米", "30,000.00", "50,000.50", "30 天", "适老化改造", "角色导航不代表登录鉴权", "报价提交和接单功能待接入"]) {
+  for (const text of ["列表接口来源：模拟标识（mock）", "需求来源：未知（接口未提供）", "不代表真实客户需求", "深圳", "60 平方米", "30,000.00", "50,000.50", "30 天", "适老化改造", "角色导航不代表登录鉴权", "报价提交和接单功能待接入"]) {
     assert.ok(html.includes(text), text);
   }
   assert.doesNotMatch(html, /已接单|报价成功/);
@@ -94,7 +94,7 @@ test("需求大厅将 HTTP 501 作为未实现错误，显示可重试状态", a
     const html = render({ status: "error", message });
     assert.match(html, /role="alert"/);
     assert.match(html, /重新加载/);
-    assert.doesNotMatch(html, /<article|数据来源：|暂无已发布需求/);
+    assert.doesNotMatch(html, /<article|来源：|暂无已发布需求/);
     return true;
   });
 });
@@ -121,5 +121,5 @@ test("需求大厅加载中禁用刷新并提供可读提示", () => {
   assert.match(html, /role="status"/);
   assert.match(html, /正在读取需求/);
   assert.match(html, /模拟数据仅用于演示/);
-  assert.doesNotMatch(html, /<article|数据来源：|暂无已发布需求/);
+  assert.doesNotMatch(html, /<article|来源：|暂无已发布需求/);
 });

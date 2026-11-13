@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DemandSource } from "./DemandSource";
 import { QuoteForm } from "./QuoteForm";
 import { formatBudget, renovationLabels } from "./demand-hall";
 import {
@@ -77,19 +78,20 @@ export function DemandDetailContent({
           <div role="status" aria-live="polite">
             <StatusBadge
               label={state.response.meta.source === "mock"
-                ? "数据来源：模拟数据（mock）"
-                : "数据来源：实时接口（live）"}
+                ? "接口来源：模拟标识（mock）"
+                : "接口来源：实时接口（live）"}
             />
             <p className="mt-2 text-sm text-slate-600">
-              {state.response.meta.source === "mock"
-                ? "当前需求为模拟数据，不代表真实客户需求。"
-                : "当前需求来自实时接口；数据来源标识不代表已完成身份鉴权。"}
+              当前需求来源以详情内标识为准，未提供时显示未知；模拟需求不代表真实客户需求。数据来源标识不代表已完成身份鉴权。
             </p>
           </div>
           {demand ? (
             <>
               <article className="card min-w-0" aria-labelledby="demand-summary-title">
-                <div className="mb-4"><StatusBadge label="已发布" /></div>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <StatusBadge label="已发布" />
+                  <DemandSource source={demand.source} />
+                </div>
                 <h2 id="demand-summary-title" className="break-words">
                   {demand.city} · {renovationLabels[demand.renovationType]}
                 </h2>
