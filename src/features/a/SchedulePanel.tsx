@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Button, C, Card, DataDisclosure, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
+import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
 import { demandHref } from "./demand-list";
 import { GanttChart } from "@/components/GanttChart";
 import {
@@ -12,13 +12,14 @@ import {
   dependencyNames,
   detectIssues,
   progressPercent,
+  scheduleStatus,
   startableTasks,
   taskStatusLabel,
   taskStatusTone,
   toGanttRows,
   totalDays,
 } from "./schedule";
-import { useSchedule } from "./useSchedule";
+import { useSchedule, type ScheduleState } from "./useSchedule";
 
 /**
  * 业主端「施工进度」页。
@@ -28,14 +29,23 @@ import { useSchedule } from "./useSchedule";
  * 数据只有 /api/schedule 一处来源，接口没给的字段（真实日期、责任人姓名、验收单）一律不编。
  */
 export function SchedulePanel({ id }: { id: string }) {
-  const { phase, data, source, error, reload } = useSchedule();
+  const { reload, ...state } = useSchedule();
+  return <ScheduleContent id={id} state={state} reload={reload} />;
+}
+
+export function ScheduleContent({ id, state, reload }: {
+  id: string;
+  state: ScheduleState;
+  reload: () => void;
+}) {
+  const { phase, data, source, error } = state;
   const [actionNote, setActionNote] = useState<string | null>(null);
 
   if (phase === "loading") {
     return (
       <div>
         <PageHeader title="施工进度" subtitle={`正在读取需求 ${id} 的排期…`} />
-        <DataDisclosure what="排期" />
+        <p className={C.meta} role="status">正在加载，排期来源尚未确认。</p>
         <Card className="animate-pulse">
           <div className="mb-4 h-4 w-1/3 rounded bg-[#EDF2F3]" />
           <div className="grid gap-2">
@@ -52,7 +62,6 @@ export function SchedulePanel({ id }: { id: string }) {
     return (
       <div>
         <PageHeader title="施工进度" subtitle="读取排期失败" />
-        <DataDisclosure what="排期" />
         <Note tone="danger" title="接口请求失败">
           <p>{error}</p>
           <div className="mt-2">
@@ -65,11 +74,27 @@ export function SchedulePanel({ id }: { id: string }) {
     );
   }
 
+  if (data && data.demandId !== id) {
+    return (
+      <div>
+        <PageHeader title="施工进度" subtitle={`未取得需求 ${id} 的排期`} />
+        <Note tone="warn" title="这条排期不属于当前需求">
+          <p>接口返回的排期属于需求「{data.demandId}」（来源：{source ?? "未确认"}），并非当前需求「{id}」。本页已停止展示该排期。</p>
+          <p>当前接口尚不支持按需求查询；这不能证明当前需求没有排期。</p>
+        </Note>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <LinkButton href={demandHref(id)} variant="secondary" size="sm">返回需求详情</LinkButton>
+          <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
+        </div>
+      </div>
+    );
+  }
+
   if (!data || data.tasks.length === 0) {
     return (
       <div>
         <PageHeader title="施工进度" subtitle="这条需求还没有排期" />
-        <DataDisclosure what="排期" />
+        <p className={C.meta}>排期来源：{source ?? "未确认"}{source === "mock" ? "（模拟数据）" : ""}</p>
         <Empty
           title="接口没有返回任何工序"
           hint="排期由签约后生成（GET /api/schedule 目前返回固定演示数据）。本页不会凭空画一份计划出来。"
@@ -89,12 +114,12 @@ export function SchedulePanel({ id }: { id: string }) {
   const issues = detectIssues(data);
   const rows = toGanttRows(data);
   const currentDay = running.length > 0 ? Math.min(...running.map((task) => task.startDay)) : null;
-  const mismatch = data.demandId !== id;
+  const status = scheduleStatus(data);
 
   return (
     <div>
       <div className="mb-3">
-        <Link href={`/owner/demand/${id}`} className="text-[13px] font-medium text-[#0F6E56]">
+        <Link href={demandHref(id)} className="text-[13px] font-medium text-[#0F6E56]">
           ← 返回需求详情
         </Link>
       </div>
@@ -103,30 +128,21 @@ export function SchedulePanel({ id }: { id: string }) {
         title="施工进度"
         subtitle={`需求 ${data.demandId} · 排期版本 v${data.version} · 数据来源 ${source ?? "未知"}`}
         aside={
-          <Badge tone={blocked.length > 0 ? "danger" : running.length > 0 ? "brand" : "neutral"}>
-            {blocked.length > 0 ? "有工序受阻" : running.length > 0 ? "施工中" : "未开工"}
+          <Badge tone={status.tone}>
+            {status.label}
           </Badge>
         }
       />
 
-      <DataDisclosure what="排期" />
-
-      {mismatch ? (
-        <div className="mb-4">
-          <Note tone="warn" title="这条排期不属于当前需求">
-            <p>
-              你打开的是需求 <code>{id}</code>，但接口只返回了需求{" "}
-              <code>{data.demandId}</code> 的排期。按 ID 查询排期的接口由 D 负责，尚未实现；
-              本页不会把别的项目排期冒充成这一条。
-            </p>
-          </Note>
-        </div>
-      ) : null}
+      <p className={C.meta}>
+        {source === "mock" ? "本排期为模拟数据（mock），仅供演示。" : `排期来源：${source ?? "未确认"}。`}
+        日期仅为计划中的相对天数，不能据此判断今天进度或是否延期。
+      </p>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           { label: "计划总工期", value: `${days} 天`, hint: "取所有工序结束日的最大值" },
-          { label: "已完成进度", value: `${percent}%`, hint: "按已完成工序的工期占比推算" },
+          { label: "工序完成比例", value: `${percent}%`, hint: "按全部工序的计划时长加权，非日历进度" },
           { label: "进行中工序", value: `${running.length} 项`, hint: running[0]?.name ?? "暂无" },
           { label: "受阻工序", value: `${blocked.length} 项`, hint: blocked[0]?.name ?? "无" },
         ].map((item) => (
@@ -151,7 +167,8 @@ export function SchedulePanel({ id }: { id: string }) {
             </span>
           }
         />
-        <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-[#EDF2F3]">
+        <p className={`mb-3 ${C.meta}`}>完成比例 = 已完成工序的计划时长 ÷ 全部工序的计划时长。100% 仅表示工序状态全部为已完成，不代表验收通过。</p>
+        <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-[#EDF2F3]" role="progressbar" aria-label="工序完成比例" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
           <div
             className="h-full rounded-full bg-[#0F6E56] transition-[width] duration-500"
             style={{ width: `${percent}%` }}
@@ -191,10 +208,11 @@ export function SchedulePanel({ id }: { id: string }) {
 
         <div className="grid content-start gap-4">
           <Card>
-            <SectionHead title="下一步可开工" aside={<Badge tone="accent">{ready.length} 项</Badge>} />
+            <SectionHead title="前置条件已满足的待开工工序" aside={<Badge tone="accent">{ready.length} 项</Badge>} />
+            <p className={`!mb-3 ${C.meta}`}>这里只核对前置工序状态；实际进场时间和现场条件仍需施工负责人确认。</p>
             {ready.length === 0 ? (
               <p className={`!mb-0 ${C.meta}`}>
-                没有满足「前置工序已全部完成」的待开工任务。若施工方说可以进场，说明排期数据没同步。
+                当前没有满足「前置工序已全部完成」的待开工任务。
               </p>
             ) : (
               <ul className="grid gap-2">
@@ -222,7 +240,7 @@ export function SchedulePanel({ id }: { id: string }) {
             {issues.length === 0 ? (
               <Note tone="ok">
                 <p className="!mb-0">
-                  依赖关系完整、无重叠排期、同一时间只有一道主工序 —— 业主不会看到「两个人同时说在干同一件事」。
+                  当前检查未发现缺失依赖、前序未完成或前后工序时间冲突。此检查不替代施工负责人审核或现场验收。
                 </p>
               </Note>
             ) : (
