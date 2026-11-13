@@ -21,4 +21,13 @@ src/app/owner/（排除 matches/quotes）；src/components/ChatWindow.tsx、Dema
 - 运行 npm run scope -- --role A --base origin/main。
 
 ## 本机演练记录
-待本角色成员填写。
+
+### 2026-11-13 feature/A-demand-chat（P0：需求澄清聊天）
+- 环境：Windows，Node 22.22.2（符合 .nvmrc 22），npm ci 全新安装。
+- `npm run check`：lint 通过；tsc --noEmit 通过；17 个测试全过（含 A 新增 9 条）；模块导入边界通过。
+- `npm run build`：生产构建成功（/owner/demand/chat 18.9 kB）。
+- `npm run scope -- --role A --base origin/main`：通过，8 个变更文件，无越界。
+- 运行时验证（next start 后实测）：/owner/demand/chat 返回 200；POST /api/demand/chat 返回 mock 信封与 6 个 missingFields；POST /api/demand 返回 501，页面显示“需求保存尚未开放”，无假成功。
+- 使用 mock：对话为 mock 固定追问，未调用真实模型；需求保存依赖 D 的 POST /api/demand。
+- 待办（P0 剩余）：需求列表页；详情页接 GET /api/demand/[id]（等 D）；服务方标签映射待 B 联调。
+- 已提共享变更请求：docs/requests/A-api-post.md（请 D 新增 apiPost）。

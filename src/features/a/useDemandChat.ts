@@ -1,0 +1,133 @@
+"use client";
+
+import { useCallback, useMemo, useRef, useState } from "react";
+import type { ChatResultDTO } from "@/contracts";
+import {
+  appendMessage,
+  describeFailure,
+  fieldLabel,
+  normalizeOutgoing,
+  parseChatResponse,
+  toChatPayload,
+  type ChatMessage,
+  type EnvelopeSource,
+} from "./demand-chat";
+
+export const GREETING: ChatMessage = {
+  role: "assistant",
+  content:
+    "您好，我是需求澄清助手。用一句话说说房子的情况和您想怎么改（例如：深圳 60 平老房，给老人住，卫生间太滑，预算 3–5 万，一个月内完工），我会整理成结构化需求单。",
+};
+
+export type ChatPhase = "idle" | "sending" | "failed";
+
+export type DemandChatState = {
+  messages: ChatMessage[];
+  phase: ChatPhase;
+  error: string | null;
+  result: ChatResultDTO | null;
+  source: EnvelopeSource | null;
+  canRetry: boolean;
+  missingLabels: string[];
+};
+
+/**
+ * 需求澄清对话状态机。
+ * 请求失败时保留用户消息并提供重试；接口返回的 draft/source 原样透出，不补齐、不猜测。
+ */
+export function useDemandChat() {
+  const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
+  const [phase, setPhase] = useState<ChatPhase>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ChatResultDTO | null>(null);
+  const [source, setSource] = useState<EnvelopeSource | null>(null);
+  const failedHistory = useRef<ChatMessage[] | null>(null);
+  const inFlight = useRef(false);
+
+  const request = useCallback(async (history: ChatMessage[]) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setPhase("sending");
+    setError(null);
+    try {
+      const response = await fetch("/api/demand/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(toChatPayload(history)),
+      });
+      let payload: unknown = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+      if (!response.ok) {
+        const failure = describeFailure(response.status, payload);
+        failedHistory.current = history;
+        setPhase("failed");
+        setError(`${failure.message}（${failure.code}）`);
+        return;
+      }
+      const parsed = parseChatResponse(payload);
+      failedHistory.current = null;
+      setMessages((current) => appendMessage(current, { role: "assistant", content: parsed.data.reply }));
+      setResult(parsed.data);
+      setSource(parsed.source);
+      setPhase("idle");
+    } catch (cause) {
+      failedHistory.current = history;
+      setPhase("failed");
+      setError(cause instanceof Error ? cause.message : "网络异常，请求没有完成。");
+    } finally {
+      inFlight.current = false;
+    }
+  }, []);
+
+  const send = useCallback(
+    async (text: string) => {
+      if (inFlight.current) return;
+      const normalized = normalizeOutgoing(text);
+      if (!normalized.ok) {
+        setError(normalized.message);
+        setPhase("failed");
+        failedHistory.current = null;
+        return;
+      }
+      const nextHistory = appendMessage(messages, { role: "user", content: normalized.value });
+      setMessages(nextHistory);
+      await request(nextHistory);
+    },
+    [messages, request],
+  );
+
+  /** 重试只重发上一次请求，不重复追加用户消息 */
+  const retry = useCallback(async () => {
+    if (!failedHistory.current) return;
+    await request(failedHistory.current);
+  }, [request]);
+
+  const reset = useCallback(() => {
+    failedHistory.current = null;
+    setMessages([GREETING]);
+    setResult(null);
+    setSource(null);
+    setPhase("idle");
+    setError(null);
+  }, []);
+
+  const missingLabels = useMemo(
+    () => (result ? result.missingFields.map(fieldLabel) : []),
+    [result],
+  );
+
+  const state: DemandChatState = {
+    messages,
+    phase,
+    error,
+    result,
+    source,
+    canRetry: phase === "failed" && failedHistory.current !== null,
+    missingLabels,
+  };
+  return { ...state, send, retry, reset };
+}
