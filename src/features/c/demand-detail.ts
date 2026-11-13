@@ -1,25 +1,39 @@
-import { Id } from "@/contracts";
-import { loadDemandHall } from "./demand-hall";
+import { Demand, DemandIdParams } from "@/contracts";
+import { apiGet, ApiClientError } from "@/lib/api-client";
 
-// 单条接口尚未由 D 提供：仅在公共列表返回的已发布需求中精确查找。
-// 未找到只表示当前列表没有该记录，不能推断后台资源不存在或已授权访问。
 export async function loadDemandDetail(demandId: string) {
-  const id = Id.parse(demandId);
-  const response = await loadDemandHall();
+  const params = DemandIdParams.safeParse({ id: demandId });
+  if (!params.success) throw new ApiClientError("需求编号无效。", "INVALID_DEMAND_ID", 400);
+  const id = params.data.id;
+  const response = await apiGet(`/api/demand/${encodeURIComponent(id)}`, Demand);
+  if (response.data.id !== id) {
+    throw new ApiClientError("需求详情编号与请求不一致。", "INVALID_RESPONSE", 200);
+  }
   return {
     ...response,
-    data: response.data.find((demand) => demand.id === id) ?? null,
+    // 客户端隐藏不可报价详情，不代表接口已实施鉴权或数据隔离。
+    data: response.data.status === "published" ? response.data : null,
   };
 }
 
 export type DemandDetailState =
   | { status: "loading" }
   | { status: "ready"; response: Awaited<ReturnType<typeof loadDemandDetail>> }
+  | { status: "not-found" }
   | { status: "error"; message: string };
 
-export function demandDetailErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message.includes("HTTP 501")) {
-    return "需求接口尚未实现，暂时无法读取详情，请等待接口接入后重试。";
+export function demandDetailFailureState(error: unknown): Extract<DemandDetailState, { status: "not-found" | "error" }> {
+  if (error instanceof ApiClientError) {
+    if (error.status === 404 && error.code === "DEMAND_NOT_FOUND") return { status: "not-found" };
+    const messages: Partial<Record<number, string>> = {
+      400: "需求编号无效，请返回需求大厅重新打开。",
+      401: "暂未获得查看此需求的身份授权，请完成身份验证后重试。角色导航不能代替登录。",
+      403: "当前身份无法查看此需求，请返回需求大厅。",
+      501: "需求接口尚未实现，暂时无法读取详情，请等待接口接入后重试。",
+      503: "需求服务暂时不可用，请稍后重试。",
+    };
+    const message = messages[error.status];
+    if (message) return { status: "error", message };
   }
-  return "需求详情加载失败，请检查网络或稍后重试。";
+  return { status: "error", message: "需求详情加载失败，请检查网络或稍后重试。" };
 }

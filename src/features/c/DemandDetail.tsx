@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { QuoteForm } from "./QuoteForm";
 import { formatBudget, renovationLabels } from "./demand-hall";
 import {
-  demandDetailErrorMessage,
+  demandDetailFailureState,
   loadDemandDetail,
   type DemandDetailState,
 } from "./demand-detail";
@@ -52,7 +52,7 @@ export function DemandDetailContent({
         当前为服务方演示入口，模拟数据仅用于演示，数据来源以加载后的标识为准。角色导航不代表登录鉴权。
       </p>
       <p className="text-sm text-slate-600">
-        详情从当前需求列表中读取；列表中未返回的需求暂时无法查看。
+        此页面仅展示已发布需求；需求是否可报价以刷新后的状态为准。
       </p>
 
       {state.status === "loading" && (
@@ -66,6 +66,12 @@ export function DemandDetailContent({
           <p>{state.message}</p>
         </div>
       )}
+      {state.status === "not-found" && (
+        <div className="card" role="status" aria-live="polite">
+          <h2>需求不存在或不可查看</h2>
+          <p>该需求可能已删除或当前不可访问。请返回需求大厅，或刷新详情重试。</p>
+        </div>
+      )}
       {state.status === "ready" && (
         <>
           <div role="status" aria-live="polite">
@@ -76,8 +82,8 @@ export function DemandDetailContent({
             />
             <p className="mt-2 text-sm text-slate-600">
               {state.response.meta.source === "mock"
-                ? "当前接口返回固定演示数据，不代表真实客户需求。"
-                : "数据来自需求接口。"}
+                ? "当前需求为模拟数据，不代表真实客户需求。"
+                : "当前需求来自实时接口；数据来源标识不代表已完成身份鉴权。"}
             </p>
           </div>
           {demand ? (
@@ -121,8 +127,8 @@ export function DemandDetailContent({
             </>
           ) : (
             <div className="card" role="status" aria-live="polite">
-              <h2>当前列表中未找到该已发布需求</h2>
-              <p>该需求可能尚未发布、已不再公开，或未包含在当前列表中。请返回需求大厅或稍后重试。</p>
+              <h2>当前需求暂不可报价</h2>
+              <p>该需求当前不是已发布状态，本入口不展示详情或报价表单。请返回需求大厅或稍后刷新。</p>
             </div>
           )}
         </>
@@ -142,7 +148,7 @@ export function DemandDetail({ demandId }: { demandId: string }) {
         if (active) setState({ status: "ready", response });
       },
       (error: unknown) => {
-        if (active) setState({ status: "error", message: demandDetailErrorMessage(error) });
+        if (active) setState(demandDetailFailureState(error));
       },
     );
     return () => { active = false; };
