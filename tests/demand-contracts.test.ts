@@ -31,4 +31,3 @@ test("详情响应必须声明来源且 501 不能解析为成功", () => {
   assert.equal(schema.safeParse({ok:true,data}).success,false);
   assert.equal(schema.safeParse({ok:false,error:{code:"NOT_IMPLEMENTED",message:"未实现"}}).success,false);
 });
-
