@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Demand } from "@/contracts";
 import type { DemandDTO } from "@/contracts";
 import { apiGet } from "@/lib/api-client";
+import { DemandWithSource } from "./demand-source";
 import { interpretDetailResponse } from "./demand-detail";
 import type { DetailVia } from "./demand-detail";
 import { findDemand } from "./demand-list";
@@ -73,7 +73,7 @@ export function useDemandDetail(id: string) {
       }
 
       // 2) 回退：从列表里按 ID 找（列表本身失败才算 failed）
-      const list = await apiGet("/api/demand", Demand.array());
+      const list = await apiGet("/api/demand", DemandWithSource.array());
       const found = findDemand(list.data, id);
       if (!found) {
         setState({

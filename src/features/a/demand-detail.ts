@@ -1,5 +1,6 @@
-import { Demand, envelope } from "@/contracts";
+import { envelope } from "@/contracts";
 import type { DemandDTO } from "@/contracts";
+import { DemandWithSource } from "./demand-source";
 
 /**
  * 详情页的数据来源路径。
@@ -34,7 +35,7 @@ export function interpretDetailResponse(
 ): DetailProbe {
   if (status < 200 || status >= 300) return { kind: "fallback", reason: detailFallbackReason(status) };
 
-  const parsed = envelope(Demand).safeParse(payload);
+  const parsed = envelope(DemandWithSource).safeParse(payload);
   if (!parsed.success) {
     return { kind: "fallback", reason: "按 ID 查询返回的数据不符合契约，已回退到列表查找" };
   }

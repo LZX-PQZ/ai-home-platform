@@ -12,6 +12,7 @@ import {
   statusTone,
 } from "./demand-list";
 import { detailMissingHint, detailViaLabel } from "./demand-detail";
+import { itemSourceBadge } from "./demand-source";
 import { renovationLabel } from "./demand-chat";
 import { useDemandDetail } from "./useDemandDetail";
 
@@ -87,7 +88,12 @@ export function DemandDetailPanel({ id }: { id: string }) {
       <PageHeader
         title={demandTitle(demand)}
         subtitle={`需求编号 ${demand.id} · 来源 ${source ?? "未知"} · ${via ? detailViaLabel(via) : "未知路径"}`}
-        aside={<Badge tone={statusTone(demand.status)}>{statusLabel(demand.status)}</Badge>}
+        aside={
+          <span className="flex items-center gap-2">
+            {itemSourceBadge(demand) ? <Badge tone="neutral">{itemSourceBadge(demand)}</Badge> : null}
+            <Badge tone={statusTone(demand.status)}>{statusLabel(demand.status)}</Badge>
+          </span>
+        }
       />
 
       <DataDisclosure what="需求" />
