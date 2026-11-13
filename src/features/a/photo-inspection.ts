@@ -1,11 +1,11 @@
-import { z } from "zod";
 import { apiPost } from "@/lib/api-client";
-import type { SourceDTO } from "@/contracts";
+import { PhotoInspectionInput, PhotoInspectionResult } from "@/contracts";
+import type { PhotoInspectionResultDTO, SourceDTO } from "@/contracts";
 
 export type PhotoInspectionPhase = "idle" | "selected" | "submitting" | "ready" | "unavailable" | "failed";
 
 export type PhotoInspectionResponse = {
-  data: unknown;
+  data: PhotoInspectionResultDTO;
   source: SourceDTO;
 };
 
@@ -38,7 +38,7 @@ export function inspectionSourceLabel(source: SourceDTO): string {
   return source === "mock" ? "mock（模拟数据）" : "live";
 }
 
-export function formatInspectionResult(data: unknown): string {
+export function formatInspectionResult(data: PhotoInspectionResultDTO): string {
   if (typeof data === "string") return data;
   if (data === undefined) return "接口返回了空结果。";
   try {
@@ -48,7 +48,8 @@ export function formatInspectionResult(data: unknown): string {
   }
 }
 
-/** 通过 D 提供的共享客户端调用预留接口；响应字段待 D 冻结前保持原样。 */
+/** 通过 D 提供的共享客户端调用照片检查接口，并校验公共输入/输出契约。 */
 export function submitPhotoInspection(demandId: string, imageRefs: string[]): Promise<PhotoInspectionResponse> {
-  return apiPost("/api/inspect", { demandId, imageRefs }, z.unknown());
+  const input = PhotoInspectionInput.parse({ demandId, imageRefs });
+  return apiPost("/api/inspect", input, PhotoInspectionResult);
 }

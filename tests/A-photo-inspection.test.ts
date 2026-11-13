@@ -3,6 +3,7 @@ import test, { before, after } from "node:test";
 import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ApiClientError } from "../src/lib/api-client";
+import { PHOTO_INSPECTION_DISCLAIMER } from "../src/contracts";
 import { PhotoInspectionPanel } from "../src/features/a/PhotoInspectionPanel";
 import { formatInspectionResult, photoInspectionStatus, submitPhotoInspection } from "../src/features/a/photo-inspection";
 
@@ -39,12 +40,43 @@ test("照片提交通过 apiPost 发送需求 ID 和图片引用，并展示实�
     assert.equal(path, "/api/inspect");
     assert.equal(init?.method, "POST");
     assert.deepEqual(JSON.parse(String(init?.body)), { demandId: "d-1", imageRefs: ["before.jpg"] });
-    return Response.json({ ok: true, data: { findings: ["画面有反光"] }, meta: { source: "mock" } });
+    return Response.json({
+      ok: true,
+      data: {
+        demandId: "d-1",
+        findings: [{ imageRef: "before.jpg", severity: "medium", message: "画面有反光" }],
+        disclaimer: PHOTO_INSPECTION_DISCLAIMER,
+      },
+      meta: { source: "mock" },
+    });
   });
   const result = await submitPhotoInspection("d-1", ["before.jpg"]);
-  assert.deepEqual(result, { data: { findings: ["画面有反光"] }, source: "mock" });
+  assert.deepEqual(result, {
+    data: {
+      demandId: "d-1",
+      findings: [{ imageRef: "before.jpg", severity: "medium", message: "画面有反光" }],
+      disclaimer: PHOTO_INSPECTION_DISCLAIMER,
+    },
+    source: "mock",
+  });
   assert.match(formatInspectionResult(result.data), /画面有反光/);
   assert.equal(request.mock.callCount(), 1);
+});
+
+test("200 成功信封但结果不符合公共契约时失败，不展示半成品", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => Response.json({
+    ok: true,
+    data: { demandId: "d-1", findings: [] },
+    meta: { source: "mock" },
+  }));
+  await assert.rejects(
+    submitPhotoInspection("d-1", ["before.jpg"]),
+    (cause: unknown) => {
+      assert.ok(cause instanceof ApiClientError);
+      assert.equal(cause.code, "INVALID_RESPONSE");
+      return true;
+    },
+  );
 });
 
 test("501 由 apiPost 传给页面，不变成空成功", async (t) => {
