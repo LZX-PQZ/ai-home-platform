@@ -5,15 +5,24 @@
  * 没有到期日、支付方式、凭证 —— 所以本页只做「计划与状态展示」，
  * 不会伪造「已付款」「资金已托管」这类结论。
  */
-import { Payment } from "@/contracts";
+import { Payment, PaymentActionInput } from "@/contracts";
+import type { PaymentDTO as PaymentDTOContract, SourceDTO } from "@/contracts";
+import { apiPost } from "@/lib/api-client";
 
-/**
- * D 目前没有从 contracts 导出 PaymentDTO（只有 Demand/Provider/Quote/Schedule），
- * 这里从契约 schema 直接推导，保证字段口径和接口一致；等 D 补上类型导出后换成 import type。
- */
-export type PaymentDTO = ReturnType<(typeof Payment)["parse"]>;
+export type PaymentDTO = PaymentDTOContract;
 export type PaymentStatus = PaymentDTO["status"];
 export type Tone = "brand" | "accent" | "neutral" | "danger";
+
+export type PaymentActionResponse = {
+  data: PaymentDTO;
+  source: SourceDTO;
+};
+
+/** 只提交 D 已冻结的演示确认动作，不把它描述成真实支付。 */
+export function confirmDemoPayment(paymentId: string): Promise<PaymentActionResponse> {
+  const input = PaymentActionInput.parse({ paymentId, action: "confirm_demo" });
+  return apiPost("/api/payment", input, Payment);
+}
 
 export const PAYMENT_STATUS: Record<PaymentStatus, { label: string; tone: Tone }> = {
   pending: { label: "待确认", tone: "accent" },
@@ -112,6 +121,7 @@ export type PaymentNode = {
   index: number;
   stage: string;
   amountCents: number;
+  status: PaymentStatus;
   statusLabel: string;
   tone: Tone;
   sharePercent: number;
@@ -126,6 +136,7 @@ export function toPaymentNodes(list: PaymentDTO[]): PaymentNode[] {
     index: index + 1,
     stage: item.stage,
     amountCents: item.amountCents,
+    status: item.status,
     statusLabel: paymentStatusLabel(item.status),
     tone: paymentStatusTone(item.status),
     sharePercent: sharePercent(item.amountCents, total),
