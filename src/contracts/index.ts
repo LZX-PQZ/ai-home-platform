@@ -66,7 +66,6 @@ export type ApiFailure = { ok: false; error: { code: string; message: string } }
 export const DemandUpdateInput = DemandInput;
 export const DemandIdParams = z.object({ id: Id.refine(value => value.trim().length > 0) }).strict();
 export const DemandDeleteResult = z.object({ id: DemandIdParams.shape.id, deleted: z.literal(true) }).strict();
-export type DemandInputDTO = z.infer<typeof DemandInput>;
 export type DemandUpdateInputDTO = z.infer<typeof DemandUpdateInput>;
 export type DemandIdParamsDTO = z.infer<typeof DemandIdParams>;
 export type DemandDeleteResultDTO = z.infer<typeof DemandDeleteResult>;
