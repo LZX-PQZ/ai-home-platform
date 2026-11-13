@@ -45,7 +45,7 @@ export function DemandHallContent({
       </div>
 
       <p className="text-sm text-slate-600">
-        当前为服务方演示入口，角色导航不代表登录鉴权。需求详情、报价提交和接单功能待接入。
+        当前为服务方演示入口，模拟数据仅用于演示，数据来源以加载后的标识为准。角色导航不代表登录鉴权。需求详情、报价提交和接单功能待接入。
       </p>
 
       {state.status === "loading" && (

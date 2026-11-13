@@ -51,7 +51,7 @@ test("需求大厅接受空数组和 live 来源，不添加模拟兜底数据",
   const html = render({ status: "ready", response });
   assert.match(html, /暂无已发布需求/);
   assert.match(html, /数据来源：实时接口（live）/);
-  assert.doesNotMatch(html, /模拟数据|<article/);
+  assert.doesNotMatch(html, /数据来源：模拟数据|<article/);
 });
 
 test("需求大厅渲染预算、工期和 mock 来源，不冒充真实需求或已接单", async (t) => {
@@ -120,5 +120,6 @@ test("需求大厅加载中禁用刷新并提供可读提示", () => {
   assert.match(html, /disabled=""/);
   assert.match(html, /role="status"/);
   assert.match(html, /正在读取需求/);
+  assert.match(html, /模拟数据仅用于演示/);
   assert.doesNotMatch(html, /<article|数据来源：|暂无已发布需求/);
 });
