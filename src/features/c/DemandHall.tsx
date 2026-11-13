@@ -1,20 +1,15 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import type { DemandDTO } from "@/contracts";
+import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   demandHallErrorMessage,
   formatBudget,
   loadDemandHall,
+  renovationLabels,
   type DemandHallState,
 } from "./demand-hall";
-
-const renovationLabels: Record<DemandDTO["renovationType"], string> = {
-  elderly: "适老化改造",
-  partial: "局部改造",
-  repair: "维修",
-};
 
 export function DemandHallContent({
   state,
@@ -45,7 +40,7 @@ export function DemandHallContent({
       </div>
 
       <p className="text-sm text-slate-600">
-        当前为服务方演示入口，模拟数据仅用于演示，数据来源以加载后的标识为准。角色导航不代表登录鉴权。需求详情、报价提交和接单功能待接入。
+        当前为服务方演示入口，模拟数据仅用于演示，数据来源以加载后的标识为准。角色导航不代表登录鉴权。报价提交和接单功能待接入。
       </p>
 
       {state.status === "loading" && (
@@ -124,6 +119,13 @@ export function DemandHallContent({
                     <p className="mb-0 mt-4 break-all text-xs text-slate-500">
                       需求编号：{demand.id}
                     </p>
+                    <Link
+                      href={`/provider/demand/${encodeURIComponent(demand.id)}`}
+                      aria-label={`查看需求 ${demand.id} 的详情`}
+                      className="mt-4 inline-block rounded-lg border border-teal-700 px-4 py-2 text-sm font-medium hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+                    >
+                      查看需求详情
+                    </Link>
                   </article>
                 </li>
               ))}
