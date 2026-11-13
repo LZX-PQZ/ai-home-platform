@@ -183,7 +183,9 @@ export function DemandListPanel() {
           </div>
 
           <p className={`mt-4 !mb-0 ${C.meta}`}>
-            说明：当前列表来自 mock 接口，只返回演示需求；真实需求需等 POST /api/demand 落库后才会出现在这里。
+            {source === "live"
+              ? "说明：列表来自真实数据库（source: live），经 POST /api/demand 落库的需求会立即出现在这里。"
+              : "说明：当前列表来自 mock 接口，只返回演示需求；真实需求需等 POST /api/demand 落库后才会出现在这里。"}
           </p>
         </>
       )}
