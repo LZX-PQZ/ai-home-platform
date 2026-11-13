@@ -1,16 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { DemandInput } from "../src/contracts";
 import {
   EMPTY_FORM,
   MAX_MESSAGES,
   appendMessage,
   describeFailure,
+  demandPath,
   formFromDraft,
   formToInput,
   interpretDemandSubmit,
   normalizeOutgoing,
   parseChatResponse,
   toChatPayload,
+  submitDemand,
   yuanToCents,
   type ChatMessage,
 } from "../src/features/a/demand-chat";
@@ -21,6 +24,105 @@ test("空消息与超长消息在本地被拦下，不发给接口", () => {
   const ok = normalizeOutgoing("  深圳 60 平老房  ");
   assert.equal(ok.ok, true);
   if (ok.ok) assert.equal(ok.value, "深圳 60 平老房");
+});
+
+const confirmationForm = {
+  ...EMPTY_FORM,
+  description: "  卫生间防滑施工  ",
+  city: " 深圳 ",
+  areaM2: "6",
+  budgetMinYuan: "19.99",
+  budgetMaxYuan: "3000",
+  desiredDays: "3",
+};
+
+const savedDemand = {
+  id: "demand-confirmation-1",
+  ...DemandInput.parse({
+    description: "卫生间防滑施工", city: "深圳", areaM2: 6,
+    budgetMinCents: 1999, budgetMaxCents: 300000,
+    renovationType: "elderly", desiredDays: 3,
+  }),
+  status: "published",
+};
+
+test("确认前按公共契约校验；非法表单不发送请求", async (t) => {
+  const request = t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("非法表单不应请求接口");
+  });
+  const result = await submitDemand({ ...confirmationForm, budgetMinYuan: "4000" });
+  assert.equal(result.kind, "rejected");
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test("确认保存通过共享客户端提交 DemandInput，保留返回 ID 与真实/模拟来源", async (t) => {
+  for (const source of ["live", "mock"] as const) {
+    const request = t.mock.method(globalThis, "fetch", async (url: string, init?: RequestInit) => {
+      assert.equal(url, "/api/demand");
+      assert.equal(init?.method, "POST");
+      assert.equal(new Headers(init?.headers).get("content-type"), "application/json");
+      const input = DemandInput.parse(JSON.parse(String(init?.body)));
+      assert.equal(input.description, "卫生间防滑施工");
+      assert.equal(input.city, "深圳");
+      assert.equal(input.budgetMinCents, 1999);
+      return Response.json({ ok: true, data: savedDemand, meta: { source } }, { status: 201 });
+    });
+    const result = await submitDemand(confirmationForm);
+    assert.equal(request.mock.callCount(), 1);
+    assert.equal(result.kind, "created");
+    if (result.kind === "created") {
+      assert.equal(result.source, source);
+      assert.equal(result.demand.id, savedDemand.id);
+      assert.equal(demandPath(result.demand.id), `/owner/demand/${savedDemand.id}`);
+    }
+    t.mock.restoreAll();
+  }
+});
+
+test("400 保留拒绝原因；501 即使响应伪装成功也只显示未开放", async (t) => {
+  const responses = [
+    { response: Response.json({ ok: false, error: { code: "VALIDATION_ERROR", message: "预算范围无效" } }, { status: 400 }), kind: "rejected" },
+    { response: Response.json({ ok: false, error: { code: "NOT_IMPLEMENTED", message: "尚未开放" } }, { status: 501 }), kind: "not_implemented" },
+    { response: new Response("not json", { status: 501 }), kind: "not_implemented" },
+    { response: Response.json({ ok: true, data: savedDemand, meta: { source: "live" } }, { status: 501 }), kind: "not_implemented" },
+  ];
+  for (const { response, kind } of responses) {
+    t.mock.method(globalThis, "fetch", async () => response);
+    const result = await submitDemand(confirmationForm);
+    assert.equal(result.kind, kind);
+    assert.equal("demand" in result, false);
+    if (result.kind === "rejected") assert.match(result.messages.join(" "), /预算范围无效/);
+    t.mock.restoreAll();
+  }
+});
+
+test("错误 JSON、缺失来源、错误信封与 503 均不能生成成功态", async (t) => {
+  const responses = [
+    new Response("invalid", { status: 201 }),
+    Response.json({ ok: true, data: savedDemand }, { status: 201 }),
+    Response.json({ ok: false, error: { code: "VALIDATION_ERROR", message: "失败" } }),
+    Response.json({ ok: true, data: { ...savedDemand, id: "" }, meta: { source: "live" } }),
+    Response.json({ ok: false, error: { code: "UNAVAILABLE", message: "服务不可用" } }, { status: 503 }),
+  ];
+  for (const response of responses) {
+    t.mock.method(globalThis, "fetch", async () => response);
+    const result = await submitDemand(confirmationForm);
+    assert.equal(result.kind, "failed");
+    assert.equal("demand" in result, false);
+    t.mock.restoreAll();
+  }
+});
+
+test("网络失败不自动重试创建；用户重试可接收成功结果", async (t) => {
+  let attempts = 0;
+  const request = t.mock.method(globalThis, "fetch", async () => {
+    if (++attempts === 1) throw new TypeError("Failed to fetch");
+    return Response.json({ ok: true, data: savedDemand, meta: { source: "live" } }, { status: 201 });
+  });
+  assert.equal((await submitDemand(confirmationForm)).kind, "failed");
+  assert.equal(request.mock.callCount(), 1);
+  assert.equal((await submitDemand(confirmationForm)).kind, "created");
+  assert.equal(request.mock.callCount(), 2);
 });
 
 test("对话历史裁剪到契约允许的 30 条且保留最新消息", () => {
