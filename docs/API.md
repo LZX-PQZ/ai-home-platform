@@ -25,12 +25,13 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
 | GET /api/quote | Quote[] | B | 固定 mock |
 | GET /api/schedule | Schedule | D | 固定 mock |
-| GET /api/payment | Payment[] | D | 固定 mock；simulated 必须 true |
+| GET /api/payment | Payment[] | D | 模拟节点列表；simulated 必须 true |
 | GET /api/ticket | Ticket[] | D | 固定 mock |
 
 ## 已预留、当前返回 501
 - POST /api/quote：由 B 实现。输入契约已由 D 冻结为 `QuoteSubmissionInput`（`demandId`、1–20 行 `items`、`estimatedDays`），不能让客户端自定 provider 身份、行金额、合计金额、待确认项或状态。服务端计价必须与 C 预览一致：数量按千分之一整数缩放，逐行用整数乘法并四舍五入到分后求和；禁止用浮点乘法替代。当前仍返回 501，不能视为成功；业务接通后必须返回 `envelope(Quote)` 并如实标注 `meta.source`。
-- POST /api/schedule、/api/payment、/api/ticket、/api/inspect、/api/review：由 D 完成。ReviewInput 已预留；其他写入契约先补齐再让页面提交。
+- POST /api/schedule、/api/ticket、/api/inspect、/api/review：由 D 完成。ReviewInput 已预留；其他写入契约先补齐再让页面提交。
+- POST /api/payment：已实现最小模拟确认动作，输入为 `PaymentActionInput`，只允许 `pending → confirmed_demo` 一次转换；成功返回 `Payment`，`meta.source` 为 `mock`，不是支付接口。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
 
 ### POST /api/inspect
@@ -60,7 +61,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 Demand.status：draft → published → contracted → in_progress → completed；状态流转规则由 D 的业务层实现。
 Quote.status：draft/submitted/accepted/rejected；提交报价不等于用户接受。
 Schedule 通过 version 表示版本；重新排期应保留旧计划，展示差异并让负责人确认。
-Payment 仅 pending/confirmed_demo；不是支付接口。
+Payment 仅 pending/confirmed_demo；不是支付接口。当前 `POST /api/payment` 只做进程内演示状态转换，不代表真实付款、资金托管或数据库持久化。
 Ticket 包含 demandId、responsibleProviderId（可空）、category、status。
 
 ## 逐条来源
