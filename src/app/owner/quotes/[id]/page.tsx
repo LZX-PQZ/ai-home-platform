@@ -1,4 +1,9 @@
-import { ModulePage } from "@/components/ui/ModulePage";
-import { QuoteTable } from "@/components/QuoteTable";
-import { quotes } from "@/lib/mock-data";
-export default function Page() { return <ModulePage title="透明报价" owner="B" description="样例仅对比列明费用；固定数据，不是市场真实报价。"><QuoteTable quotes={quotes}/></ModulePage>; }
+import { notFound } from "next/navigation";
+import { QuoteComparison } from "@/features/b/QuoteComparison";
+import { loadQuoteData } from "@/lib/quote-engine/data";
+
+export default function Page({ params }: { params: { id: string } }) {
+  const data = loadQuoteData(params.id);
+  if (!data) notFound();
+  return <QuoteComparison data={data} />;
+}
