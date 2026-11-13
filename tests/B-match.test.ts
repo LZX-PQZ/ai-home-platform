@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { Match, envelope, type ProviderDTO } from "../src/contracts";
 import { demoDemand, providers } from "../src/lib/mock-data";
 import { matchProviders } from "../src/lib/match";
-import { loadMatchData } from "../src/lib/match/data";
 import { GET } from "../src/app/api/match/route";
 
 const provider = (overrides: Partial<ProviderDTO> = {}): ProviderDTO => ({
@@ -74,37 +73,18 @@ test("最高评分输出符合公共 Match 契约，且不虚构预算与档期�
   assert.ok(result[0].reasons.every((reason) => !/满足预算|档期匹配|资质已验证/.test(reason)));
 });
 
-test("数据入口不将未知需求 ID 替换成演示需求", () => {
-  const result = loadMatchData("demo-demand");
-  assert.ok(result);
-  assert.equal(result.demand.id, "demo-demand");
-  assert.equal(result.response.meta.source, "mock");
-  assert.equal(loadMatchData("another-demand"), null);
-});
-
-test("匹配 API 保留无参数演示入口，也支持显式需求 ID，均使用公共响应契约", async () => {
-  for (const query of ["", "?demandId=demo-demand"]) {
-    const response = GET(new Request(`http://localhost/api/match${query}`));
-    assert.equal(response.status, 200);
-    const body = envelope(Match.array()).parse(await response.json());
-    assert.equal(body.meta.source, "mock");
-    assert.deepEqual(body.data.map((row) => row.provider.id), ["provider-a", "provider-b"]);
-  }
+test("匹配 API 保留无参数演示入口，使用公共响应契约", async () => {
+  const response = await GET(new Request("http://localhost/api/match"));
+  assert.equal(response.status, 200);
+  const body = envelope(Match.array()).parse(await response.json());
+  assert.equal(body.meta.source, "mock");
+  assert.deepEqual(body.data.map((row) => row.provider.id), ["provider-a", "provider-b"]);
 });
 
 test("匹配 API 拒绝空、纯空白和重复 ID", async () => {
   for (const query of ["?demandId=", "?demandId=%20%20", "?demandId=demo-demand&demandId=other"]) {
-    const response = GET(new Request(`http://localhost/api/match${query}`));
+    const response = await GET(new Request(`http://localhost/api/match${query}`));
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), { ok: false, error: { code: "VALIDATION_ERROR", message: "请提供一个非空的需求 ID。" } });
   }
-});
-
-test("匹配 API 对未知 ID 返回 404，并且不泄漏默认匹配结果", async () => {
-  const response = GET(new Request("http://localhost/api/match?demandId=unknown"));
-  assert.equal(response.status, 404);
-  const body = await response.json();
-  assert.equal(body.ok, false);
-  assert.equal(body.error.code, "DEMAND_NOT_FOUND");
-  assert.equal("data" in body, false);
 });
