@@ -2,8 +2,8 @@ import { z } from "zod";
 export const Money = z.number().int().nonnegative().safe();
 export const Id = z.string().min(1);
 export const DemandInput = z.object({
-  description: z.string().min(1).max(4000),
-  city: z.string().min(1), areaM2: z.number().positive(),
+  description: z.string().trim().min(1).max(4000),
+  city: z.string().trim().min(1), areaM2: z.number().finite().positive(),
   budgetMinCents: Money, budgetMaxCents: Money,
   renovationType: z.enum(["elderly", "partial", "repair"]),
   desiredDays: z.number().int().positive(),
@@ -61,3 +61,11 @@ export type ScheduleDTO = z.infer<typeof Schedule>;
 export type ChatInputDTO = z.infer<typeof ChatInput>;
 export type ChatResultDTO = z.infer<typeof ChatResult>;
 export type ApiFailure = { ok: false; error: { code: string; message: string } };
+
+// PUT replaces all editable fields; status transitions are a separate server concern.
+export const DemandUpdateInput = DemandInput;
+export const DemandIdParams = z.object({ id: Id.refine(value => value.trim().length > 0) }).strict();
+export const DemandDeleteResult = z.object({ id: DemandIdParams.shape.id, deleted: z.literal(true) }).strict();
+export type DemandUpdateInputDTO = z.infer<typeof DemandUpdateInput>;
+export type DemandIdParamsDTO = z.infer<typeof DemandIdParams>;
+export type DemandDeleteResultDTO = z.infer<typeof DemandDeleteResult>;
