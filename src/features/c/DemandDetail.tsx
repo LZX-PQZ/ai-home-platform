@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
+import { QuoteForm } from "./QuoteForm";
 import { formatBudget, renovationLabels } from "./demand-hall";
 import {
   demandDetailErrorMessage,
@@ -116,10 +117,7 @@ export function DemandDetailContent({
                 </dl>
                 <p className="mb-0 mt-4 text-sm text-slate-600">以上为业主预算，实际报价待服务方确认。</p>
               </article>
-              <section className="card" aria-labelledby="quote-pending-title">
-                <h2 id="quote-pending-title">报价与接单</h2>
-                <p className="mb-0">报价提交和接单功能待接入，当前仅支持查看需求。</p>
-              </section>
+              <QuoteForm key={demand.id} demandId={demand.id} />
             </>
           ) : (
             <div className="card" role="status" aria-live="polite">
