@@ -1,6 +1,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ProviderCard } from "@/components/ProviderCard";
+import { formatQuoteMoney } from "@/features/b/format-quote";
 import { renovationLabels } from "@/lib/match";
 import type { loadMatches } from "@/features/b/load-matches";
 
@@ -8,7 +9,6 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
   const { demand, response, demandSource, providerSource } = data;
   const matches = response.data;
   const isMock = response.meta.source === "mock";
-  const formatMoney = (cents: number) => `¥${(cents / 100).toLocaleString("zh-CN")}`;
 
   return (
     <div className="space-y-7">
@@ -29,7 +29,7 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
         <dl className="grid grid-cols-2 gap-5 border-t border-slate-100 pt-5 md:grid-cols-4">
           <div><dt className="text-xs text-slate-500">城市 / 面积</dt><dd className="mt-1 font-semibold">{demand.city} · {demand.areaM2}㎡</dd></div>
           <div><dt className="text-xs text-slate-500">改造类型</dt><dd className="mt-1 font-semibold">{renovationLabels[demand.renovationType]}</dd></div>
-          <div><dt className="text-xs text-slate-500">预算范围</dt><dd className="mt-1 font-semibold">{formatMoney(demand.budgetMinCents)} – {formatMoney(demand.budgetMaxCents)}</dd></div>
+          <div><dt className="text-xs text-slate-500">预算范围</dt><dd className="mt-1 break-words font-semibold">{formatQuoteMoney(demand.budgetMinCents)} – {formatQuoteMoney(demand.budgetMaxCents)}</dd></div>
           <div><dt className="text-xs text-slate-500">期望工期</dt><dd className="mt-1 font-semibold">{demand.desiredDays} 天</dd></div>
         </dl>
       </section>
