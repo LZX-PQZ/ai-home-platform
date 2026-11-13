@@ -1,7 +1,7 @@
 # B → D：报价查询与提交契约交接
 
 - 申请角色：B
-- D 处理状态：PR #23 冻结输入，PR #31 明确整数计价，PR #36 提供身份入口，PR #46 修复导入边界；PR #42 预检已合入。B 已准备单次原子写入内核，但真实登录、细粒度授权、幂等和公开写入尚未接通。
+- D 处理状态：PR #57 已冻结持久化幂等、账户绑定、报价授权及数据库范围。B 已准备幂等事务内核，新增工具导入边界仍待 D 修复；真实登录和公开写入尚未接通。
 - 用户场景：C 提交服务方报价后，A/B 按同一 demandId 查看已提交报价；不能由客户端冒充服务方或决定合计金额。
 - 共享文件：src/contracts/index.ts、docs/API.md、D 的鉴权/数据库/查询基础设施、共享 mock 和契约测试。由 D 修改，B 本 PR 不改这些文件。
 
@@ -21,7 +21,9 @@
 
 `src/lib/quote-engine/transaction.ts` 的 createQuoteAtomically 使用现有 Prisma Serializable 事务，要求服务端提供事务会话读取器。事务内重新调用 D 的身份入口、核对预检的用户和服务方是否仍一致，并读取当前账户角色、服务方是否存在；使用 `findDemand(id, tx)` 重读需求，拒绝不存在、非 published 和模拟需求，再持久化服务端整数计价的明细、合计与 submitted 状态。返回 DTO 的校验也在事务内，失败回滚，提交完成后才返回。
 
-该内核尚无幂等保护，也不代表账户绑定与细粒度授权已实现；不能直接替换公开路由的 501。测试用隔离的临时 SQLite 验证实际插入及回滚，身份和数据均为合成测试夹具，不是新增真实登录。公开 POST 仍为未登录 401、预检通过 501，GET 仍是 mock。D/C 需要先完成 B-quote-idempotency.md 中的公共协议及适配器，再由 B 接入写入与回执。
+上述为 PR #50 的原子核心阶段；PR #57 后已接入 readIdempotencyKey、hashQuoteSubmission、authorizeProviderAccount、authorizeProviderQuote。报价与回执在同一个 Serializable 事务提交，同键重放返回原报价，不同内容冲突；DatabaseMoney/DatabaseInt 在写入前校验。当前授权要求新建及重放均为 live、published 需求，历史回执读取规则待 D 明确。
+
+内核返回 `{ quote, replayed }`，供后续路由映射 201/200，尚未替换公开路由的 501。测试用隔离临时 SQLite 验证插入、重放、两个客户端并发及回滚，会话和数据均为合成夹具。公开 POST 仍为未登录 401、预检通过 501，GET 仍是 mock。新增模块的边界许可和后续接通限制见 B-quote-idempotency-boundary.md。
 
 ## 已交付的报价读取与对比
 
@@ -40,7 +42,7 @@ B 的报价页通过已开放的 GET /api/demand/[id] 验证当前需求，再�
 1. 已完成：公共 QuoteSubmissionInput 和 DTO，含 demandId、1–20 项 items、正安全整数 estimatedDays；行 code 唯一，quantity 为正数、至多三位小数且不超过 1,000,000，金额用安全整数分或 null。具体限制直接使用公共 Schema，不复制替代 DTO。
 2. 输入已禁止 providerId、amountCents、knownTotalCents、pendingItems、status 等服务端字段。D 已提供 requireProviderIdentity、401/403 规则和导入许可；仍需提供真实验证签名、会话过期、账户绑定和数据访问范围的事务会话适配器，不能信任客户端身份字段或角色导航。
 3. 已完成：按 PR #31 的逐行整数舍入规则实现提交计价和安全整数校验，与 C 的边界样例一致；该规则仅用于新的提交输入，不推算历史报价未列明的金额。
-4. 按 D 的交接，报价路由、业务计价、幂等与 Prisma 写入由 B 实现。B 已准备事务内身份/需求复核及单次原子写入，公开路由尚未调用；请 D 按 B-quote-idempotency.md 冻结重复提交协议和唯一约束，公共请求头/契约或 schema 由 D 合入。写入开放后必须只在事务提交完成时返回成功回执，失败不得残留部分数据。
+4. 按 D 的交接，B 已准备事务内身份/需求复核、幂等及原子写入，使用 PR #57 的唯一回执约束。公开路由尚未调用；请 D 放行新增模块导入、提供真实事务会话并明确历史回执读取规则。写入开放后只在事务提交完成时返回成功回执，失败不得残留部分数据，未知提交结果不能冒充明确失败。
 5. 报价查询仍待确定协议，建议 GET /api/quote?demandId=... 返回 envelope(Quote[])；已知需求暂无报价时为 []，未知需求 404，非法参数 400，无权限按 D 的统一约定处理。业主只读 submitted/accepted，草稿和已拒绝报价不进入当前对比。D 已允许 quote API/quote-engine 复用 findDemand，B 本次已准备调用，不复制查询逻辑。
 6. 与已有 B-demand-query.md 一并明确需求和服务方名称查询的来源。真实查询失败不得回退为模拟成功；仅完整数据链路接通后标 live。
 
