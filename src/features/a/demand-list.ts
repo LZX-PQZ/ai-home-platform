@@ -45,3 +45,26 @@ export function demandTitle(demand: DemandDTO): string {
 export function findDemand(list: DemandDTO[], id: string): DemandDTO | null {
   return list.find((item) => item.id === id) ?? null;
 }
+
+/**
+ * 一条需求从「说清楚」到「住进去」的五个阶段，顺序与契约 status 一一对应。
+ * 列表卡片上用这条链告诉业主「我现在走到哪一步了」，而不是只给一个状态词。
+ */
+export const STAGES = [
+  { status: "draft", label: "需求澄清" },
+  { status: "published", label: "匹配报价" },
+  { status: "contracted", label: "签约定标" },
+  { status: "in_progress", label: "施工中" },
+  { status: "completed", label: "已完工" },
+] as const satisfies readonly { status: DemandDTO["status"]; label: string }[];
+
+/** 当前处于第几个阶段（0 起）；未知状态返回 0，避免进度条整条变灰 */
+export function stageIndex(status: DemandDTO["status"]): number {
+  const index = STAGES.findIndex((stage) => stage.status === status);
+  return index < 0 ? 0 : index;
+}
+
+/** 签约之后才该出现的入口（施工进度、节点付款） */
+export function isPostContract(status: DemandDTO["status"]): boolean {
+  return status === "contracted" || status === "in_progress" || status === "completed";
+}

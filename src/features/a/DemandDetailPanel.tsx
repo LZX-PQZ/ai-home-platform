@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Badge, Button, C, Card, Empty, Note, PageHeader, SectionHead } from "./ui";
-import { demandTitle, findDemand, formatBudget, statusLabel, statusTone } from "./demand-list";
+import { demandTitle, findDemand, formatBudget, isPostContract, statusLabel, statusTone } from "./demand-list";
 import { renovationLabel } from "./demand-chat";
 import { useDemandList } from "./useDemandList";
 
@@ -119,6 +119,39 @@ export function DemandDetailPanel({ id }: { id: string }) {
                 </Button>
               </Link>
             </div>
+          </Card>
+
+          <Card>
+            <SectionHead
+              title="施工与资金"
+              aside={<Badge tone={isPostContract(demand.status) ? "brand" : "neutral"}>签约后</Badge>}
+            />
+            <p className={`!mb-3 ${C.meta}`}>
+              排期由签约后的施工方提交，付款按节点走；两页都只读接口数据，不做本地假状态。
+            </p>
+            <div className="grid gap-2">
+              <Link href={`/owner/project/${demand.id}`}>
+                <Button
+                  variant={isPostContract(demand.status) ? "primary" : "secondary"}
+                  className="w-full"
+                >
+                  查看施工进度
+                </Button>
+              </Link>
+              <Link href={`/owner/payments/${demand.id}`}>
+                <Button variant="secondary" className="w-full">
+                  查看节点付款
+                </Button>
+              </Link>
+            </div>
+            {!isPostContract(demand.status) ? (
+              <div className="mt-3">
+                <Note tone="info">
+                  当前需求还在「{statusLabel(demand.status)}」阶段，排期与付款节点要等签约后才生成；
+                  现在打开会看到「没有排期 / 没有付款节点」的如实提示，不会给你一份假计划。
+                </Note>
+              </div>
+            ) : null}
           </Card>
 
           <Card>

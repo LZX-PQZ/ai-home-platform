@@ -4,10 +4,13 @@ import type { DemandDTO } from "../src/contracts";
 import {
   demandTitle,
   findDemand,
+  isPostContract,
   formatBudget,
   formatYuan,
   statusLabel,
   statusTone,
+  stageIndex,
+  STAGES,
 } from "../src/features/a/demand-list";
 
 const base: DemandDTO = {
@@ -64,4 +67,25 @@ test("按 ID 查找：命中返回该条，不命中返回 null（供页面如�
   assert.equal(findDemand(list, "d-2")?.city, "广州");
   assert.equal(findDemand(list, "d-404"), null);
   assert.equal(findDemand([], "d-1"), null);
+});
+
+test("五阶段进度条与契约状态一一对应，当前阶段序号正确", () => {
+  assert.equal(STAGES.length, 5);
+  assert.deepEqual(
+    STAGES.map((stage) => stage.label),
+    ["需求澄清", "匹配报价", "签约定标", "施工中", "已完工"],
+  );
+  assert.equal(stageIndex("draft"), 0);
+  assert.equal(stageIndex("published"), 1);
+  assert.equal(stageIndex("contracted"), 2);
+  assert.equal(stageIndex("in_progress"), 3);
+  assert.equal(stageIndex("completed"), 4);
+});
+
+test("只有签约之后才露出施工与付款入口，避免业主点进去看到空计划", () => {
+  assert.equal(isPostContract("draft"), false);
+  assert.equal(isPostContract("published"), false);
+  assert.equal(isPostContract("contracted"), true);
+  assert.equal(isPostContract("in_progress"), true);
+  assert.equal(isPostContract("completed"), true);
 });

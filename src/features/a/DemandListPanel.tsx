@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { Badge, Button, C, Card, Empty, Note, PageHeader } from "./ui";
 import {
+  STAGES,
   demandTitle,
   formatBudget,
+  isPostContract,
+  stageIndex,
   statusLabel,
   statusTone,
 } from "./demand-list";
@@ -18,6 +21,33 @@ function SkeletonCard() {
       <div className="mb-2 h-3 w-full rounded bg-[#F4F7F8]" />
       <div className="h-3 w-4/5 rounded bg-[#F4F7F8]" />
       <div className="mt-4 h-3 w-1/2 rounded bg-[#EDF2F3]" />
+    </div>
+  );
+}
+
+/** 五阶段进度条：已走过的高亮成浅绿，当前阶段实心，未到的置灰 */
+function StageBar({ status }: { status: Parameters<typeof stageIndex>[0] }) {
+  const current = stageIndex(status);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {STAGES.map((stage, index) => {
+        const done = index < current;
+        const active = index === current;
+        return (
+          <span
+            key={stage.status}
+            className={`rounded-full px-2 py-0.5 text-[11px] ${
+              active
+                ? "bg-[#0F6E56] font-medium text-white"
+                : done
+                  ? "bg-[#E7F3EF] text-[#0C5A47]"
+                  : "bg-[#F0F3F4] text-[#A8B4B8]"
+            }`}
+          >
+            {stage.label}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -93,6 +123,8 @@ export function DemandListPanel() {
                   {demand.description}
                 </p>
 
+                <StageBar status={demand.status} />
+
                 <dl className="grid grid-cols-3 gap-2 rounded-[10px] bg-[#F7FAFA] px-3 py-2.5">
                   <div>
                     <dt className={C.meta}>预算</dt>
@@ -118,16 +150,33 @@ export function DemandListPanel() {
                   <Link href={`/owner/demand/${demand.id}`}>
                     <Button size="sm">查看需求详情</Button>
                   </Link>
-                  <Link href={`/owner/matches/${demand.id}`}>
-                    <Button variant="secondary" size="sm">
-                      找服务方
-                    </Button>
-                  </Link>
-                  <Link href={`/owner/quotes/${demand.id}`}>
-                    <Button variant="ghost" size="sm">
-                      看报价
-                    </Button>
-                  </Link>
+                  {isPostContract(demand.status) ? (
+                    <>
+                      <Link href={`/owner/project/${demand.id}`}>
+                        <Button variant="secondary" size="sm">
+                          施工进度
+                        </Button>
+                      </Link>
+                      <Link href={`/owner/payments/${demand.id}`}>
+                        <Button variant="ghost" size="sm">
+                          节点付款
+                        </Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link href={`/owner/matches/${demand.id}`}>
+                        <Button variant="secondary" size="sm">
+                          找服务方
+                        </Button>
+                      </Link>
+                      <Link href={`/owner/quotes/${demand.id}`}>
+                        <Button variant="ghost" size="sm">
+                          看报价
+                        </Button>
+                      </Link>
+                    </>
+                  )}
                 </div>
               </Card>
             ))}

@@ -41,3 +41,8 @@ src/app/owner/（排除 matches/quotes）；src/components/ChatWindow.tsx、Dema
 - 运行时验证：/owner/project/demo-demand 与 /owner/payments/demo-demand 均 200，无头截图确认布局与数据渲染正常。
 - 数据边界：schedule/payment 只显示「第 N 天」相对工期（契约无真实日期字段）；demandId 不一致时提示而非冒充；POST 均 501，页面按钮给出诚实反馈。
 - 已提共享变更请求：docs/requests/A-schedule-payment.md（真实日期、责任方姓名、验收回写、付款比例/到期日/凭证、PaymentDTO 类型导出）。
+
+### 2026-11-13 feature/A-demand-chat（导航打通）
+- 列表卡片加五阶段进度条（需求澄清→匹配报价→签约定标→施工中→已完工），与契约 status 一一对应；签约后按钮切换为「施工进度 / 节点付款」。
+- 需求详情右侧新增「施工与资金」卡片，含施工/付款入口与签约前如实提示；打通 /owner/project/[id]、/owner/payments/[id] 的可达路径。
+- demand-list.ts 新增 STAGES、stageIndex、isPostContract；A-demand-list 测试 +2 条，全套 41 条通过；check/scope/build 全过；截图验证列表与详情渲染。
