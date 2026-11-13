@@ -56,7 +56,7 @@ export function AdminDemandOverviewContent({ state, onReload }: {
               {response.meta.source === "mock"
                 ? response.data.length === 0
                   ? "本次为空列表，接口来源标记为 mock；没有可展示的需求。"
-                  : "列表包含模拟数据，也可能包含实际创建的需求；当前未提供逐条来源，不能将每条记录都视为真实或模拟需求。"
+                  : "列表包含模拟数据，也可能包含实际创建的需求；本页尚未展示逐条来源，不能将每条记录都视为真实或模拟需求。"
                 : "本次列表由实时接口返回，来源标识不代表已完成身份鉴权。"}
             </p>
           </div>

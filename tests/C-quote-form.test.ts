@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Quote, QuoteItem } from "../src/contracts";
+import { Quote, QuoteItem, QuoteSubmissionItemInput } from "../src/contracts";
 import { QuoteForm, QuotePreview } from "../src/features/c/QuoteForm";
 import {
   emptyQuoteLine, formatQuoteMoney, MAX_QUOTE_LINES, quotePriceToCents, validateQuoteForm,
@@ -48,6 +48,30 @@ test("分数数量的预览按每行四舍五入到分，符合公共 Quote 字�
   for (const key of ["id", "providerId", "status", "ok", "meta"]) assert.ok(!(key in data), key);
   const perLine = preview(fields([line({ quantity: "0.5", priceYuan: "0.01" }), line({ code: "line-2", quantity: "0.5", priceYuan: "0.01" })]));
   assert.equal(perLine.knownTotalCents, 2);
+});
+
+test("公共输入允许的半分边界精确舍入，每行先舍入再合计", () => {
+  for (const [quantity, expectedCents] of [
+    ["0.144", 14], ["0.145", 15], ["0.146", 15],
+    ["1.004", 100], ["1.005", 101], ["1.006", 101],
+  ] as const) {
+    assert.ok(QuoteSubmissionItemInput.safeParse({
+      code: "line-1", name: "测试施工", unit: "m2", quantity: Number(quantity), unitPriceCents: 100, note: "",
+    }).success);
+    const data = preview(fields([line({ quantity, priceYuan: "1.00" })]));
+    assert.equal(data.items[0].amountCents, expectedCents, quantity);
+    assert.equal(data.knownTotalCents, expectedCents, quantity);
+  }
+  const data = preview(fields([
+    line({ quantity: "0.145", priceYuan: "1.00" }),
+    line({ code: "line-2", quantity: "0.145", priceYuan: "1.00" }),
+  ]));
+  assert.deepEqual(data.items.map((item) => item.amountCents), [15, 15]);
+  assert.equal(data.knownTotalCents, 30);
+  const html = renderToStaticMarkup(createElement(QuotePreview, { preview: data }));
+  assert.match(html, /¥0.15/);
+  assert.match(html, /¥0.30/);
+  assert.match(html, /本地报价预览 · 未提交/);
 });
 
 test("待确认与零元分开，同名待确认明细按编号保留两行，既有单价不会误入小计", () => {
