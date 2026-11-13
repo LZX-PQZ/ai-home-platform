@@ -103,8 +103,8 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
 
       {result === null && (
         <p className={`!mb-0 ${C.meta}`}>
-          先在左侧发一句话描述需求。对话接口返回草稿后，这里会列出字段；当前对话接口为 mock，
-          可能不会给出草稿，此时可以手动填写并验证提交流程。
+          可以在左侧描述需求，也可以直接手动填写。当前对话接口为 mock；
+          即使对话暂时不可用，也可填写需求单，核对后提交。
         </p>
       )}
 
@@ -133,12 +133,12 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
         </div>
       )}
 
-      {result && !draft && (
+      {!draft && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Button variant="secondary" size="sm" onClick={() => setManual((value) => !value)} disabled={submitting || Boolean(created)}>
             {manual ? "收起手动填写" : "手动填写需求单（不是 AI 生成）"}
           </Button>
-          <span className={C.meta}>当前接口不返回草稿，字段需人工填写</span>
+          <span className={C.meta}>手动填写的内容由您提供，不是 AI 生成。</span>
         </div>
       )}
 
