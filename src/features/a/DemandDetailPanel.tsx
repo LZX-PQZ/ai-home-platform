@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Badge, Button, C, Card, DataDisclosure, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
+import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
 import {
   demandTitle,
   formatBudget,
@@ -11,23 +11,26 @@ import {
   statusLabel,
   statusTone,
 } from "./demand-list";
-import { detailMissingHint, detailViaLabel } from "./demand-detail";
-import { itemSourceBadge } from "./demand-source";
+import type { DemandDetailState } from "./demand-detail";
 import { renovationLabel } from "./demand-chat";
 import { useDemandDetail } from "./useDemandDetail";
 
-/**
- * 需求详情：首选 GET /api/demand/[id]；接口未开放时自动回退到列表按 ID 查找，
- * 并在页面上标注本次数据走的是哪条路径。查不到就如实说明，不用固定样例冒充这个 ID 的数据。
- */
+/** 需求详情仅展示按 ID 接口确认的数据。 */
 export function DemandDetailPanel({ id }: { id: string }) {
-  const { phase, demand, source, via, fallbackReason, error, reload } = useDemandDetail(id);
+  const { state, reload } = useDemandDetail(id);
+  return <DemandDetailContent id={id} state={state} reload={reload} />;
+}
 
-  if (phase === "loading") {
+export function DemandDetailContent({ id, state, reload }: {
+  id: string;
+  state: DemandDetailState;
+  reload: () => void;
+}) {
+  if (state.phase === "loading") {
     return (
       <div>
         <PageHeader title="需求详情" subtitle={`正在读取需求 ${id}…`} />
-        <DataDisclosure what="需求" />
+        <p className={C.meta} role="status">本页数据可能包含模拟数据，加载完成后显示具体来源。</p>
         <Card className="animate-pulse">
           <div className="mb-3 h-4 w-1/2 rounded bg-[#EDF2F3]" />
           <div className="mb-2 h-3 w-full rounded bg-[#F4F7F8]" />
@@ -37,13 +40,12 @@ export function DemandDetailPanel({ id }: { id: string }) {
     );
   }
 
-  if (phase === "failed") {
+  if (state.phase === "failed") {
     return (
       <div>
         <PageHeader title="需求详情" subtitle="读取需求失败" />
-        <DataDisclosure what="需求" />
         <Note tone="danger" title="接口请求失败">
-          <p>{error}</p>
+          <p>{state.error}</p>
           <div className="mt-2">
             <Button variant="secondary" size="sm" onClick={() => void reload()}>
               重新加载
@@ -54,28 +56,25 @@ export function DemandDetailPanel({ id }: { id: string }) {
     );
   }
 
-  if (phase === "missing" || !demand) {
+  if (state.phase === "missing") {
     return (
       <div>
         <PageHeader title="需求详情" subtitle="没有找到这条需求" />
-        <DataDisclosure what="需求" />
         <Empty
           title={`接口未返回需求「${id}」`}
-          hint={detailMissingHint(id, fallbackReason)}
+          hint="这条需求不存在或已被删除，请核对需求链接。"
           action={
             <LinkButton href="/owner" size="sm" variant="secondary">返回我的装修</LinkButton>
           }
         />
-        {fallbackReason ? (
-          <div className="mt-3">
-            <Button variant="secondary" size="sm" onClick={() => void reload()}>
-              重新读取
-            </Button>
-          </div>
-        ) : null}
+        <div className="mt-3">
+          <Button variant="secondary" size="sm" onClick={reload}>重新读取</Button>
+        </div>
       </div>
     );
   }
+
+  const { demand, source } = state;
 
   return (
     <div>
@@ -87,16 +86,18 @@ export function DemandDetailPanel({ id }: { id: string }) {
 
       <PageHeader
         title={demandTitle(demand)}
-        subtitle={`需求编号 ${demand.id} · 来源 ${source ?? "未知"} · ${via ? detailViaLabel(via) : "未知路径"}`}
+        subtitle={`需求编号 ${demand.id} · 来源 ${source}`}
         aside={
           <span className="flex items-center gap-2">
-            {itemSourceBadge(demand) ? <Badge tone="neutral">{itemSourceBadge(demand)}</Badge> : null}
+            {source === "mock" ? <Badge tone="accent">模拟数据</Badge> : null}
             <Badge tone={statusTone(demand.status)}>{statusLabel(demand.status)}</Badge>
           </span>
         }
       />
 
-      <DataDisclosure what="需求" />
+      <p className={C.meta}>
+        {source === "mock" ? "本条需求为模拟数据（mock），仅用于演示。" : "本条需求来自数据库（live）。"}
+      </p>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <Card>
@@ -124,12 +125,12 @@ export function DemandDetailPanel({ id }: { id: string }) {
           <Card>
             <SectionHead title="下一步" aside={<Badge tone="accent">推荐</Badge>} />
             <p className={`!mb-3 ${C.meta}`}>
-              需求已结构化，接着去找匹配的服务方；这两页由 B 负责，用同一个需求 ID 打开。
+              查看这条需求的服务方匹配与报价信息。
             </p>
             <div className="grid gap-2">
               <LinkButton href={`/owner/matches/${encodeURIComponent(demand.id)}`} className="w-full">匹配服务方</LinkButton>
               <LinkButton href={`/owner/quotes/${encodeURIComponent(demand.id)}`} variant="secondary" className="w-full">查看报价对比</LinkButton>
-              <LinkButton href="/owner/demand/chat" variant="ghost" className="w-full">继续补充需求</LinkButton>
+              <LinkButton href="/owner/demand/chat" variant="ghost" className="w-full">创建另一条需求</LinkButton>
             </div>
           </Card>
 
@@ -159,14 +160,10 @@ export function DemandDetailPanel({ id }: { id: string }) {
             <SectionHead title="数据说明" />
             <Note tone="info">
               <p>
-                来源：{source ?? "未知"}（{via ? detailViaLabel(via) : "未知路径"}）。字段严格按{" "}
-                <code>src/contracts</code> 的 Demand 契约渲染，未经接口确认的信息不会出现在本页。
+                本页展示的是需求编号「{demand.id}」的查询结果，来源为 {source}。
+                如需确认最近的变更，可以重新加载。
               </p>
-              {fallbackReason ? (
-                <p className="!mb-0 mt-2 text-[12.5px] text-[#7A6A2F]">
-                  {fallbackReason}；按 ID 接口上线后本页会自动切换，无需改页面。
-                </p>
-              ) : null}
+              <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
             </Note>
           </Card>
         </div>
