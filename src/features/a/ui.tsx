@@ -10,6 +10,8 @@
  * 约束：只写完整字面量类名，禁止拼接字符串，否则 Tailwind 扫描不到。
  */
 
+import Link from "next/link";
+
 /** 色板：与 app-preview 原型一致，墨绿主色 + 暖橙强调 + 中性灰 */
 export const T = {
   brand: "#0F6E56",
@@ -58,7 +60,7 @@ export const C = {
   label: "grid gap-1.5 text-[12.5px]",
   labelText: "font-medium text-[#4A5A60]",
   input:
-    "w-full rounded-[9px] border border-[#E2E9EB] bg-white px-3 py-2 text-[13.5px] text-[#16242B] outline-none placeholder:text-[#A8B4B8] focus:border-[#0F6E56] focus:ring-2 focus:ring-[#0F6E56]/12",
+    "w-full rounded-[9px] border border-[#E2E9EB] bg-white px-3 py-2 text-[13.5px] text-[#16242B] outline-none placeholder:text-[#A8B4B8] focus:border-[#0F6E56] focus:ring-2 focus:ring-[#0F6E561F]",
 
   note: "rounded-[10px] px-3 py-2.5 text-[12.5px] leading-relaxed",
   noteWarn: "bg-[#FEF6E7] text-[#8A5A06]",
@@ -68,6 +70,27 @@ export const C = {
 } as const;
 
 /* ---------- 基础组件 ---------- */
+
+/** 页面头部：标题 + 说明 + 右侧动作，统一所有业主端页面的开屏样式 */
+export function PageHeader({
+  title,
+  subtitle,
+  aside,
+}: {
+  title: string;
+  subtitle?: string;
+  aside?: React.ReactNode;
+}) {
+  return (
+    <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className={`!mb-1 ${C.pageTitle}`}>{title}</h1>
+        {subtitle ? <p className={`!mb-0 ${C.pageSub}`}>{subtitle}</p> : null}
+      </div>
+      {aside}
+    </header>
+  );
+}
 
 export function Card({
   children,
@@ -112,6 +135,13 @@ export function Badge({
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
+const BUTTON_VARIANT: Record<ButtonVariant, string> = {
+  primary: C.btnPrimary,
+  secondary: C.btnSecondary,
+  ghost: C.btnGhost,
+  danger: C.btnDanger,
+};
+
 export function Button({
   children,
   onClick,
@@ -129,21 +159,45 @@ export function Button({
   type?: "button" | "submit";
   className?: string;
 }) {
-  const map: Record<ButtonVariant, string> = {
-    primary: C.btnPrimary,
-    secondary: C.btnSecondary,
-    ghost: C.btnGhost,
-    danger: C.btnDanger,
-  };
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`${C.btnBase} ${map[variant]} ${size === "sm" ? C.btnSm : ""} ${className}`}
+      className={`${C.btnBase} ${BUTTON_VARIANT[variant]} ${size === "sm" ? C.btnSm : ""} ${className}`}
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * 长得像按钮的链接。
+ *
+ * 为什么不用 <Link><Button/></Link>：<a> 里套 <button> 是非法嵌套，
+ * 键盘用户会落到两个可聚焦元素上，屏幕阅读器会念成「按钮 链接」。
+ * 这里直接渲染成 <Link>（即 <a>），复用按钮的视觉类名。
+ */
+export function LinkButton({
+  href,
+  children,
+  variant = "primary",
+  size = "md",
+  className = "",
+}: {
+  href: string;
+  children: React.ReactNode;
+  variant?: ButtonVariant;
+  size?: "md" | "sm";
+  className?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`${C.btnBase} ${BUTTON_VARIANT[variant]} ${size === "sm" ? C.btnSm : ""} ${className}`}
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -206,5 +260,19 @@ export function Empty({
       {hint ? <p className={`!mb-0 ${C.meta}`}>{hint}</p> : null}
       {action}
     </div>
+  );
+}
+
+/**
+ * 数据披露（首屏静态）：无论接口处于哪个加载阶段都会渲染，
+ * 保证首屏 HTML 里就有「模拟」字样 —— 这是冒烟检查的要求，
+ * 也是「不冒充真实数据」原则的一部分。what 填页面主题，如「排期」「付款节点」。
+ */
+export function DataDisclosure({ what }: { what: string }) {
+  return (
+    <p className={`!mb-0 ${C.meta}`}>
+      数据说明：本页{what}来自演示接口（模拟数据），真实来源以页面加载后的标识为准；
+      接口未返回的信息不会出现在页面上。
+    </p>
   );
 }

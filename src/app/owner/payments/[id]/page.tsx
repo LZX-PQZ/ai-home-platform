@@ -1,2 +1,5 @@
-import { ModulePage } from "@/components/ui/ModulePage";
-export default function Page(){ return <ModulePage title="节点付款" owner="A" description="仅演示付款状态，不接真实支付，不代表真实资金托管。"/>; }
+import { PaymentsPanel } from "@/features/a/PaymentsPanel";
+
+export default function Page({ params }: { params: { id: string } }) {
+  return <PaymentsPanel id={params.id} />;
+}

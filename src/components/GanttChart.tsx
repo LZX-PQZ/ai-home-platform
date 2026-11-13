@@ -1,4 +1,150 @@
-import type { ScheduleDTO } from "@/contracts";
-export function GanttChart({schedule}:{schedule:ScheduleDTO}) {
- return <section className="card">{schedule.tasks.map(task=><p key={task.id}>{task.name}：第 {task.startDay+1} 天开始，持续 {task.durationDays} 天</p>)}</section>;
+import type { GanttRow } from "@/features/a/schedule";
+
+/**
+ * 甘特图（纯展示组件）：只接收算好的行数据，不引业务逻辑、不发请求。
+ * 这样 C 的施工方端以后也能直接复用，不用跟着 A 的 features 目录走。
+ *
+ * 时间轴按「天」等分，用百分比定位，所以总工期变化时不需要改任何类名；
+ * 工序多的时候横向滚动，不压缩条形宽度。
+ */
+
+const BAR: Record<GanttRow["status"], string> = {
+  done: "border-[#A9D3C6] bg-[#E7F3EF] text-[#0C5A47]",
+  active: "border-[#0F6E56] bg-[#0F6E56] text-white",
+  pending: "border-[#DCE4E7] bg-[#F0F3F4] text-[#4A5A60]",
+  blocked: "border-[#EAC7C3] bg-[#FEF3F2] text-[#B42318]",
+};
+
+const DOT: Record<GanttRow["status"], string> = {
+  done: "bg-[#0F6E56]",
+  active: "bg-[#0F6E56] ring-2 ring-[#0F6E561F]",
+  pending: "bg-[#C7D2D6]",
+  blocked: "bg-[#B42318]",
+};
+
+const LEGEND: { status: GanttRow["status"]; label: string }[] = [
+  { status: "done", label: "已完成" },
+  { status: "active", label: "进行中" },
+  { status: "pending", label: "待开工" },
+  { status: "blocked", label: "受阻" },
+];
+
+export function GanttChart({
+  rows,
+  totalDays,
+  currentDay,
+}: {
+  rows: GanttRow[];
+  totalDays: number;
+  /** 推算的「今天」是第几天（0 起），不传则不画参考线 */
+  currentDay?: number | null;
+}) {
+  if (rows.length === 0 || totalDays <= 0) {
+    return (
+      <div className="rounded-[12px] border border-dashed border-[#E2E9EB] bg-[#FAFCFC] px-4 py-8 text-center text-[13px] text-[#7A8A90]">
+        没有可展示的工序，接口返回的排期为空。
+      </div>
+    );
+  }
+
+  const dayPercent = 100 / totalDays;
+  const tickStep = totalDays <= 15 ? 1 : totalDays <= 31 ? 2 : Math.ceil(totalDays / 15);
+  const ticks = Array.from({ length: totalDays }, (_, index) => index).filter(
+    (index) => index % tickStep === 0,
+  );
+
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[600px]">
+          {/* 天数刻度 */}
+          <div className="flex items-end gap-3">
+            <div className="w-[168px] shrink-0 pb-1 text-[11.5px] font-medium text-[#7A8A90]">
+              工序（共 {totalDays} 天）
+            </div>
+            <div className="relative h-5 flex-1">
+              {ticks.map((day) => (
+                <span
+                  key={day}
+                  className="absolute top-0 -translate-x-1/2 text-[11px] tabular-nums text-[#A8B4B8]"
+                  style={{ left: `${day * dayPercent + dayPercent / 2}%` }}
+                >
+                  {day + 1}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-1.5 grid gap-1.5">
+            {rows.map((row) => (
+              <div key={row.id} className="flex items-stretch gap-3">
+                <div className="flex w-[168px] shrink-0 items-center gap-2">
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[row.status]}`} />
+                  <div className="min-w-0">
+                    <div
+                      className="truncate text-[13px] font-medium text-[#16242B]"
+                      title={row.name}
+                    >
+                      {row.name}
+                    </div>
+                    <div className="truncate text-[11px] text-[#7A8A90]" title={row.rangeLabel}>
+                      {row.rangeLabel}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="relative h-11 flex-1 rounded-[6px] bg-[#FAFCFC]">
+                  {/* 每天一条竖向网格线 */}
+                  <div
+                    className="absolute inset-0 rounded-[6px]"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(to right, #EEF3F4 0 1px, transparent 1px)",
+                      backgroundSize: `${dayPercent}% 100%`,
+                    }}
+                  />
+                  {typeof currentDay === "number" ? (
+                    <div
+                      className="absolute inset-y-0 w-px bg-[#C2681C]/45"
+                      style={{
+                        left: `${Math.min(Math.max(currentDay, 0), totalDays) * dayPercent}%`,
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className={`absolute inset-y-[6px] overflow-hidden rounded-[5px] border px-2 text-[11.5px] font-medium leading-[26px] ${BAR[row.status]}`}
+                    style={{
+                      left: `${row.startDay * dayPercent}%`,
+                      width: `${row.durationDays * dayPercent}%`,
+                      minWidth: 22,
+                    }}
+                    title={`${row.name}：${row.rangeLabel}，${row.statusLabel}${
+                      row.deps.length ? `，前置：${row.deps.join("、")}` : ""
+                    }`}
+                  >
+                    <span className="block truncate">{row.statusLabel}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[#EEF3F4] pt-3 text-[11.5px] text-[#7A8A90]">
+        {LEGEND.map((item) => (
+          <span key={item.status} className="inline-flex items-center gap-1.5">
+            <span className={`h-2 w-2 rounded-[2px] ${DOT[item.status]}`} />
+            {item.label}
+          </span>
+        ))}
+        {typeof currentDay === "number" ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-px bg-[#C2681C]/60" />
+            当前工序起点（按任务状态推算，非真实日期）
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
 }
