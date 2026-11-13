@@ -22,6 +22,18 @@ export const Provider = z.object({
   kind: z.enum(["construction", "materials", "design", "supervision"]),
   tags: z.array(z.string()), rating: z.number().min(0).max(5),
 });
+export const UserRole = z.enum(["owner", "provider", "admin"]);
+/** 只表示已由服务端认证适配器验证过的会话，不表示客户端角色切换状态。 */
+export const VerifiedSession = z.object({
+  userId: Id,
+  role: UserRole,
+  providerId: Id.nullable(),
+}).strict();
+export const ProviderIdentity = z.object({
+  userId: Id,
+  role: z.literal("provider"),
+  providerId: Id,
+}).strict();
 export const Match = z.object({ provider: Provider, score: z.number().min(0).max(100), reasons: z.array(z.string()) });
 export const QuoteItem = z.object({
   code: Id, name: z.string(), unit: z.enum(["m2", "piece", "job"]),
@@ -129,6 +141,9 @@ export type DemandDTO = z.infer<typeof Demand>;
 export type DemandInputDTO = z.infer<typeof DemandInput>;
 export type DemandStatus = DemandDTO["status"];
 export type ProviderDTO = z.infer<typeof Provider>;
+export type UserRoleDTO = z.infer<typeof UserRole>;
+export type VerifiedSessionDTO = z.infer<typeof VerifiedSession>;
+export type ProviderIdentityDTO = z.infer<typeof ProviderIdentity>;
 export type QuoteDTO = z.infer<typeof Quote>;
 export type QuoteSubmissionItemInputDTO = z.infer<typeof QuoteSubmissionItemInput>;
 export type QuoteSubmissionInputDTO = z.infer<typeof QuoteSubmissionInput>;

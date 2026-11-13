@@ -39,6 +39,15 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 接通真实分析后使用 `envelope(PhotoInspectionResult)`，结果包含 `demandId`、`findings[]`（`imageRef`、`severity`、`message`）、可选服务端 `reviewedAt` 和固定免责声明。当前真实分析尚未接通，合法输入返回 HTTP 501 `NOT_IMPLEMENTED`；坏 JSON/非法字段返回 400。501 不能被页面显示为分析成功或验收通过。
 
+## 服务端身份基础设施
+
+报价服务端可通过 `src/lib/server-auth.ts` 的 `requireProviderIdentity(request, readSession)` 取得当前服务方身份。`readSession` 必须是服务端已验证会话的适配器，返回 `VerifiedSession` 后才会生成绑定的 `providerId`；请求体、角色切换和客户端自带 `providerId` 均不参与认证。
+
+- 没有已验证会话：401 `UNAUTHENTICATED`。
+- 已登录但不是服务方，或会话未绑定服务方：403 `FORBIDDEN`。
+- 当前默认 reader 不产生演示身份，因此真实认证适配器接入前不能把报价提交标记为成功。
+- 报价 API 与报价引擎可复用 `findDemand`；页面和客户端仍禁止直接导入数据库服务。
+
 ## GET /api/match 查询参数
 
 - `demandId` 是可选的单值查询参数。省略时保留 `demo-demand` 的演示入口，返回 `Match[]`，`meta.source` 为 `mock`。
