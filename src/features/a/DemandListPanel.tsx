@@ -13,7 +13,7 @@ import {
   statusLabel,
   statusTone,
 } from "./demand-list";
-import { listSourceNote } from "./demand-source";
+import { itemSourceBadge, listSourceNote } from "./demand-source";
 import { useDemandList, type DemandListState } from "./useDemandList";
 
 /** 加载骨架：让「正在取数据」和「没有数据」在视觉上区分开 */
@@ -131,7 +131,10 @@ export function DemandListContent({ state, reload }: { state: DemandListState; r
               <Card key={demand.id} className="flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h2 className={`!mb-1 ${C.sectionTitle}`}>{demandTitle(demand)}</h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className={`!mb-1 ${C.sectionTitle}`}>{demandTitle(demand)}</h2>
+                      {itemSourceBadge(demand) ? <Badge tone="accent">{itemSourceBadge(demand)}</Badge> : null}
+                    </div>
                     <p className={`!mb-0 ${C.meta}`}>需求编号：{demand.id}</p>
                   </div>
                   <Badge tone={statusTone(demand.status)}>{statusLabel(demand.status)}</Badge>
