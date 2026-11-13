@@ -15,6 +15,7 @@ import type { DemandDetailState } from "./demand-detail";
 import { itemSourceBadge, itemSource } from "./demand-source";
 import { renovationLabel } from "./demand-chat";
 import { useDemandDetail } from "./useDemandDetail";
+import { DemandEditPanel } from "./DemandEditPanel";
 
 /** 需求详情仅展示按 ID 接口确认的数据。 */
 export function DemandDetailPanel({ id }: { id: string }) {
@@ -129,6 +130,7 @@ export function DemandDetailContent({ id, state, reload }: {
         </Card>
 
         <div className="grid content-start gap-4">
+          <DemandEditPanel demand={demand} onChanged={() => void reload()} />
           <Card>
             <SectionHead title="下一步" aside={<Badge tone="accent">推荐</Badge>} />
             <p className={`!mb-3 ${C.meta}`}>
