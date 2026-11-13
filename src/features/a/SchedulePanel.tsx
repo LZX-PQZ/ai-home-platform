@@ -20,6 +20,7 @@ import {
   totalDays,
 } from "./schedule";
 import { useSchedule, type ScheduleState } from "./useSchedule";
+import { PhotoInspectionPanel } from "./PhotoInspectionPanel";
 
 /**
  * 业主端「施工进度」页。
@@ -289,6 +290,8 @@ export function ScheduleContent({ id, state, reload }: {
           </Card>
         </div>
       </div>
+
+      <PhotoInspectionPanel demandId={id} />
     </div>
   );
 }
