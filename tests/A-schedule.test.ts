@@ -9,6 +9,7 @@ import {
   detectIssues,
   doneDays,
   progressPercent,
+  scheduleStatus,
   startableTasks,
   taskEndDay,
   taskStatusLabel,
@@ -71,6 +72,55 @@ test("进度按已完成工序的工期占比推算，不会超过 100%", () => 
     tasks: base.tasks.map((item) => ({ ...item, status: "done" as const })),
   };
   assert.equal(progressPercent(allDone), 100);
+});
+
+test("并行工序分别计入总工作量，不能在仍有待开工工序时提前显示 100%", () => {
+  const parallel: ScheduleDTO = {
+    ...base,
+    tasks: [
+      task({ id: "a", name: "A", durationDays: 5, status: "done" }),
+      task({ id: "b", name: "B", durationDays: 5, status: "done" }),
+      task({ id: "c", name: "C", durationDays: 5, status: "pending" }),
+    ],
+  };
+  assert.equal(totalDays(parallel), 5);
+  assert.equal(progressPercent(parallel), 67);
+  assert.equal(progressPercent({ ...parallel, tasks: parallel.tasks.map(t => ({ ...t, status: "done" })) }), 100);
+});
+
+test("排期空档与延后开工不改变工序完成比例", () => {
+  const gap: ScheduleDTO = {
+    ...base,
+    tasks: [
+      task({ id: "a", name: "A", startDay: 10, durationDays: 2, status: "done" }),
+      task({ id: "b", name: "B", startDay: 100, durationDays: 2 }),
+    ],
+  };
+  assert.equal(totalDays(gap), 102);
+  assert.equal(progressPercent(gap), 50);
+  assert.equal(progressPercent({ ...gap, tasks: gap.tasks.map(t => ({ ...t, status: "done" })) }), 100);
+});
+
+test("仍有进行中/受阻/待开工工序时，舍入上限为 99%", () => {
+  for (const status of ["active", "blocked", "pending"] as const) {
+    assert.equal(progressPercent({ ...base, tasks: [
+      task({ id: "a", name: "A", durationDays: 999, status: "done" }),
+      task({ id: "b", name: "B", durationDays: 1, status }),
+    ] }), 99);
+  }
+  assert.equal(progressPercent({ ...base, tasks: [task({ id: "a", name: "A", status: "active" })] }), 0);
+});
+
+test("整体状态区分全部完成、等待后续、进行中、受阻与未开工", () => {
+  const label = (statuses: Task["status"][]) => scheduleStatus({
+    ...base, tasks: statuses.map((status, i) => task({ id: String(i), name: String(i), status })),
+  }).label;
+  assert.equal(label([]), "暂无工序");
+  assert.equal(label(["done", "done"]), "工序全部完成");
+  assert.equal(label(["done", "pending"]), "等待后续工序");
+  assert.equal(label(["pending"]), "未开工");
+  assert.equal(label(["active", "pending"]), "施工中");
+  assert.equal(label(["blocked", "active"]), "有工序受阻");
 });
 
 test("只持续一天的工序显示「第 N 天」，多天显示区间，不出现「第 1–1 天」", () => {

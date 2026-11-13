@@ -40,19 +40,30 @@ export function totalDays(schedule: ScheduleDTO): number {
   return schedule.tasks.reduce((max, task) => Math.max(max, taskEndDay(task)), 0);
 }
 
-/** 已完成任务的工期合计（天），用来算进度分母 */
+/** 已完成任务的计划时长合计（天），用作进度分子；不是已流逝的日历天数。 */
 export function doneDays(schedule: ScheduleDTO): number {
   return schedule.tasks
     .filter((task) => task.status === "done")
     .reduce((sum, task) => sum + task.durationDays, 0);
 }
 
-/** 进度百分比：已完成工期 / 总工期，取整并夹在 0–100，空计划按 0 处理 */
+/** 按工序计划时长加权：并行工序分别计入分母，排期空档不算工作量。 */
 export function progressPercent(schedule: ScheduleDTO): number {
-  const total = totalDays(schedule);
+  const total = schedule.tasks.reduce((sum, task) => sum + task.durationDays, 0);
   if (total <= 0) return 0;
+  if (schedule.tasks.every((task) => task.status === "done")) return 100;
   const percent = Math.round((doneDays(schedule) / total) * 100);
-  return Math.min(100, Math.max(0, percent));
+  // 四舍五入也不能把尚未完成的计划显示成 100%。
+  return Math.min(99, Math.max(0, percent));
+}
+
+export function scheduleStatus(schedule: ScheduleDTO): { label: string; tone: Tone } {
+  if (schedule.tasks.length === 0) return { label: "暂无工序", tone: "neutral" };
+  if (schedule.tasks.every((task) => task.status === "done")) return { label: "工序全部完成", tone: "brand" };
+  if (schedule.tasks.some((task) => task.status === "blocked")) return { label: "有工序受阻", tone: "danger" };
+  if (schedule.tasks.some((task) => task.status === "active")) return { label: "施工中", tone: "brand" };
+  if (schedule.tasks.some((task) => task.status === "done")) return { label: "等待后续工序", tone: "neutral" };
+  return { label: "未开工", tone: "neutral" };
 }
 
 /** 「第 1 天」或「第 1–3 天」，duration=1 时不显示区间，避免出现「第 1–1 天」 */
