@@ -3,11 +3,26 @@
 import { useState } from "react";
 import { DemandDraftPanel } from "@/features/a/DemandDraftPanel";
 import { useDemandChat } from "@/features/a/useDemandChat";
+import { Badge, Button, C, Card, Note, SectionHead } from "@/features/a/ui";
 
 const QUICK_PHRASES = [
   "深圳 60 平老房，给老人住，卫生间太滑，想加扶手",
   "厨房漏水，橱柜底板发霉，预算 1 万左右",
 ];
+
+/** 头像：让对话看起来像两个人的往来，而不是两条文本 */
+function Avatar({ me }: { me: boolean }) {
+  return (
+    <span
+      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11.5px] font-semibold ${
+        me ? "bg-[#E7F3EF] text-[#0C5A47]" : "bg-[#FDF0E2] text-[#8A5A06]"
+      }`}
+      aria-hidden
+    >
+      {me ? "我" : "AI"}
+    </span>
+  );
+}
 
 export function ChatWindow() {
   const { messages, phase, error, result, source, canRetry, send, retry, reset } = useDemandChat();
@@ -22,73 +37,80 @@ export function ChatWindow() {
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-      <section className="card">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="!mb-0">AI 需求澄清</h2>
-          <span className="badge">对话接口来源：{source ?? "未确认"}</span>
-        </div>
-        <p className="text-xs text-slate-500">
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)]">
+      <Card>
+        <SectionHead
+          title="AI 需求澄清"
+          aside={
+            <Badge tone={source === "live" ? "brand" : "accent"}>
+              对话接口来源：{source ?? "未确认"}
+            </Badge>
+          }
+        />
+        <p className={`!mb-0 ${C.meta}`}>
           当前为 mock 澄清接口，不调用真实模型，也不会自动补全您没说过的信息。
         </p>
 
         <ol
-          className="mt-3 grid max-h-[420px] gap-2 overflow-y-auto rounded-xl bg-slate-50 p-3"
+          className="mt-3.5 grid max-h-[440px] gap-3 overflow-y-auto rounded-[12px] bg-[#F7FAFA] p-3.5"
           aria-live="polite"
         >
-          {messages.map((message, index) => (
-            <li
-              key={`${message.role}-${index}`}
-              className={
-                message.role === "user"
-                  ? "ml-auto max-w-[85%] rounded-xl bg-teal-700 px-3 py-2 text-sm text-white"
-                  : "mr-auto max-w-[85%] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
-              }
-            >
-              <span className="block text-[11px] opacity-70">
-                {message.role === "user" ? "我" : "需求澄清助手"}
-              </span>
-              {message.content}
-            </li>
-          ))}
+          {messages.map((message, index) => {
+            const me = message.role === "user";
+            return (
+              <li key={`${message.role}-${index}`} className="flex items-start gap-2.5">
+                <Avatar me={me} />
+                <div
+                  className={
+                    me
+                      ? "max-w-[84%] rounded-[12px] rounded-tl-[4px] bg-[#0F6E56] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-white"
+                      : "max-w-[84%] rounded-[12px] rounded-tl-[4px] border border-[#E2E9EB] bg-white px-3.5 py-2.5 text-[13.5px] leading-relaxed text-[#16242B]"
+                  }
+                >
+                  <span
+                    className={`mb-1 block text-[11px] ${me ? "text-white/65" : "text-[#7A8A90]"}`}
+                  >
+                    {me ? "我" : "需求澄清助手"}
+                  </span>
+                  {message.content}
+                </div>
+              </li>
+            );
+          })}
           {sending && (
-            <li className="mr-auto rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
-              助手正在整理需求…
+            <li className="flex items-start gap-2.5">
+              <Avatar me={false} />
+              <div className="rounded-[12px] rounded-tl-[4px] border border-[#E2E9EB] bg-white px-3.5 py-2.5 text-[13.5px] text-[#7A8A90]">
+                助手正在整理需求…
+              </div>
             </li>
           )}
         </ol>
 
         {error && (
-          <div className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert">
-            <p className="!mb-2">{error}</p>
-            <div className="flex gap-2">
-              {canRetry && (
-                <button
-                  type="button"
-                  className="rounded-lg border border-red-300 px-3 py-1.5 text-sm"
-                  onClick={retry}
-                  disabled={sending}
-                >
-                  重试上一次请求
-                </button>
-              )}
-              <button
-                type="button"
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-                onClick={reset}
-              >
-                重新开始
-              </button>
-            </div>
+          <div className="mt-3">
+            <Note tone="danger" title="对话请求失败">
+              <p>{error}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {canRetry && (
+                  <Button variant="danger" size="sm" onClick={retry} disabled={sending}>
+                    重试上一次请求
+                  </Button>
+                )}
+                <Button variant="secondary" size="sm" onClick={reset}>
+                  重新开始
+                </Button>
+              </div>
+            </Note>
           </div>
         )}
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3.5 flex flex-wrap gap-2">
           {QUICK_PHRASES.map((phrase) => (
             <button
               key={phrase}
               type="button"
-              className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-700"
+              className={C.pill}
               onClick={() => setText(phrase)}
               disabled={sending}
             >
@@ -97,10 +119,10 @@ export function ChatWindow() {
           ))}
         </div>
 
-        <div className="mt-3 grid gap-2">
+        <div className="mt-3 grid gap-2.5">
           <textarea
-            className="min-h-[76px] w-full rounded-lg border border-slate-300 p-2 text-sm"
-            placeholder="例如：深圳 60 平老房，给老人住，卫生间太滑，预算 3-5 万，一个月内完工"
+            className={`min-h-[84px] resize-y ${C.input}`}
+            placeholder="用一句话说说房子的情况和您想怎么改，例如：深圳 60 平老房，给老人住，卫生间太滑，预算 3-5 万，一个月内完工"
             value={text}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
@@ -112,26 +134,16 @@ export function ChatWindow() {
             disabled={sending}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-              onClick={() => void submit()}
-              disabled={sending || text.trim().length === 0}
-            >
+            <Button onClick={() => void submit()} disabled={sending || text.trim().length === 0}>
               {sending ? "发送中…" : "发送"}
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              onClick={reset}
-              disabled={sending}
-            >
+            </Button>
+            <Button variant="secondary" onClick={reset} disabled={sending}>
               清空对话
-            </button>
-            <span className="text-xs text-slate-500">Enter 发送，Shift+Enter 换行</span>
+            </Button>
+            <span className={C.meta}>Enter 发送，Shift+Enter 换行</span>
           </div>
         </div>
-      </section>
+      </Card>
 
       <DemandDraftPanel result={result} source={source} />
     </div>
