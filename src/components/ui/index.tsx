@@ -23,40 +23,40 @@ export const T = {
 
 /* ---------- 类名常量：其他三位可直接复用 ---------- */
 export const C = {
-  card: "rounded-[14px] border border-[#E2E9EB] bg-white p-5 shadow-[0_1px_2px_rgba(22,36,43,0.04)]",
-  cardFlush: "rounded-[14px] border border-[#E2E9EB] bg-white shadow-[0_1px_2px_rgba(22,36,43,0.04)]",
-  sectionTitle: "text-[15px] font-semibold text-[#16242B]",
-  pageTitle: "text-[26px] font-bold tracking-tight text-[#16242B]",
-  pageSub: "text-[13.5px] leading-relaxed text-[#4A5A60]",
-  meta: "text-[12px] text-[#7A8A90]",
+  card: "rounded-card border border-line bg-white p-5 shadow-sm",
+  cardFlush: "rounded-card border border-line bg-white shadow-sm",
+  sectionTitle: "text-[15px] font-semibold text-ink",
+  pageTitle: "text-[26px] font-bold tracking-tight text-ink",
+  pageSub: "text-[13.5px] leading-relaxed text-ink-2",
+  meta: "text-[12px] text-ink-3",
 
   btnBase:
     "inline-flex items-center justify-center gap-1.5 rounded-[10px] px-4 py-2 text-[13.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45",
-  btnPrimary: "bg-[#0F6E56] text-white hover:bg-[#0C5A47]",
+  btnPrimary: "bg-brand text-white hover:bg-brand-hover",
   btnSecondary:
-    "border border-[#E2E9EB] bg-white text-[#16242B] hover:border-[#0F6E56] hover:text-[#0F6E56]",
-  btnGhost: "text-[#0F6E56] hover:bg-[#E7F3EF]",
-  btnDanger: "border border-[#EAC7C3] bg-white text-[#B42318] hover:bg-[#FEF3F2]",
+    "border border-line bg-white text-ink hover:border-brand hover:text-brand",
+  btnGhost: "text-brand hover:bg-brand-soft",
+  btnDanger: "border border-danger/20 bg-white text-danger hover:bg-danger-soft",
   btnSm: "px-3 py-1.5 text-[12.5px]",
 
-  pill: "inline-flex items-center rounded-full border border-[#E2E9EB] bg-white px-3 py-1 text-[12px] text-[#4A5A60] hover:border-[#0F6E56] hover:text-[#0F6E56]",
+  pill: "inline-flex items-center rounded-full border border-line bg-white px-3 py-1 text-[12px] text-ink-2 hover:border-brand hover:text-brand",
 
   badge: "inline-flex items-center gap-1 rounded-[7px] px-2 py-0.5 text-[11.5px] font-medium",
-  badgeBrand: "bg-[#E7F3EF] text-[#0C5A47]",
-  badgeAccent: "bg-[#FDF0E2] text-[#8A5A06]",
-  badgeNeutral: "bg-[#F0F3F4] text-[#4A5A60]",
-  badgeDanger: "bg-[#FEF3F2] text-[#B42318]",
+  badgeBrand: "bg-brand-soft text-brand-hover",
+  badgeAccent: "bg-accent-soft text-warn",
+  badgeNeutral: "bg-line/40 text-ink-2",
+  badgeDanger: "bg-danger-soft text-danger",
 
   label: "grid gap-1.5 text-[12.5px]",
-  labelText: "font-medium text-[#4A5A60]",
+  labelText: "font-medium text-ink-2",
   input:
-    "w-full rounded-[9px] border border-[#E2E9EB] bg-white px-3 py-2 text-[13.5px] text-[#16242B] outline-none placeholder:text-[#A8B4B8] focus:border-[#0F6E56] focus:ring-2 focus:ring-[#0F6E56]/[0.12]",
+    "w-full rounded-input border border-line bg-white px-3 py-2 text-[13.5px] text-ink outline-none placeholder:text-ink-3 focus:border-brand focus:ring-2 focus:ring-brand/15",
 
   note: "rounded-[10px] px-3 py-2.5 text-[12.5px] leading-relaxed",
-  noteWarn: "bg-[#FEF6E7] text-[#8A5A06]",
-  noteInfo: "bg-[#F0F3F4] text-[#4A5A60]",
-  noteDanger: "bg-[#FEF3F2] text-[#B42318]",
-  noteOk: "bg-[#E7F3EF] text-[#0C5A47]",
+  noteWarn: "bg-warn-soft text-warn",
+  noteInfo: "bg-line/40 text-ink-2",
+  noteDanger: "bg-danger-soft text-danger",
+  noteOk: "bg-brand-soft text-brand-hover",
 } as const;
 
 /* ---------- 基础组件 ---------- */
@@ -152,7 +152,7 @@ export function Field({
     <label className={C.label}>
       <span className={C.labelText}>
         {label}
-        {hint ? <span className="ml-1 font-normal text-[#A8B4B8]">（{hint}）</span> : null}
+        {hint ? <span className="ml-1 font-normal text-ink-3">（{hint}）</span> : null}
       </span>
       {children}
     </label>
@@ -193,8 +193,8 @@ export function Empty({
   action?: ReactNode;
 }) {
   return (
-    <div className="grid place-items-center gap-2 rounded-[12px] border border-dashed border-[#E2E9EB] bg-[#FAFCFC] px-4 py-8 text-center">
-      <p className="!mb-0 text-[13.5px] font-medium text-[#4A5A60]">{title}</p>
+    <div className="grid place-items-center gap-2 rounded-control border border-dashed border-line bg-white px-4 py-8 text-center">
+      <p className="!mb-0 text-[13.5px] font-medium text-ink-2">{title}</p>
       {hint ? <p className={`!mb-0 ${C.meta}`}>{hint}</p> : null}
       {action}
     </div>

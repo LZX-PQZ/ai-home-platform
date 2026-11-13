@@ -16,7 +16,7 @@ test("共享 UI 出口提供基础组件并保留可识别的 focus ring", () =>
       createElement(Empty, { title: "暂无数据" }),
     ),
   );
-  assert.match(html, /focus:ring-2 focus:ring-\[#0F6E56\]\/\[0\.12\]/);
+  assert.match(html, /focus:ring-2 focus:ring-brand\/15/);
   assert.match(html, /role="alert"/);
   assert.match(html, /暂无数据/);
 });
