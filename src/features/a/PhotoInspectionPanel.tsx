@@ -1,8 +1,17 @@
 "use client";
 
 import { useState, type ChangeEvent } from "react";
+import { ApiClientError } from "@/lib/api-client";
 import { Button, C, Card, Note, SectionHead } from "./ui";
-import { PHOTO_INSPECTION_HINTS, photoInspectionStatus, type PhotoInspectionPhase } from "./photo-inspection";
+import {
+  formatInspectionResult,
+  inspectionSourceLabel,
+  PHOTO_INSPECTION_HINTS,
+  photoInspectionStatus,
+  submitPhotoInspection,
+  type PhotoInspectionPhase,
+  type PhotoInspectionResponse,
+} from "./photo-inspection";
 
 /**
  * 施工照片辅助检查入口。
@@ -11,15 +20,30 @@ import { PHOTO_INSPECTION_HINTS, photoInspectionStatus, type PhotoInspectionPhas
 export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
   const [files, setFiles] = useState<string[]>([]);
   const [phase, setPhase] = useState<PhotoInspectionPhase>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<PhotoInspectionResponse | null>(null);
 
   const onSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const names = Array.from(event.target.files ?? []).map((file) => file.name);
     setFiles(names);
     setPhase(names.length > 0 ? "selected" : "idle");
+    setError(null);
+    setResult(null);
   };
 
-  const submit = () => {
-    if (files.length > 0) setPhase("unavailable");
+  const submit = async () => {
+    if (files.length === 0 || phase === "submitting") return;
+    setPhase("submitting");
+    setError(null);
+    setResult(null);
+    try {
+      const response = await submitPhotoInspection(demandId, files);
+      setResult(response);
+      setPhase("ready");
+    } catch (cause) {
+      setPhase(cause instanceof ApiClientError && cause.status === 501 ? "unavailable" : "failed");
+      setError(cause instanceof Error ? cause.message : "照片检查请求失败，请重试。");
+    }
   };
 
   return (
@@ -51,7 +75,7 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
 
       <div className="mt-3 grid gap-2 sm:flex sm:items-center">
         <Button variant="secondary" onClick={submit} disabled={files.length === 0}>
-          提交辅助检查
+          {phase === "submitting" ? "提交中…" : "提交辅助检查"}
         </Button>
         <span className={C.meta}>需求 {demandId} · 当前不会自动确认验收</span>
       </div>
@@ -62,10 +86,28 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
         </ul>
       </Note>
 
+      {phase === "ready" && result ? (
+        <div className="mt-3">
+          <Note tone="ok" title={`辅助检查结果（来源：${inspectionSourceLabel(result.source)}）`}>
+            <pre className="mb-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-[#F7FAFA] p-2 text-[12px] leading-relaxed text-[#16242B]">{formatInspectionResult(result.data)}</pre>
+            <p className="!mb-0">以上内容只提示疑点，不能代替现场检测，也不等于验收合格。</p>
+          </Note>
+        </div>
+      ) : null}
+
       {phase === "unavailable" ? (
         <div className="mt-3">
           <Note tone="warn">
-            照片检查接口尚未开放（501）。本页不会把照片或排期状态改成「已验收」，请由施工负责人现场确认。
+            {error ?? "照片检查接口尚未开放（501）。"} 本页不会把照片或排期状态改成「已验收」，请由施工负责人现场确认。
+          </Note>
+        </div>
+      ) : null}
+
+      {phase === "failed" ? (
+        <div className="mt-3">
+          <Note tone="danger" title="照片辅助检查失败">
+            <p>{error ?? "照片检查请求失败，请重试。"}</p>
+            <Button variant="secondary" size="sm" onClick={() => void submit()}>重试</Button>
           </Note>
         </div>
       ) : null}

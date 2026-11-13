@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ApiClientError } from "../src/lib/api-client";
 import { PhotoInspectionPanel } from "../src/features/a/PhotoInspectionPanel";
-import { photoInspectionStatus } from "../src/features/a/photo-inspection";
+import { formatInspectionResult, photoInspectionStatus, submitPhotoInspection } from "../src/features/a/photo-inspection";
 
 const previousReact = Object.getOwnPropertyDescriptor(globalThis, "React");
 before(() => Object.defineProperty(globalThis, "React", { configurable: true, value: React }));
@@ -22,10 +23,42 @@ test("照片辅助检查首屏明确来源未知，并提示只能辅助发现�
   assert.match(html, /disabled/);
 });
 
-test("照片检查状态只描述选择和 501，不生成验收成功结论", () => {
+test("照片检查状态覆盖等待、成功、失败和 501，不生成验收成功结论", () => {
   assert.match(photoInspectionStatus("idle", 0), /尚未选择照片/);
   assert.match(photoInspectionStatus("selected", 2), /已选择 2 张照片/);
+  assert.match(photoInspectionStatus("submitting", 2), /等待接口返回/);
+  assert.match(photoInspectionStatus("ready", 2), /已返回辅助检查结果/);
   const unavailable = photoInspectionStatus("unavailable", 2);
   assert.match(unavailable, /501/);
   assert.doesNotMatch(unavailable, /已验收|验收合格/);
+  assert.match(photoInspectionStatus("failed", 2), /未完成/);
+});
+
+test("照片提交通过 apiPost 发送需求 ID 和图片引用，并展示实际返回数据", async (t) => {
+  const request = t.mock.method(globalThis, "fetch", async (path: string, init?: RequestInit) => {
+    assert.equal(path, "/api/inspect");
+    assert.equal(init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(init?.body)), { demandId: "d-1", imageRefs: ["before.jpg"] });
+    return Response.json({ ok: true, data: { findings: ["画面有反光"] }, meta: { source: "mock" } });
+  });
+  const result = await submitPhotoInspection("d-1", ["before.jpg"]);
+  assert.deepEqual(result, { data: { findings: ["画面有反光"] }, source: "mock" });
+  assert.match(formatInspectionResult(result.data), /画面有反光/);
+  assert.equal(request.mock.callCount(), 1);
+});
+
+test("501 由 apiPost 传给页面，不变成空成功", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => Response.json(
+    { ok: false, error: { code: "NOT_IMPLEMENTED", message: "这是开工骨架，此操作尚未实现。" } },
+    { status: 501 },
+  ));
+  await assert.rejects(
+    submitPhotoInspection("d-1", ["before.jpg"]),
+    (cause: unknown) => {
+      assert.ok(cause instanceof ApiClientError);
+      assert.equal(cause.status, 501);
+      assert.match(cause.message, /HTTP 501/);
+      return true;
+    },
+  );
 });
