@@ -1,6 +1,7 @@
 import { z } from "zod";
 export const Money = z.number().int().nonnegative().safe();
 export const Id = z.string().min(1);
+export const Source = z.enum(["mock", "live"]);
 export const DemandInput = z.object({
   description: z.string().trim().min(1).max(4000),
   city: z.string().trim().min(1), areaM2: z.number().finite().positive(),
@@ -14,6 +15,7 @@ export const Demand = z.object({
   renovationType: z.enum(["elderly", "partial", "repair"]),
   desiredDays: z.number().int().positive(),
   status: z.enum(["draft", "published", "contracted", "in_progress", "completed"]),
+  source: Source.optional(),
 });
 export const Provider = z.object({
   id: Id, name: z.string(), city: z.string(),
@@ -50,8 +52,9 @@ export const ChatInput = z.object({ messages: z.array(z.object({ role: z.enum(["
 export const ChatResult = z.object({ reply: z.string(), ready: z.boolean(), draft: DemandInput.nullable(), missingFields: z.array(z.string()) });
 export const ReviewInput = z.object({ demandId: Id, providerId: Id, rating: z.number().int().min(1).max(5), comment: z.string().max(2000) });
 export function envelope<T extends z.ZodTypeAny>(schema: T) {
-  return z.object({ ok: z.literal(true), data: schema, meta: z.object({ source: z.enum(["mock", "live"]) }) });
+  return z.object({ ok: z.literal(true), data: schema, meta: z.object({ source: Source }) });
 }
+export type SourceDTO = z.infer<typeof Source>;
 export type DemandDTO = z.infer<typeof Demand>;
 export type DemandInputDTO = z.infer<typeof DemandInput>;
 export type DemandStatus = DemandDTO["status"];
