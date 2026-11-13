@@ -37,14 +37,17 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
       <section aria-labelledby="matches-heading">
         <p className="text-sm text-slate-500">服务方来源：{providerSource === "mock" ? "模拟资料和样例评分" : "服务方接口数据"}</p>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="mb-0" id="matches-heading">{matches.length ? `${matches.length} 家符合城市与工种的候选团队` : "暂未找到符合条件的团队"}</h2>
-          <span className="text-sm text-slate-500">按匹配分从高到低排列</span>
+          <h2 className="mb-0" id="matches-heading">{matches.length ? `${matches.length} 家符合城市与工种的候选团队` : providerSource === "mock" ? "当前模拟资料中暂未找到符合条件的团队" : "本次返回的资料中暂未找到符合条件的团队"}</h2>
+          {matches.length > 0 && <span className="text-sm text-slate-500">按匹配分从高到低排列</span>}
         </div>
         {matches.length ? (
           <div className="grid gap-4 md:grid-cols-2">{matches.map((match, index) => <ProviderCard key={match.provider.id} match={match} rank={index + 1} />)}</div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
-            <p>当前没有同城施工团队。可以返回需求详情核对城市，或等待更多服务方加入。</p>
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center" role="status">
+            <p>{providerSource === "mock"
+              ? "当前服务方接口仅提供模拟资料，其中没有符合这份需求城市与工种的团队，不能据此判断是否存在真实可接单团队。"
+              : "本次返回的服务方资料中，没有符合这份需求城市与工种的团队；这不代表当地没有施工团队。"}</p>
+            <p className="text-sm text-slate-600">可以返回需求详情核对城市，或使用页面上方的“刷新匹配”重新读取资料。</p>
             <Link href={`/owner/demand/${encodeURIComponent(demand.id)}`}>查看需求详情 →</Link>
           </div>
         )}
