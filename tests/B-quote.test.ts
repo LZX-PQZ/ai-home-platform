@@ -105,7 +105,7 @@ test("报价数据入口不会将未知需求替换成演示需求", () => {
   assert.equal(loadQuoteData(""), null);
 });
 
-test("报价 GET 保持公共契约和 mock 来源，POST 的 501 不视为成功", async () => {
+test("报价 GET 保持公共契约和 mock 来源，默认未登录的 POST 明确失败", async () => {
   const response = GET();
   assert.equal(response.status, 200);
   const body = envelope(Quote.array()).parse(await response.json());
@@ -118,6 +118,8 @@ test("报价 GET 保持公共契约和 mock 来源，POST 的 501 不视为成�
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ demandId: demoDemand.id, estimatedDays: 10, items: [{ code: "test", name: "测试", unit: "job", quantity: 1, unitPriceCents: 100, note: "" }] }),
   }));
-  assert.equal(failure.status, 501);
-  assert.equal((await failure.json()).ok, false);
+  assert.equal(failure.status, 401);
+  const failed = await failure.json();
+  assert.equal(failed.ok, false);
+  assert.equal(failed.error.code, "UNAUTHENTICATED");
 });

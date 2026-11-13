@@ -1,7 +1,7 @@
 # B → D：报价查询与提交契约交接
 
 - 申请角色：B
-- D 处理状态：PR #23 冻结 QuoteSubmissionInput，PR #31 明确逐行整数计价；B 已接入校验并修正计价，身份、权限、幂等和写入尚未接通。
+- D 处理状态：PR #23 冻结输入，PR #31 明确整数计价，PR #36 提供身份入口和需求查询边界；B 已准备身份与需求状态预检，认证模块导入边界仍待修正，真实登录、细粒度授权、幂等和写入尚未接通。
 - 用户场景：C 提交服务方报价后，A/B 按同一 demandId 查看已提交报价；不能由客户端冒充服务方或决定合计金额。
 - 共享文件：src/contracts/index.ts、docs/API.md、D 的鉴权/数据库/查询基础设施、共享 mock 和契约测试。由 D 修改，B 本 PR 不改这些文件。
 
@@ -11,7 +11,9 @@
 - PR #28 的浮点乘法已按 PR #31 和 C-quote-rounding.md 修正。回归样例：0.144/0.145/0.146 × 100 分分别为 14/15/15 分；1.004/1.005/1.006 × 100 分分别为 100/101/101 分；两行 0.145 × 100 分分别为 15 分、合计 30 分。测试同时覆盖零元、null、数量上下限、大整数中间值及单行/累计溢出。
 - 未知单价保持 null，行金额也为 null，不参与已知小计。零元明确保留为 0。同名但不同 code 的未知项目在 pendingItems 中保留多个名称条目。
 - 计价函数只返回现有 Quote 的需求、明细、工期、已知小计和待确认字段；不生成身份、报价 ID、submitted 状态或成功信封，不查询或写入数据库。
-- POST /api/quote：非法 JSON 返回 400/INVALID_JSON；公共输入校验失败、客户端伪造字段或计算溢出返回 400/VALIDATION_ERROR。合法输入仍返回 501/NOT_IMPLEMENTED，不返回计算结果或成功信封，不能称为提交成功。
+- POST /api/quote 先检查服务端身份：无已验证会话返回 401/UNAUTHENTICATED，非服务方或无服务方绑定返回 403/FORBIDDEN，不解析请求体或查需求。当前默认适配器无真实会话，因此实际 HTTP 请求返回 401。
+- 认证后非法 JSON 返回 400/INVALID_JSON；公共输入校验失败、客户端伪造字段或计算溢出返回 400/VALIDATION_ERROR。再通过 findDemand 查询，无需求 404/DEMAND_NOT_FOUND，非 published 409/INVALID_STATE，查询失败或错位 ID 503/DATABASE_UNAVAILABLE。全部通过仍为 501/NOT_IMPLEMENTED，不返回报价或成功信封，不写库。
+- server-auth 的导入尚未被 D 的边界脚本放行，接入代码暂为草稿；精确修正请求和响应优先级见 B-quote-auth-boundary.md。预检不替代将来的事务内授权和状态核验。
 - GET /api/quote、现有报价展示和历史明细计算规则保持原行为；不会用新输入计价规则补齐历史报价的 null 金额。页面及 C 的提交表单本次未修改。
 - 请 D 在 docs/API.md 中同步上述校验行为；公共字段和成功响应形状没有新增。
 
@@ -30,13 +32,13 @@ B 的报价页通过已开放的 GET /api/demand/[id] 验证当前需求，再�
 ## 请求 D 确认并合入的字段与行为
 
 1. 已完成：公共 QuoteSubmissionInput 和 DTO，含 demandId、1–20 项 items、正安全整数 estimatedDays；行 code 唯一，quantity 为正数、至多三位小数且不超过 1,000,000，金额用安全整数分或 null。具体限制直接使用公共 Schema，不复制替代 DTO。
-2. 输入已禁止 providerId、amountCents、knownTotalCents、pendingItems、status 等服务端字段。仍需 D 明确并提供可复用的服务端身份入口：从已验证会话取得服务方 ID，不能信任请求体、普通请求头或角色导航。身份入口还需规定未登录/非服务方的 401/403 行为以及需求读取和报价权限。
+2. 输入已禁止 providerId、amountCents、knownTotalCents、pendingItems、status 等服务端字段。D 已提供 requireProviderIdentity 和 401/403 规则；仍需补齐 B-quote-auth-boundary.md 的导入许可，以及真实验证签名、会话过期、账户绑定和数据访问范围的会话适配器，不能信任客户端身份字段或角色导航。
 3. 已完成：按 PR #31 的逐行整数舍入规则实现提交计价和安全整数校验，与 C 的边界样例一致；该规则仅用于新的提交输入，不推算历史报价未列明的金额。
 4. 按 D 的交接，报价路由、业务计价、幂等与 Prisma 写入由 B 实现。待服务端身份入口就绪后，B 将在本模块实现需求状态校验与原子写入；请 D 确认重复提交协议（新版本、更新还是 409，以及超时重试如何识别），涉及公共请求头/契约或 schema 由 D 合入。成功才返回 envelope(Quote) 和 submitted，失败不得落库。
-5. 报价查询仍待确定协议，建议 GET /api/quote?demandId=... 返回 envelope(Quote[])；已知需求暂无报价时为 []，未知需求 404，非法参数 400，无权限按 D 的统一约定处理。业主只读 submitted/accepted，草稿和已拒绝报价不进入当前对比。`findDemand` 的导入边界目前仅开放给 match 目录；请 D 同样允许 B 的 quote API/quote-engine 服务端模块复用，保持客户端不得导入需求数据库服务。
+5. 报价查询仍待确定协议，建议 GET /api/quote?demandId=... 返回 envelope(Quote[])；已知需求暂无报价时为 []，未知需求 404，非法参数 400，无权限按 D 的统一约定处理。业主只读 submitted/accepted，草稿和已拒绝报价不进入当前对比。D 已允许 quote API/quote-engine 复用 findDemand，B 本次已准备调用，不复制查询逻辑。
 6. 与已有 B-demand-query.md 一并明确需求和服务方名称查询的来源。真实查询失败不得回退为模拟成功；仅完整数据链路接通后标 live。
 
-## 已冻结输入示例（目前合法输入仍返回 501，不会写入）
+## 已冻结输入示例（未登录 401，已认证且通过需求校验后仍为 501，不会写入）
 
 ```json
 {
@@ -57,5 +59,5 @@ B 的报价页通过已开放的 GET /api/demand/[id] 验证当前需求，再�
 - 伪造 providerId、金额合计或状态的请求被拒绝，合法身份只能给有权限的需求报价。
 - 提交含未知费用的报价后，C 得到真实成功；A/B 读取相同需求时显示相同明细、已知合计与待确认项。
 - 不同需求的报价不混入；空结果、404、权限失败和服务器失败分别处理。
-- POST /api/quote 在实际接通前继续返回 501/ok:false，页面不能显示提交成功。
+- POST /api/quote 默认未登录返回 401，认证及其他校验通过仍返回 501/ok:false，页面均不能显示提交成功。
 - 档期排序、单位不一致/缺项诊断等 P1 功能不在本次范围。
