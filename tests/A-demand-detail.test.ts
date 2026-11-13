@@ -1,83 +1,152 @@
 import assert from "node:assert/strict";
-import test from "node:test";
-import {
-  detailFallbackReason,
-  detailMissingHint,
-  detailViaLabel,
-  interpretDetailResponse,
-} from "../src/features/a/demand-detail";
+import test, { before, after } from "node:test";
+import React, { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Demand } from "../src/contracts";
+import { loadDemandDetail, type DemandDetailState } from "../src/features/a/demand-detail";
+import { DemandDetailContent } from "../src/features/a/DemandDetailPanel";
 
-const demand = {
-  id: "d-1",
-  description: "70 平老房卫生间防滑改造",
-  city: "深圳",
-  areaM2: 70,
-  budgetMinCents: 3500000,
-  budgetMaxCents: 5200000,
-  renovationType: "elderly" as const,
-  desiredDays: 35,
-  status: "published" as const,
-};
-
-const ok = (data: unknown, source: "mock" | "live" = "live") => ({ ok: true, data, meta: { source } });
-
-test("按 ID 接口返回合法需求时命中 byId，并带上来源", () => {
-  const probe = interpretDetailResponse(200, ok(demand), "d-1");
-  assert.equal(probe.kind, "demand");
-  if (probe.kind !== "demand") return;
-  assert.deepEqual(probe.demand, demand);
-  assert.equal(probe.source, "live");
+// tsx 在仓库的 jsx:preserve 配置下使用经典 JSX；仅为本文件的渲染测试提供 React。
+const previousReact = Object.getOwnPropertyDescriptor(globalThis, "React");
+before(() => Object.defineProperty(globalThis, "React", { configurable: true, value: React }));
+after(() => {
+  if (previousReact) Object.defineProperty(globalThis, "React", previousReact);
+  else Reflect.deleteProperty(globalThis, "React");
 });
 
-test("接口未实现（404/501）时返回回退原因，而不是当成失败", () => {
-  const notFound = interpretDetailResponse(404, null, "d-1");
-  assert.equal(notFound.kind, "fallback");
-  const notImplemented = interpretDetailResponse(501, null, "d-1");
-  assert.equal(notImplemented.kind, "fallback");
-  if (notImplemented.kind === "fallback") {
-    assert.match(notImplemented.reason, /501/);
-    assert.match(notImplemented.reason, /回退到列表查找/);
+// 仅用于测试的模拟记录，页面不包含本地演示数据。
+const demand = Demand.parse({
+  id: "d-1", description: "测试需求：卫生间防滑改造", city: "深圳", areaM2: 70,
+  budgetMinCents: 3500000, budgetMaxCents: 5200000,
+  renovationType: "elderly", desiredDays: 35, status: "published",
+});
+const ok = (data: unknown, source = "live") => ({ ok: true, data, meta: { source } });
+const render = (state: DemandDetailState, id = demand.id) => renderToStaticMarkup(
+  createElement(DemandDetailContent, { id, state, reload() {} }),
+);
+
+test("详情只请求按 ID 接口，保留公共契约字段和 mock/live 来源", async (t) => {
+  for (const source of ["mock", "live"] as const) {
+    const request = t.mock.method(globalThis, "fetch", async (path: string) => {
+      assert.equal(path, "/api/demand/d-1");
+      return Response.json(ok(demand, source));
+    });
+    assert.deepEqual(await loadDemandDetail(demand.id), { phase: "ready", demand, source });
+    assert.equal(request.mock.callCount(), 1);
+    t.mock.restoreAll();
   }
 });
 
-test("服务端错误同样回退，原因里带状态码", () => {
-  const probe = interpretDetailResponse(503, { ok: false, error: { code: "x", message: "y" } }, "d-1");
-  assert.equal(probe.kind, "fallback");
-  if (probe.kind === "fallback") assert.match(probe.reason, /503/);
+test("空编号在本地拦截；特殊字符编码后查询并严格核对 ID", async (t) => {
+  const id = "需求/one?#";
+  const request = t.mock.method(globalThis, "fetch", async (path: string) => {
+    assert.equal(path, `/api/demand/${encodeURIComponent(id)}`);
+    return Response.json(ok({ ...demand, id }));
+  });
+  for (const invalid of ["", "  "]) assert.equal((await loadDemandDetail(invalid)).phase, "failed");
+  assert.equal(request.mock.callCount(), 0);
+  assert.equal((await loadDemandDetail(id)).phase, "ready");
+  assert.equal(request.mock.callCount(), 1);
 });
 
-test("返回的是另一条需求时拒绝采用，避免张冠李戴", () => {
-  const probe = interpretDetailResponse(200, ok({ ...demand, id: "d-2" }), "d-1");
-  assert.equal(probe.kind, "fallback");
-  if (probe.kind === "fallback") assert.match(probe.reason, /另一条需求/);
+test("404 是资源不存在，不查询列表或冒充接口未开放，即使响应含成功数据", async (t) => {
+  for (const response of [
+    Response.json({ ok: false, error: { code: "DEMAND_NOT_FOUND", message: "需求不存在" } }, { status: 404 }),
+    new Response("not found", { status: 404 }),
+    Response.json(ok(demand), { status: 404 }),
+  ]) {
+    const request = t.mock.method(globalThis, "fetch", async () => response);
+    assert.deepEqual(await loadDemandDetail(demand.id), { phase: "missing" });
+    assert.equal(request.mock.callCount(), 1);
+    t.mock.restoreAll();
+  }
 });
 
-test("返回数据结构不符合契约时回退，不把半个对象渲染到页面", () => {
-  const probe = interpretDetailResponse(200, ok({ id: "d-1", city: "深圳" }), "d-1");
-  assert.equal(probe.kind, "fallback");
-  if (probe.kind === "fallback") assert.match(probe.reason, /不符合契约/);
+test("400/401/403/501/503 明确报错，不通过列表请求掩盖失败", async (t) => {
+  for (const [status, expected] of [
+    [400, /编号无效/], [401, /登录/], [403, /没有权限/], [501, /尚未开放/], [503, /暂时不可用/],
+  ] as const) {
+    const request = t.mock.method(globalThis, "fetch", async () => Response.json(
+      { ok: false, error: { code: "TEST_ERROR", message: "测试注入" } }, { status },
+    ));
+    const result = await loadDemandDetail(demand.id);
+    assert.equal(result.phase, "failed");
+    if (result.phase === "failed") {
+      assert.match(result.error, expected);
+      assert.match(result.error, new RegExp(`HTTP ${status}`));
+    }
+    assert.equal(request.mock.callCount(), 1);
+    t.mock.restoreAll();
+  }
 });
 
-test("ok:false 的错误信封不会被当成需求", () => {
-  const probe = interpretDetailResponse(200, { ok: false, error: { code: "E", message: "坏了" } }, "d-1");
-  assert.equal(probe.kind, "fallback");
+test("501 的非法 JSON 或成功信封也不能产生可操作详情", async (t) => {
+  for (const response of [new Response("not json", { status: 501 }), Response.json(ok(demand), { status: 501 })]) {
+    const request = t.mock.method(globalThis, "fetch", async () => response);
+    const result = await loadDemandDetail(demand.id);
+    assert.equal(result.phase, "failed");
+    if (result.phase === "failed") assert.match(result.error, /尚未开放/);
+    assert.equal(request.mock.callCount(), 1);
+    assert.doesNotMatch(render(result), /href="\/owner\/matches\//);
+    t.mock.restoreAll();
+  }
 });
 
-test("回退原因与路径标签都有中文可读文案", () => {
-  assert.match(detailFallbackReason(404), /尚未开放/);
-  assert.match(detailFallbackReason(403), /没有权限/);
-  assert.match(detailFallbackReason(418), /HTTP 418/);
-  assert.equal(detailViaLabel("byId"), "按 ID 查询");
-  assert.equal(detailViaLabel("list"), "列表回退");
+test("错位 ID、缺少来源、非法字段和 200 错误信封被拒绝，不回退", async (t) => {
+  for (const payload of [
+    ok({ ...demand, id: "other" }), ok({ id: demand.id }), { ok: true, data: demand },
+    ok(demand, "unknown"), { ok: false, error: { code: "ERROR", message: "失败" } },
+  ]) {
+    const request = t.mock.method(globalThis, "fetch", async () => Response.json(payload));
+    const result = await loadDemandDetail(demand.id);
+    assert.equal(result.phase, "failed");
+    assert.equal("demand" in result, false);
+    assert.equal(request.mock.callCount(), 1);
+    t.mock.restoreAll();
+  }
 });
 
-test("找不到需求时区分「接口没开」和「确实没有这条」", () => {
-  const withReason = detailMissingHint("d-9", "按 ID 查询接口尚未开放（HTTP 501），已回退到列表查找");
-  assert.match(withReason, /501/);
-  assert.match(withReason, /列表里也没有/);
-  assert.match(withReason, /不会用其他样例数据冒充/);
+test("网络异常和非 JSON 不回退；用户重试可读取恢复后的详情", async (t) => {
+  let attempt = 0;
+  const request = t.mock.method(globalThis, "fetch", async () => {
+    attempt++;
+    if (attempt === 1) throw new TypeError("Network error");
+    if (attempt === 2) return new Response("invalid JSON");
+    return Response.json(ok(demand));
+  });
+  assert.equal((await loadDemandDetail(demand.id)).phase, "failed");
+  assert.equal(request.mock.callCount(), 1);
+  assert.equal((await loadDemandDetail(demand.id)).phase, "failed");
+  assert.equal(request.mock.callCount(), 2);
+  assert.equal((await loadDemandDetail(demand.id)).phase, "ready");
+  assert.equal(request.mock.callCount(), 3);
+});
 
-  const withoutReason = detailMissingHint("d-9", null);
-  assert.match(withoutReason, /接口未返回编号为「d-9」的需求/);
-  assert.doesNotMatch(withoutReason, /列表里也没有/);
+test("加载/不存在/失败页面无匹配报价链接，也不提前断言 mock", () => {
+  const states: DemandDetailState[] = [{ phase: "loading" }, { phase: "missing" }, { phase: "failed", error: "服务不可用" }];
+  for (const state of states) {
+    const html = render(state);
+    assert.doesNotMatch(html, /href="\/owner\/(matches|quotes)\//);
+    assert.doesNotMatch(html, /本条需求为模拟数据|来源 live|列表回退|尚未开放/);
+  }
+  assert.match(render({ phase: "loading" }), /本页数据可能包含模拟数据，加载完成后显示具体来源/);
+  assert.match(render({ phase: "missing" }), /不存在或已被删除/);
+  assert.match(render({ phase: "missing" }), /重新读取/);
+  assert.match(render({ phase: "failed", error: "服务不可用" }), /role="alert"/);
+});
+
+test("真实与模拟来源分别披露，同一个 ID 贯穿匹配报价链接", () => {
+  const id = "需求/one?#";
+  for (const source of ["mock", "live"] as const) {
+    const html = render({ phase: "ready", demand: { ...demand, id }, source }, id);
+    assert.ok(html.includes(`/owner/matches/${encodeURIComponent(id)}`));
+    assert.ok(html.includes(`/owner/quotes/${encodeURIComponent(id)}`));
+    assert.match(html, /创建另一条需求/);
+    assert.doesNotMatch(html, /继续补充需求|列表回退/);
+    if (source === "mock") assert.match(html, /模拟数据（mock）/);
+    else {
+      assert.match(html, /来自数据库（live）/);
+      assert.doesNotMatch(html, /模拟数据/);
+    }
+  }
 });

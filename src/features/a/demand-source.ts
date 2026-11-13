@@ -35,10 +35,10 @@ export function itemSourceBadge(
 /** 列表整体说明：不再断言「只返回演示需求」，改为说明本次接口的来源与落库行为 */
 export function listSourceNote(source: "mock" | "live" | null): string {
   if (source === "live") {
-    return "说明：本次列表来自真实数据库（source: live），新建需求经 POST /api/demand 落库后会出现在这里。";
+    return "说明：本次列表来自真实数据库（source: live）。保存新需求后，可点击刷新列表查看。";
   }
   if (source === "mock") {
-    return "说明：本次列表接口返回的是模拟数据（source: mock），页面不会在本地插入需求；实际是否已落库以接口返回为准。";
+    return "说明：本次列表标记为 mock，可能混有模拟数据和实际保存的需求；这不代表每条都是模拟数据。接口尚未提供逐条来源，请打开需求详情查看该条来源。";
   }
   return "说明：列表来源未知，页面按接口原样展示，不猜测数据的真假。";
 }

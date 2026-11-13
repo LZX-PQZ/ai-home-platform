@@ -102,14 +102,15 @@ test("需求或服务方的 501/503/网络错误及非法响应均失败，不�
   assert.match(matchLoadErrorMessage(new ApiClientError("", "DATABASE_UNAVAILABLE", 503)), /暂时不可用/);
 });
 
-test("匹配结果明确显示真实需求加模拟服务方，新需求不跳入演示报价", async (t) => {
+test("匹配结果明确显示真实需求加模拟服务方，报价链接保留当前需求 ID", async (t) => {
   const demand = Demand.parse({ ...demoDemand, id: "new-demand", city: "上海", description: "测试实际需求" });
   t.mock.method(globalThis, "fetch", async (url: string) => url === "/api/provider" ? success(providers, "mock") : success(demand));
   const data = await loadMatches(demand.id);
   const html = renderToStaticMarkup(createElement(MatchResults, { data }));
-  for (const text of ["含模拟数据", "需求来源：已保存的需求数据", "服务方来源：模拟资料和样例评分", "测试实际需求", "暂未找到符合条件的团队", "报价查询尚未接通"]) assert.ok(html.includes(text), text);
+  for (const text of ["含模拟数据", "需求来源：已保存的需求数据", "服务方来源：模拟资料和样例评分", "测试实际需求", "暂未找到符合条件的团队"]) assert.ok(html.includes(text), text);
   assert.ok(!html.includes('<article '));
   assert.ok(!html.includes('href="/owner/quotes/demo-demand"'));
+  assert.ok(html.includes('href="/owner/quotes/new-demand"'));
   assert.ok(html.includes('href="/owner/demand/new-demand"'));
 });
 
