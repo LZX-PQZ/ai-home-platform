@@ -98,6 +98,10 @@ export const ScheduleTask = z.object({
   responsibleProviderId: Id.nullable(), status: z.enum(["pending", "active", "done", "blocked"]),
 });
 export const Schedule = z.object({ demandId: Id, version: z.number().int().positive(), tasks: z.array(ScheduleTask) });
+export const ScheduleQuery = z.object({
+  demandId: Id.refine(value => value.trim().length > 0),
+  version: DatabaseInt.positive().optional(),
+}).strict();
 export const Payment = z.object({
   id: Id, demandId: Id, stage: z.string(), amountCents: Money,
   status: z.enum(["pending", "confirmed_demo"]), simulated: z.literal(true),
@@ -160,6 +164,7 @@ export type QuoteDTO = z.infer<typeof Quote>;
 export type QuoteSubmissionItemInputDTO = z.infer<typeof QuoteSubmissionItemInput>;
 export type QuoteSubmissionInputDTO = z.infer<typeof QuoteSubmissionInput>;
 export type ScheduleDTO = z.infer<typeof Schedule>;
+export type ScheduleQueryDTO = z.infer<typeof ScheduleQuery>;
 export type PaymentDTO = z.infer<typeof Payment>;
 export type PaymentActionInputDTO = z.infer<typeof PaymentActionInput>;
 export type PhotoInspectionInputDTO = z.infer<typeof PhotoInspectionInput>;
