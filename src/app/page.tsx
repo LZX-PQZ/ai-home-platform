@@ -1,6 +1,6 @@
 import Link from "next/link";
 export default function Home() {
-  return <><span className="badge">开工骨架 · 模拟数据 · 尚未接入真实 AI</span><h1>把需求、报价与履约串起来</h1><p>老房适老化改造：需求澄清 → 服务方匹配 → 透明报价 → 施工排期 → 售后工单。</p><div className="grid gap-4 md:grid-cols-2">{[
+  return <><span className="badge">开工骨架 · 模拟数据 · 尚未接入真实 AI</span><h1>把需求、报价与履约串起来</h1><p>老房适老化改造：需求澄清 → 服务方匹配 → 透明报价 → 施工排期 → 售后工单。</p><p className="rounded-control bg-brand-soft px-3 py-2 text-sm text-brand-hover">本页为组内开发工作台，产品入口见右上身份切换。</p><div className="grid gap-4 md:grid-cols-2">{[
     ["A", "业主端与需求澄清", "/owner", "聊天、需求详情、施工进度、付款展示"],
     ["B", "匹配与报价", "/owner/quotes/demo-demand", "匹配规则、费用对齐、报价解释"],
     ["C", "服务方与管理端", "/provider", "需求大厅、接单、看板、售后工单"],

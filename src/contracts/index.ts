@@ -53,6 +53,8 @@ export function envelope<T extends z.ZodTypeAny>(schema: T) {
   return z.object({ ok: z.literal(true), data: schema, meta: z.object({ source: z.enum(["mock", "live"]) }) });
 }
 export type DemandDTO = z.infer<typeof Demand>;
+export type DemandInputDTO = z.infer<typeof DemandInput>;
+export type DemandStatus = DemandDTO["status"];
 export type ProviderDTO = z.infer<typeof Provider>;
 export type QuoteDTO = z.infer<typeof Quote>;
 export type ScheduleDTO = z.infer<typeof Schedule>;
