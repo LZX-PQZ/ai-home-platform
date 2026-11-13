@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { quotes, demoDemand, providers } from "../src/lib/mock-data";
-import { summarizeQuote } from "../src/lib/quote-engine";
+import { getPendingQuoteItems, summarizeQuote } from "../src/lib/quote-engine";
 import { matchProviders } from "../src/lib/match";
 import { Quote, envelope, type QuoteDTO } from "../src/contracts";
 import { prepareQuotes } from "../src/lib/quote-engine";
@@ -42,6 +42,33 @@ test("单价未知或额外待确认费用不能因列明金额存在而消失",
     items: [item({ name: "材料", unitPriceCents: null, amountCents: 200 })],
   }));
   assert.deepEqual(summary, { knownTotalCents: 200, pendingItems: ["现场勘查", "材料"] });
+});
+
+test("同名不同编号的待确认明细分别保留，金额未知与单价未知均不漏项", () => {
+  const input = quote({ pendingItems: ["垃圾清运"], items: [
+    item({ code: "haul-bathroom", name: "垃圾清运", amountCents: null }),
+    item({ code: "haul-kitchen", name: "垃圾清运", amountCents: 500, unitPriceCents: null }),
+    item({ code: "haul-bedroom", name: "垃圾清运", amountCents: 200, unitPriceCents: 200 }),
+  ] });
+  const before = structuredClone(input);
+  const pending = getPendingQuoteItems(input);
+  assert.deepEqual(pending.items.map((value) => value.code), ["haul-bathroom", "haul-kitchen"]);
+  assert.deepEqual(pending.extraNames, []);
+  assert.deepEqual(summarizeQuote(input), { knownTotalCents: 700, pendingItems: ["垃圾清运", "垃圾清运"] });
+  assert.deepEqual(input, before);
+});
+
+test("名称数组往返公共契约后重复汇总不增加或合并同名明细，额外费用保留", () => {
+  const input = quote({ pendingItems: ["现场勘查", "现场勘查", "垃圾清运"], items: [
+    item({ code: "haul-a", name: "垃圾清运", amountCents: null }),
+    item({ code: "haul-b", name: "垃圾清运", amountCents: null }),
+  ] });
+  const [first] = prepareQuotes(demoDemand.id, [input]);
+  const parsed = Quote.parse(JSON.parse(JSON.stringify(first)));
+  const [second] = prepareQuotes(demoDemand.id, [parsed]);
+  assert.deepEqual(first.pendingItems, ["现场勘查", "垃圾清运", "垃圾清运"]);
+  assert.deepEqual(first, second);
+  assert.deepEqual(getPendingQuoteItems(second).extraNames, ["现场勘查"]);
 });
 
 test("只返回当前需求已提交和已接受报价，保留原顺序而非以小计判最低价", () => {

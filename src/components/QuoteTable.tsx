@@ -1,7 +1,7 @@
 import * as React from "react";
 import type { ProviderDTO, QuoteDTO } from "@/contracts";
 import { formatQuoteMoney } from "@/features/b/format-quote";
-import { summarizeQuote } from "@/lib/quote-engine";
+import { getPendingQuoteItems, summarizeQuote } from "@/lib/quote-engine";
 
 const units: Record<QuoteDTO["items"][number]["unit"], string> = { m2: "㎡", piece: "件", job: "项" };
 const statuses: Record<QuoteDTO["status"], string> = {
@@ -17,6 +17,7 @@ export function QuoteTable({ quotes, providers = [] }: { quotes: QuoteDTO[]; pro
     <div className="grid items-start gap-5 lg:grid-cols-2">
       {quotes.map((quote) => {
         const summary = summarizeQuote(quote);
+        const pending = getPendingQuoteItems(quote);
         const providerName = providers.find((provider) => provider.id === quote.providerId)?.name ?? `服务方 ${quote.providerId}（名称待确认）`;
         return (
           <article className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" key={quote.id}>
@@ -40,7 +41,7 @@ export function QuoteTable({ quotes, providers = [] }: { quotes: QuoteDTO[]; pro
                 </tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {quote.items.map((item, index) => <tr key={`${item.code}-${index}`}>
-                    <th className="px-4 py-4 align-top font-normal" scope="row"><span className="font-medium">{item.name}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{item.note || "服务范围待确认"}</span></th>
+                    <th className="break-words px-4 py-4 align-top font-normal" scope="row"><span className="font-medium">{item.name}</span><span className="mt-1 block break-all text-xs text-slate-500">项目编号：{item.code}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{item.note || "服务范围待确认"}</span></th>
                     <td className="whitespace-nowrap px-2 py-4 align-top">{item.quantity} {units[item.unit]}</td>
                     <td className="whitespace-nowrap px-2 py-4 text-right align-top tabular-nums">{formatQuoteMoney(item.unitPriceCents)}</td>
                     <td className={`whitespace-nowrap px-4 py-4 text-right align-top tabular-nums ${item.amountCents === null ? "font-semibold text-amber-800" : ""}`}>{formatQuoteMoney(item.amountCents)}</td>
@@ -57,7 +58,10 @@ export function QuoteTable({ quotes, providers = [] }: { quotes: QuoteDTO[]; pro
               </div>
               {summary.pendingItems.length ? <div className="rounded-xl bg-amber-50 p-4 text-amber-950">
                 <h4 className="text-sm font-semibold">待确认项目 · {summary.pendingItems.length} 项</h4>
-                <ul className="mt-2 list-inside list-disc text-sm leading-6">{summary.pendingItems.map((name) => <li key={name}>{name}</li>)}</ul>
+                <ul className="mt-2 list-inside list-disc break-words text-sm leading-6">
+                  {pending.extraNames.map((name) => <li key={`extra:${name}`}>{name}</li>)}
+                  {pending.items.map((item) => <li key={`item:${item.code}`}>{item.name}<span className="break-all">（项目编号：{item.code}）</span></li>)}
+                </ul>
                 <p className="mb-0 mt-2 text-xs">未知金额未计入小计；已列明金额的项目仍可能需要确认单价。小计不是最终总价。</p>
               </div> : <p className="mb-0 text-sm text-slate-600">{quote.items.length ? "当前明细金额均已列明，服务范围仍需双方确认。" : "没有明细不代表免费，也不能据此判断最终总价。"}</p>}
             </div>
