@@ -12,6 +12,7 @@ import {
   statusTone,
 } from "./demand-list";
 import type { DemandDetailState } from "./demand-detail";
+import { itemSourceBadge, itemSource } from "./demand-source";
 import { renovationLabel } from "./demand-chat";
 import { useDemandDetail } from "./useDemandDetail";
 
@@ -75,6 +76,8 @@ export function DemandDetailContent({ id, state, reload }: {
   }
 
   const { demand, source } = state;
+  const demandSource = itemSource(demand);
+  const demandSourceBadge = itemSourceBadge(demand);
 
   return (
     <div>
@@ -86,17 +89,21 @@ export function DemandDetailContent({ id, state, reload }: {
 
       <PageHeader
         title={demandTitle(demand)}
-        subtitle={`需求编号 ${demand.id} · 来源 ${source}`}
+        subtitle={`需求编号 ${demand.id} · 逐条来源 ${demandSource ?? "未确认"}`}
         aside={
           <span className="flex items-center gap-2">
-            {source === "mock" ? <Badge tone="accent">模拟数据</Badge> : null}
+            {demandSourceBadge ? <Badge tone="accent">{demandSourceBadge}</Badge> : null}
             <Badge tone={statusTone(demand.status)}>{statusLabel(demand.status)}</Badge>
           </span>
         }
       />
 
       <p className={C.meta}>
-        {source === "mock" ? "本条需求为模拟数据（mock），仅用于演示。" : "本条需求来自数据库（live）。"}
+        {demandSource === "mock"
+          ? "本条需求为模拟数据（mock），仅用于演示。"
+          : demandSource === "live"
+            ? "本条需求来自数据库（live）。"
+            : "本条需求未提供逐条来源，页面不作猜测。"}
       </p>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
@@ -160,7 +167,7 @@ export function DemandDetailContent({ id, state, reload }: {
             <SectionHead title="数据说明" />
             <Note tone="info">
               <p>
-                本页展示的是需求编号「{demand.id}」的查询结果，来源为 {source}。
+                本页展示的是需求编号「{demand.id}」的查询结果，接口响应来源为 {source}；逐条来源为 {demandSource ?? "未确认"}。
                 如需确认最近的变更，可以重新加载。
               </p>
               <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>

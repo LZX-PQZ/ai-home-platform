@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  DemandWithSource,
   itemSource,
   itemSourceBadge,
   listSourceNote,
 } from "../src/features/a/demand-source";
+import { Demand } from "../src/contracts";
 
 const base = {
   id: "d-1",
@@ -25,13 +25,13 @@ test("条目带 source 字段时按它逐条标注，互不影响", () => {
   assert.equal(itemSource(base), null);
 });
 
-test("simulated: true 视为模拟；false/缺失不算", () => {
-  assert.equal(itemSource({ ...base, simulated: true }), "mock");
-  assert.equal(itemSource({ ...base, simulated: false }), null);
+test("公共 Demand.source 缺失时保持未知，不从 simulated 推断", () => {
+  assert.equal(itemSource({ ...base, simulated: true } as never), null);
+  assert.equal(itemSource({ ...base, simulated: false } as never), null);
 });
 
-test("扩展 schema 不会丢弃逐条来源字段（z.object 默认剥掉未知键，必须显式声明）", () => {
-  const parsed = DemandWithSource.parse({ ...base, source: "mock" });
+test("公共 Demand schema 保留可选 source 字段", () => {
+  const parsed = Demand.parse({ ...base, source: "mock" });
   assert.equal(parsed.source, "mock");
 });
 
@@ -45,8 +45,8 @@ test("列表说明不再断言「只返回演示需求」，按整批来源如�
   const mock = listSourceNote("mock");
   assert.match(mock, /模拟数据/);
   assert.match(mock, /标记为 mock/);
-  assert.match(mock, /不代表每条都是模拟数据/);
-  assert.match(mock, /尚未提供逐条来源/);
+  assert.match(mock, /demand\.source/);
+  assert.doesNotMatch(mock, /尚未提供逐条来源/);
   assert.doesNotMatch(mock, /只返回演示需求/);
 
   const live = listSourceNote("live");

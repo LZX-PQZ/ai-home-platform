@@ -20,6 +20,8 @@ const demand = Demand.parse({
   budgetMinCents: 3500000, budgetMaxCents: 5200000,
   renovationType: "elderly", desiredDays: 35, status: "published",
 });
+const mockDemand = { ...demand, source: "mock" as const };
+const liveDemand = { ...demand, source: "live" as const };
 const ok = (data: unknown, source = "live") => ({ ok: true, data, meta: { source } });
 const render = (state: DemandDetailState, id = demand.id) => renderToStaticMarkup(
   createElement(DemandDetailContent, { id, state, reload() {} }),
@@ -135,18 +137,25 @@ test("加载/不存在/失败页面无匹配报价链接，也不提前断言 mo
   assert.match(render({ phase: "failed", error: "服务不可用" }), /role="alert"/);
 });
 
-test("真实与模拟来源分别披露，同一个 ID 贯穿匹配报价链接", () => {
+test("详情按 demand.source 分别披露，同一个 ID 贯穿匹配报价链接", () => {
   const id = "需求/one?#";
-  for (const source of ["mock", "live"] as const) {
-    const html = render({ phase: "ready", demand: { ...demand, id }, source }, id);
+  for (const [demandWithSource, envelopeSource] of [[mockDemand, "live"], [liveDemand, "mock"]] as const) {
+    const html = render({ phase: "ready", demand: { ...demandWithSource, id }, source: envelopeSource }, id);
     assert.ok(html.includes(`/owner/matches/${encodeURIComponent(id)}`));
     assert.ok(html.includes(`/owner/quotes/${encodeURIComponent(id)}`));
     assert.match(html, /创建另一条需求/);
     assert.doesNotMatch(html, /继续补充需求|列表回退/);
-    if (source === "mock") assert.match(html, /模拟数据（mock）/);
+    if (demandWithSource.source === "mock") assert.match(html, /模拟数据（mock）/);
     else {
       assert.match(html, /来自数据库（live）/);
-      assert.doesNotMatch(html, /模拟数据/);
+      assert.doesNotMatch(html, /模拟数据（mock）/);
     }
   }
+});
+
+test("详情缺少 demand.source 时显示未知且不猜测", () => {
+  const html = render({ phase: "ready", demand, source: "mock" });
+  assert.match(html, /逐条来源 未确认/);
+  assert.match(html, /未提供逐条来源/);
+  assert.doesNotMatch(html, /模拟数据（mock）/);
 });

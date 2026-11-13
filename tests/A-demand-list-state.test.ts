@@ -20,11 +20,13 @@ const demand = Demand.parse({
   budgetMinCents: 100000, budgetMaxCents: 200000, renovationType: "repair",
   desiredDays: 5, status: "published",
 });
+const mockDemand = { ...demand, id: "demo-demand", source: "mock" as const };
+const liveDemand = { ...demand, source: "live" as const };
 const render = (state: DemandListState) => renderToStaticMarkup(createElement(DemandListContent, { state, reload() {} }));
 const ready = (items = [demand], source: "mock" | "live" = "live"): DemandListState => ({ phase: "ready", items, source, error: null });
 
-test("列表只调用已有 GET 接口，直接解析公共 Demand，混合来源保持信封值", async (t) => {
-  const items = [{ ...demand, id: "demo-demand" }, demand];
+test("列表只调用已有 GET 接口，直接解析公共 Demand，混合来源保持信封值和逐条 source", async (t) => {
+  const items = [mockDemand, liveDemand];
   const request = t.mock.method(globalThis, "fetch", async (path: string) => {
     assert.equal(path, "/api/demand");
     return Response.json({ ok: true, data: items, meta: { source: "mock" } });
@@ -33,16 +35,16 @@ test("列表只调用已有 GET 接口，直接解析公共 Demand，混合来�
   assert.equal(request.mock.callCount(), 1);
 });
 
-test("尚未纳入公共契约的 source/simulated 字段不能成为逐条来源", async (t) => {
+test("公共 Demand.source 被保留并驱动逐条模拟标签", async (t) => {
   t.mock.method(globalThis, "fetch", async () => Response.json({
-    ok: true, data: [{ ...demand, source: "live", simulated: false }], meta: { source: "mock" },
+    ok: true, data: [mockDemand, liveDemand], meta: { source: "mock" },
   }));
   const result = await loadDemandList();
-  assert.deepEqual(result.items, [demand]);
+  assert.equal(result.items[0]?.source, "mock");
+  assert.equal(result.items[1]?.source, "live");
   const html = render(result);
-  assert.match(html, /不代表每条都是模拟数据/);
-  assert.match(html, /尚未提供逐条来源/);
-  assert.doesNotMatch(html, /来源：live|真实数据库/);
+  assert.match(html, /模拟数据/);
+  assert.equal((html.match(/模拟数据/g) ?? []).length, 2);
 });
 
 test("空列表是成功空状态，保留 mock/live 来源", async (t) => {
@@ -118,7 +120,7 @@ test("来源说明在列表前展示，全部链接保留对应 ID；live 不标
   const id = "需求/a?#";
   const items = [{ ...demand, id }];
   const html = render(ready(items, "mock"));
-  assert.ok(html.indexOf("不代表每条都是模拟数据") < html.indexOf("需求编号："));
+  assert.ok(html.indexOf("demand.source") < html.indexOf("需求编号："));
   for (const route of ["demand", "matches", "quotes"]) {
     assert.ok(html.includes(`/owner/${route}/${encodeURIComponent(id)}`));
   }
