@@ -12,7 +12,14 @@
 - 按需求 ID 查数据库、服务方鉴权/多租户隔离、真实的双端数据联动。
 - 动态排期与异常调整、照片检查、评价回流、售后闭环。
 - 真实支付/资金托管（本次只计划模拟）。
-- CODEOWNERS 真实成员账号、成员邀请与 GitHub 分支保护。
+- CODEOWNERS 真实成员账号、成员邀请；GitHub 分支保护受当前私有仓库套餐限制，未开启（详见 docs/GITHUB.md）。
 
 GET API 仍以固定 mock 响应，不读取 seed 数据库；数据库是 D 的开工底座。
 动态页面当前使用固定样例，不代表任意 ID 已正确实现。
+
+## 本地验证记录（2026-11-13）
+- npm run check：lint、TypeScript、8 个测试、模块导入边界通过。
+- npm run db:setup：新建 SQLite 数据库、建表和种子数据成功。
+- npm run build：生产构建成功。
+- 启动生产服务后运行 node scripts/smoke.mjs：13 个页面、8 个 GET 接口、3 个 POST 场景通过。
+- 分工检查实测：A 的文件对 A 放行，对 B 拒绝。
