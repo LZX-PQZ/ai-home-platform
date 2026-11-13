@@ -5,7 +5,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ApiClientError } from "../src/lib/api-client";
 import { PHOTO_INSPECTION_DISCLAIMER } from "../src/contracts";
 import { PhotoInspectionPanel } from "../src/features/a/PhotoInspectionPanel";
-import { formatInspectionResult, photoInspectionStatus, submitPhotoInspection } from "../src/features/a/photo-inspection";
+import {
+  formatInspectionResult,
+  photoInspectionSelectionError,
+  photoInspectionStatus,
+  submitPhotoInspection,
+} from "../src/features/a/photo-inspection";
 
 const previousReact = Object.getOwnPropertyDescriptor(globalThis, "React");
 before(() => Object.defineProperty(globalThis, "React", { configurable: true, value: React }));
@@ -33,6 +38,14 @@ test("照片检查状态覆盖等待、成功、失败和 501，不生成验收�
   assert.match(unavailable, /501/);
   assert.doesNotMatch(unavailable, /已验收|验收合格/);
   assert.match(photoInspectionStatus("failed", 2), /未完成/);
+  assert.match(photoInspectionStatus("invalid", 11), /重新选择/);
+});
+
+test("超过 10 张或重复照片时给出可读选择提示，不泄露契约校验原文", () => {
+  assert.equal(photoInspectionSelectionError(["one.jpg", "two.jpg"]), null);
+  assert.match(photoInspectionSelectionError(Array.from({ length: 11 }, (_, index) => `photo-${index}.jpg`)) ?? "", /最多选择 10 张照片/);
+  assert.match(photoInspectionSelectionError(["same.jpg", "same.jpg"]) ?? "", /不能重复/);
+  assert.doesNotMatch(photoInspectionSelectionError(Array.from({ length: 11 }, (_, index) => `photo-${index}.jpg`)) ?? "", /Array must contain/);
 });
 
 test("照片提交通过 apiPost 发送需求 ID 和图片引用，并展示实际返回数据", async (t) => {

@@ -7,6 +7,7 @@ import {
   formatInspectionResult,
   inspectionSourceLabel,
   PHOTO_INSPECTION_HINTS,
+  photoInspectionSelectionError,
   photoInspectionStatus,
   submitPhotoInspection,
   type PhotoInspectionPhase,
@@ -25,14 +26,15 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
 
   const onSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const names = Array.from(event.target.files ?? []).map((file) => file.name);
+    const selectionError = photoInspectionSelectionError(names);
     setFiles(names);
-    setPhase(names.length > 0 ? "selected" : "idle");
-    setError(null);
+    setPhase(selectionError ? "invalid" : names.length > 0 ? "selected" : "idle");
+    setError(selectionError);
     setResult(null);
   };
 
   const submit = async () => {
-    if (files.length === 0 || phase === "submitting") return;
+    if (files.length === 0 || phase === "invalid" || phase === "submitting") return;
     setPhase("submitting");
     setError(null);
     setResult(null);
@@ -74,7 +76,7 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
       ) : null}
 
       <div className="mt-3 grid gap-2 sm:flex sm:items-center">
-        <Button variant="secondary" onClick={submit} disabled={files.length === 0}>
+        <Button variant="secondary" onClick={submit} disabled={files.length === 0 || phase === "invalid"}>
           {phase === "submitting" ? "提交中…" : "提交辅助检查"}
         </Button>
         <span className={C.meta}>需求 {demandId} · 当前不会自动确认验收</span>
@@ -91,6 +93,14 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
           <Note tone="ok" title={`辅助检查结果（来源：${inspectionSourceLabel(result.source)}）`}>
             <pre className="mb-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-[#F7FAFA] p-2 text-[12px] leading-relaxed text-[#16242B]">{formatInspectionResult(result.data)}</pre>
             <p className="!mb-0">以上内容只提示疑点，不能代替现场检测，也不等于验收合格。</p>
+          </Note>
+        </div>
+      ) : null}
+
+      {phase === "invalid" ? (
+        <div className="mt-3">
+          <Note tone="warn" title="照片选择需要调整">
+            {error ?? photoInspectionStatus(phase, files.length)}
           </Note>
         </div>
       ) : null}

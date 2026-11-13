@@ -2,7 +2,7 @@ import { apiPost } from "@/lib/api-client";
 import { PhotoInspectionInput, PhotoInspectionResult } from "@/contracts";
 import type { PhotoInspectionResultDTO, SourceDTO } from "@/contracts";
 
-export type PhotoInspectionPhase = "idle" | "selected" | "submitting" | "ready" | "unavailable" | "failed";
+export type PhotoInspectionPhase = "idle" | "selected" | "invalid" | "submitting" | "ready" | "unavailable" | "failed";
 
 export type PhotoInspectionResponse = {
   data: PhotoInspectionResultDTO;
@@ -28,10 +28,27 @@ export function photoInspectionStatus(phase: PhotoInspectionPhase, count: number
   if (phase === "failed") {
     return "照片检查未完成，请检查错误信息后重试。";
   }
+  if (phase === "invalid") {
+    return "照片选择不符合要求，请重新选择。";
+  }
   if (phase === "selected") {
     return `已选择 ${count} 张照片，提交后等待接口返回。`;
   }
   return "尚未选择照片，来源未确认。";
+}
+
+/** 把公共输入契约转换成业主能读懂的选择提示，避免直接展示 Zod 原始错误。 */
+export function photoInspectionSelectionError(imageRefs: string[]): string | null {
+  const parsed = PhotoInspectionInput.safeParse({ demandId: "selection-check", imageRefs });
+  if (parsed.success) return null;
+  const issue = parsed.error.issues[0];
+  if (issue?.path[0] === "imageRefs" && issue.code === "too_big") {
+    return "最多选择 10 张照片，请重新选择。";
+  }
+  if (issue?.path[0] === "imageRefs" && issue.message === "图片引用不能重复") {
+    return "照片引用不能重复，请重新选择。";
+  }
+  return "照片选择不符合要求，请重新选择。";
 }
 
 export function inspectionSourceLabel(source: SourceDTO): string {
