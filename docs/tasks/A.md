@@ -31,3 +31,13 @@ src/app/owner/（排除 matches/quotes）；src/components/ChatWindow.tsx、Dema
 - 使用 mock：对话为 mock 固定追问，未调用真实模型；需求保存依赖 D 的 POST /api/demand。
 - 待办（P0 剩余）：需求列表页；详情页接 GET /api/demand/[id]（等 D）；服务方标签映射待 B 联调。
 - 已提共享变更请求：docs/requests/A-api-post.md（请 D 新增 apiPost）。
+
+### 2026-11-13 feature/A-demand-chat（P1：施工进度 + 付款时间线）
+- 交付：`/owner/project/[id]` 重做（SchedulePanel：4 项统计卡、真实甘特条、工序清单、可开工任务、排期自检、变更/验收诚实提示）；`/owner/payments/[id]` 重做（PaymentsPanel：金额汇总卡、节点时间线、付款自检、资金安全说明）。
+- `src/components/GanttChart.tsx` 重写为纯展示甘特图（只收 props，按天百分比定位，C 端可复用）。
+- 新增：features/a/schedule.ts、payments.ts、useSchedule.ts、usePayments.ts、SchedulePanel.tsx、PaymentsPanel.tsx。
+- 测试：A-schedule（10 条）、A-payments（7 条）新增；全套 39 条通过。
+- `npm run check` 通过（lint/tsc/测试/边界）；`npm run build` 通过；scope --role A 通过。
+- 运行时验证：/owner/project/demo-demand 与 /owner/payments/demo-demand 均 200，无头截图确认布局与数据渲染正常。
+- 数据边界：schedule/payment 只显示「第 N 天」相对工期（契约无真实日期字段）；demandId 不一致时提示而非冒充；POST 均 501，页面按钮给出诚实反馈。
+- 已提共享变更请求：docs/requests/A-schedule-payment.md（真实日期、责任方姓名、验收回写、付款比例/到期日/凭证、PaymentDTO 类型导出）。
