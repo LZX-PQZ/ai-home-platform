@@ -1,0 +1,54 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { POST } from "../src/app/api/demand/route";
+import { GET as detailGET } from "../src/app/api/demand/[id]/route";
+import { createDemand, findDemand, listDemands, type DemandDatabase } from "../src/lib/demand";
+
+const input = {
+  description: "测试需求：浴室防滑改造。",
+  city: "深圳",
+  areaM2: 60,
+  budgetMinCents: 3000000,
+  budgetMaxCents: 5000000,
+  renovationType: "elderly" as const,
+  desiredDays: 30,
+};
+
+const row = { id: "demand-test", ...input, status: "published", ownerId: "demo-owner", createdAt: new Date() };
+
+function fakeDb(rows: typeof row[] = [row]): DemandDatabase {
+  return {
+    user: { upsert: async () => ({}) },
+    demandOrder: {
+      findMany: async () => rows as never,
+      findUnique: async ({ where }: { where: { id: string } }) => (rows.find((value) => value.id === where.id) ?? null) as never,
+      create: async () => row as never,
+    },
+  } as unknown as DemandDatabase;
+}
+
+test("POST /api/demand 拒绝倒置预算", async () => {
+  const response = await POST(new Request("http://localhost/api/demand", {
+    method: "POST",
+    body: JSON.stringify({ ...input, budgetMinCents: 6000000 }),
+  }));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { ok: false, error: { code: "VALIDATION_ERROR", message: "需求字段不符合契约。" } });
+});
+
+test("需求服务从数据库读取，并为用户创建记录标记 live", async () => {
+  const result = await listDemands(fakeDb());
+  assert.equal(result.source, "live");
+  assert.equal(result.data[0].id, row.id);
+  const created = await createDemand(input, fakeDb());
+  assert.equal(created.status, "published");
+  const demo = await listDemands(fakeDb([{ ...row, id: "demo-demand" }]));
+  assert.equal(demo.source, "mock");
+});
+
+test("GET /api/demand/[id] 拒绝空 ID，服务详情对未知 ID 返回空", async () => {
+  const invalid = await detailGET(new Request("http://localhost/api/demand/%20"), { params: { id: " " } });
+  assert.equal(invalid.status, 400);
+  const missing = await findDemand("missing", fakeDb([]));
+  assert.equal(missing, null);
+});

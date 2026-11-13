@@ -17,7 +17,9 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | 方法/路径 | data 对应契约 | 负责 | 当前状态 |
 |---|---|---|---|
 | GET /api/health | service、stage | D | 可用 |
-| GET /api/demand | Demand[] | D | 固定 mock |
+| GET /api/demand | Demand[] | D | 查询 Prisma；仅 seed 的 demo-demand 标为 mock，含用户创建记录时标为 live |
+| POST /api/demand | DemandInput → Demand | D | 校验后写入 Prisma，创建为 published，返回 live；无数据库时 503 |
+| GET /api/demand/[id] | Demand | D | 按 ID 查询 Prisma；不存在 404，不回退到 demo-demand |
 | POST /api/demand/chat | ChatResult | D | 读取 ChatInput，固定追问，来源 mock |
 | GET /api/provider | Provider[] | D | 固定 mock |
 | GET /api/match | Match[] | B | 固定需求上的城市/工种过滤与评分排序 |
@@ -27,10 +29,9 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/ticket | Ticket[] | D | 固定 mock |
 
 ## 已预留、当前返回 501
-- POST /api/demand：后续使用 DemandInput，返回 Demand；由 D 实现写入。
 - POST /api/quote：由 B 实现。报价提交输入类型需先和 D 确定，再添加契约；不能让客户端自定 provider 身份/合计金额。
 - POST /api/schedule、/api/payment、/api/ticket、/api/inspect、/api/review：由 D 完成。ReviewInput 已预留；其他写入契约先补齐再让页面提交。
-- 单需求详情 GET /api/demand/[id] 尚未建立，由 D 添加；A 先使用固定 demo-demand，不能自行拼新接口。
+- 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
 
 ## ID 与状态
 固定演示需求 demo-demand，服务方 provider-a 到 provider-f。

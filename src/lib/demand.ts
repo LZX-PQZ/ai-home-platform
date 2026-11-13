@@ -1,0 +1,61 @@
+import type { DemandOrder } from "@prisma/client";
+import { Demand, type DemandDTO, type DemandInputDTO } from "@/contracts";
+import { prisma } from "@/lib/prisma";
+
+export type DemandDatabase = {
+  user: Pick<typeof prisma.user, "upsert">;
+  demandOrder: Pick<typeof prisma.demandOrder, "findMany" | "findUnique" | "create">;
+};
+
+export const DEMO_OWNER_ID = "demo-owner";
+export const DEMO_DEMAND_ID = "demo-demand";
+
+/** 只把数据库字段映射为公共 Demand 契约，避免路由暴露 Prisma 记录。 */
+export function toDemandDTO(row: Pick<
+  DemandOrder,
+  "id" | "description" | "city" | "areaM2" | "budgetMinCents" | "budgetMaxCents" | "renovationType" | "desiredDays" | "status"
+>): DemandDTO {
+  return Demand.parse({
+    id: row.id,
+    description: row.description,
+    city: row.city,
+    areaM2: row.areaM2,
+    budgetMinCents: row.budgetMinCents,
+    budgetMaxCents: row.budgetMaxCents,
+    renovationType: row.renovationType,
+    desiredDays: row.desiredDays,
+    status: row.status,
+  });
+}
+
+export function demandSource(rows: Array<{ id: string }>): "mock" | "live" {
+  return rows.some((row) => row.id !== DEMO_DEMAND_ID) ? "live" : "mock";
+}
+
+export async function listDemands(db: DemandDatabase = prisma) {
+  const rows = await db.demandOrder.findMany({ orderBy: { createdAt: "desc" } });
+  return { data: rows.map(toDemandDTO), source: demandSource(rows) };
+}
+
+export async function findDemand(id: string, db: DemandDatabase = prisma) {
+  const row = await db.demandOrder.findUnique({ where: { id } });
+  if (!row) return null;
+  return { data: toDemandDTO(row), source: demandSource([row]) };
+}
+
+export async function createDemand(input: DemandInputDTO, db: DemandDatabase = prisma) {
+  // 当前没有鉴权，所有提交先归属本地演示业主；接入鉴权后由服务端会话替换。
+  await db.user.upsert({
+    where: { id: DEMO_OWNER_ID },
+    update: {},
+    create: { id: DEMO_OWNER_ID, name: "演示业主", role: "owner" },
+  });
+  const row = await db.demandOrder.create({
+    data: {
+      ...input,
+      ownerId: DEMO_OWNER_ID,
+      status: "published",
+    },
+  });
+  return toDemandDTO(row);
+}
