@@ -1,5 +1,7 @@
 # B → D：补齐报价认证模块的服务端导入边界
 
+- 当前状态：已由 D 的 PR #46 修复，B 的 PR #42 已合入；下文保留原请求与验收范围。
+
 - 基线：PR #36 已提供 `src/lib/server-auth.ts`，但 `scripts/check-boundaries.mjs` 只为报价模块放行了 demand.ts，没有允许导入 server-auth.ts。
 - 影响：B 按交接调用 requireProviderIdentity 时，检查会报告 `src/lib/quote-engine/submit-request.ts -> src/lib/server-auth.ts`。本次未修改或绕过检查脚本。
 
@@ -15,4 +17,4 @@
 - 通过身份后使用公共提交契约和现有整数计价，调用 D 的 findDemand 精确读取需求；无需求 404、非 published 409、异常或错位 ID 503。
 - 所有条件通过仍返回 501；未生成报价 ID、未写入、未使用演示身份，没有真实报价成功路径。现有 GET 仍是 mock。
 - 本次仅接入身份与状态预检，不代表完成细粒度授权、并发状态保护、幂等或原子写入。后续真正写入时需在事务内再次核验状态和授权，不能依赖较早的预检结果。
-- 测试注入的会话与需求均为合成数据，不是新增真实登录适配器。共享边界修正前，本 PR 应保持草稿，不合并。
+- 测试注入的会话与需求均为合成数据，不是新增真实登录适配器。原草稿阻塞已解除；真实认证、幂等及公开写入的后续依赖见 B-quote-idempotency.md。
