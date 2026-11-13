@@ -8,6 +8,7 @@ import {
   type QuoteFormFields, type QuoteFormResult, type QuoteLineFields, type QuotePreviewData,
 } from "./quote-form";
 import { quoteSubmissionFailure, submitQuote, type QuoteSubmissionState } from "./quote-submit";
+import { createQuoteSubmissionSession } from "./quote-idempotency";
 
 const inputClass = `${C.input} mt-1 block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:bg-line/40`;
 const buttonClass = `${C.btnBase} ${C.btnSecondary} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`;
@@ -77,6 +78,7 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
   const [fields, setFields] = useState<QuoteFormFields>({ lines: [emptyQuoteLine(1)], estimatedDays: "" });
   const [result, setResult] = useState<QuoteFormResult | null>(null);
   const [submission, setSubmission] = useState<QuoteSubmissionState>({ status: "idle" });
+  const [submissionSession] = useState(createQuoteSubmissionSession);
   const inFlight = useRef(false);
   const mounted = useRef(true);
   const nextLine = useRef(2);
@@ -101,6 +103,7 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
 
   function change(update: (previous: QuoteFormFields) => QuoteFormFields) {
     if (inFlight.current || locked) return;
+    submissionSession.invalidate();
     setFields(update);
     setResult(null);
     setSubmission({ status: "idle" });
@@ -118,7 +121,8 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
     inFlight.current = true;
     setSubmission({ status: "submitting" });
     try {
-      const response = await submitQuote(input);
+      const attempt = submissionSession.prepare(input);
+      const response = await submitQuote(attempt.input, attempt.idempotencyKey);
       if (mounted.current) setSubmission({ status: "received", response });
     } catch (error) {
       if (mounted.current) setSubmission(quoteSubmissionFailure(error));
