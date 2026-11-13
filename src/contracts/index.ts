@@ -95,6 +95,10 @@ export const Payment = z.object({
   id: Id, demandId: Id, stage: z.string(), amountCents: Money,
   status: z.enum(["pending", "confirmed_demo"]), simulated: z.literal(true),
 });
+export const PaymentActionInput = z.object({
+  paymentId: Id,
+  action: z.literal("confirm_demo"),
+}).strict();
 export const Ticket = z.object({
   id: Id, demandId: Id, description: z.string(),
   category: z.enum(["quality", "schedule", "payment", "attitude"]),
@@ -148,6 +152,8 @@ export type QuoteDTO = z.infer<typeof Quote>;
 export type QuoteSubmissionItemInputDTO = z.infer<typeof QuoteSubmissionItemInput>;
 export type QuoteSubmissionInputDTO = z.infer<typeof QuoteSubmissionInput>;
 export type ScheduleDTO = z.infer<typeof Schedule>;
+export type PaymentDTO = z.infer<typeof Payment>;
+export type PaymentActionInputDTO = z.infer<typeof PaymentActionInput>;
 export type PhotoInspectionInputDTO = z.infer<typeof PhotoInspectionInput>;
 export type PhotoInspectionFindingDTO = z.infer<typeof PhotoInspectionFinding>;
 export type PhotoInspectionResultDTO = z.infer<typeof PhotoInspectionResult>;
