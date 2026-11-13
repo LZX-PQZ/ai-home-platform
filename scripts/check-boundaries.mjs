@@ -7,6 +7,15 @@ const files=[];
 function walk(dir){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isDirectory())walk(p);else if(/\.tsx?$/.test(p))files.push(p.replaceAll("\\","/"));}}
 walk("src");
 const failures=[];
+export function canReadAcrossOwner(file, target) {
+ const matchCanReadDemand = (file.startsWith("src/lib/match/") || file.startsWith("src/app/api/match/")) && target === "src/lib/demand.ts";
+ const quoteCanReadDemand = (file === "src/lib/quote-engine.ts" || file.startsWith("src/lib/quote-engine/") || file.startsWith("src/app/api/quote/")) && target === "src/lib/demand.ts";
+ const quoteCanReadServerAuth = (file === "src/lib/quote-engine.ts" || file.startsWith("src/lib/quote-engine/") || file.startsWith("src/app/api/quote/")) && target === "src/lib/server-auth.ts";
+ const serverOnlyDatabase = target === "src/lib/prisma.ts";
+ const serverCanReadDatabase = file.startsWith("src/app/api/") || file.startsWith("src/lib/") || file.startsWith("prisma/");
+ if (serverOnlyDatabase) return serverCanReadDatabase;
+ return ownerOf(file)===ownerOf(target)||shared.test(target)||matchCanReadDemand||quoteCanReadDemand||quoteCanReadServerAuth;
+}
 for(const file of files){
  const ast=ts.createSourceFile(file,fs.readFileSync(file,"utf8"),ts.ScriptTarget.Latest,true);
  function check(node){
@@ -16,12 +25,7 @@ for(const file of files){
   if(spec&&(spec.startsWith("@/")||spec.startsWith("."))){
    const raw=spec.startsWith("@/")?"src/"+spec.slice(2):path.posix.normalize(path.posix.join(path.posix.dirname(file),spec));
    const target=[raw,raw+".ts",raw+".tsx",raw+"/index.ts",raw+"/index.tsx"].find(p=>fs.existsSync(p)&&fs.statSync(p).isFile());
-   const matchCanReadDemand = (file.startsWith("src/lib/match/") || file.startsWith("src/app/api/match/")) && target === "src/lib/demand.ts";
-   const quoteCanReadDemand = (file === "src/lib/quote-engine.ts" || file.startsWith("src/lib/quote-engine/") || file.startsWith("src/app/api/quote/")) && target === "src/lib/demand.ts";
-   const serverOnlyDatabase = target === "src/lib/prisma.ts";
-   const serverCanReadDatabase = file.startsWith("src/app/api/") || file.startsWith("src/lib/") || file.startsWith("prisma/");
-   if(serverOnlyDatabase&&!serverCanReadDatabase) failures.push(file+" -> "+target);
-   else if(target&&ownerOf(file)!==ownerOf(target)&&!shared.test(target)&&!matchCanReadDemand&&!quoteCanReadDemand) failures.push(file+" -> "+target);
+   if(target&&!canReadAcrossOwner(file,target)) failures.push(file+" -> "+target);
   }
   ts.forEachChild(node,check);
  }
