@@ -3,7 +3,11 @@ import test, { before, after } from "node:test";
 import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Payment } from "../src/contracts";
-import { PaymentsContent } from "../src/features/a/PaymentsPanel";
+import {
+  PaymentsContent,
+  paymentConfirmationMessage,
+  requestPaymentConfirmation,
+} from "../src/features/a/PaymentsPanel";
 import type { PaymentsState } from "../src/features/a/usePayments";
 
 // 为 jsx:preserve 下的渲染测试提供 React，测试结束后恢复。
@@ -81,7 +85,19 @@ test("付款操作说明演示确认已接通，不再把 POST /api/payment 说�
   const html = render(ready([pending]));
   assert.match(html, /确认本节点/);
   assert.match(html, /只改变内存中的演示状态/);
+  assert.match(html, /确认本节点前会弹出二次确认/);
   assert.doesNotMatch(html, /接口目前返回 501/);
+});
+
+test("付款确认先生成不可撤销提示，取消时不允许进入确认动作", () => {
+  const message = paymentConfirmationMessage("签约节点", 123456);
+  assert.match(message, /确认演示付款节点「签约节点」\（¥1,234\.56）吗/);
+  assert.match(message, /不能撤销/);
+  let calls = 0;
+  assert.equal(requestPaymentConfirmation(() => { calls++; return false; }, "签约节点", 123456), false);
+  assert.equal(calls, 1);
+  assert.equal(requestPaymentConfirmation(() => { calls++; return true; }, "签约节点", 123456), true);
+  assert.equal(calls, 2);
 });
 
 test("加载时显示统一静态说明，失败时显示 501 和重试，均不展示旧付款计划", () => {
