@@ -29,7 +29,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/ticket | Ticket[] | D | 固定 mock |
 
 ## 已预留、当前返回 501
-- POST /api/quote：由 B 实现。输入契约已由 D 冻结为 `QuoteSubmissionInput`（`demandId`、1–20 行 `items`、`estimatedDays`），不能让客户端自定 provider 身份、行金额、合计金额、待确认项或状态。当前仍返回 501，不能视为成功；业务接通后必须返回 `envelope(Quote)` 并如实标注 `meta.source`。
+- POST /api/quote：由 B 实现。输入契约已由 D 冻结为 `QuoteSubmissionInput`（`demandId`、1–20 行 `items`、`estimatedDays`），不能让客户端自定 provider 身份、行金额、合计金额、待确认项或状态。服务端计价必须与 C 预览一致：数量按千分之一整数缩放，逐行用整数乘法并四舍五入到分后求和；禁止用浮点乘法替代。当前仍返回 501，不能视为成功；业务接通后必须返回 `envelope(Quote)` 并如实标注 `meta.source`。
 - POST /api/schedule、/api/payment、/api/ticket、/api/inspect、/api/review：由 D 完成。ReviewInput 已预留；其他写入契约先补齐再让页面提交。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
 

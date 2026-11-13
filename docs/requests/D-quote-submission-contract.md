@@ -37,7 +37,7 @@ Schema 使用 strict 模式。客户端不得传入 `id`、`providerId`、`amoun
 
 ## 计价与实现边界
 
-B 负责 `/api/quote` 的业务路由、服务方身份、可报价需求校验、逐行金额和 `knownTotalCents` 计算、`pendingItems` 生成、幂等和写入。若 `unitPriceCents` 为 `null`，该行金额保持待确认，不得按零计算；已知金额按每行 `Math.round(quantity * unitPriceCents)` 四舍五入到分后求和。计算过程中必须拒绝非安全整数溢出。
+B 负责 `/api/quote` 的业务路由、服务方身份、可报价需求校验、逐行金额和 `knownTotalCents` 计算、`pendingItems` 生成、幂等和写入。若 `unitPriceCents` 为 `null`，该行金额保持待确认，不得按零计算。已知金额必须采用与 C 预览一致的整数算法：将最多三位小数的 `quantity` 还原为千分之一整数 `quantityMilli`，计算 `quantityMilli * unitPriceCents`，再按正数四舍五入到分（等价于 `(product + 500) / 1000` 的整数除法）得到该行金额，最后累加各行结果。禁止用浮点乘法替代该规则；计算过程中必须拒绝非安全整数溢出。
 
 C 使用同一公共输入类型提交表单，不自行声明替代 DTO。D 本次只冻结契约和共享测试，不实现 B 的报价业务 API、计价或 Prisma 写入。
 
