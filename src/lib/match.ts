@@ -30,7 +30,7 @@ export function matchProviders(
           hasSpecialty
             ? `擅长标签包含「${specialty}」：+60 分`
             : `未标注「${specialty}」经验：+0 分，需进一步确认`,
-          `评分 ${provider.rating.toFixed(1)}/5：+${ratingPoints} 分（评分 × 8，四舍五入）`,
+          `评分 ${provider.rating}/5：+${ratingPoints} 分（评分 × 8，四舍五入）`,
         ],
       };
     })

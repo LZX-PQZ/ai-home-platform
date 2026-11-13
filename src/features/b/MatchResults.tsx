@@ -49,7 +49,7 @@ export function MatchResults({ data }: { data: NonNullable<ReturnType<typeof loa
 
       <aside className="rounded-2xl border border-amber-200 bg-amber-50 p-6" aria-labelledby="matching-notes">
         <h2 className="text-base" id="matching-notes">做决定前，还需要确认</h2>
-        <p className="text-sm text-amber-950">匹配分 = 改造标签匹配 60 分 + 服务方评分 × 8（四舍五入，最高 40 分）。分数仅用于候选排序，不代表施工质量保证。</p>
+        <p className="text-sm text-amber-950">匹配分 = 改造标签匹配 60 分 + 服务方评分 × 8（四舍五入，最高 40 分）。同分团队按固定顺序展示，先后不代表优劣。分数仅用于候选排序，不代表施工质量保证。</p>
         <p className="text-sm text-amber-950">服务方的报价、可接单日期和资质尚未核验。预算与期望工期只是你的需求，当前不作为已满足条件。</p>
         {isMock && <p className="mb-0 text-sm text-amber-950">当前团队资料和评分均为模拟数据，未使用真实履约记录或 AI 模型。</p>}
       </aside>

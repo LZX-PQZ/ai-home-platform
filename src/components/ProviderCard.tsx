@@ -9,7 +9,7 @@ export function ProviderCard({ match, rank }: { match: z.infer<typeof Match>; ra
         <div>
           <span className="text-xs font-semibold tracking-wide text-teal-700">候选 {String(rank).padStart(2, "0")}</span>
           <h3 className="mb-2 mt-2 text-lg font-semibold">{provider.name}</h3>
-          <p className="text-sm text-slate-600">{provider.city} · 施工团队 · 评分 {provider.rating.toFixed(1)}/5</p>
+          <p className="text-sm text-slate-600">{provider.city} · 施工团队 · 评分 {provider.rating}/5</p>
         </div>
         <div className="shrink-0 rounded-xl bg-teal-50 px-4 py-3 text-center" aria-label={`匹配分 ${score}，满分 100`}>
           <strong className="text-3xl text-teal-800">{score}</strong>

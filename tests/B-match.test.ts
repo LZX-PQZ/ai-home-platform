@@ -39,6 +39,18 @@ test("改造类型变化会改变排序，而不是始终偏好适老化标签",
   }
 });
 
+test("多位小数评分的理由保留原值，读者按展示公式可复算得分", () => {
+  const [match] = matchProviders(demoDemand, [provider({ rating: 4.56 })]);
+  assert.equal(match.score, 96);
+  const reason = match.reasons.find((value) => value.startsWith("评分 "));
+  assert.ok(reason);
+  const values = /^评分 ([\d.]+)\/5：\+(\d+) 分/.exec(reason);
+  assert.ok(values);
+  assert.equal(Number(values[1]), 4.56);
+  assert.equal(Number(values[2]), Math.round(Number(values[1]) * 8));
+  assert.equal(match.score, 60 + Number(values[2]));
+});
+
 test("同分候选顺序稳定且不会原地修改输入数组或标签", () => {
   const candidates = [provider({ id: "b" }), provider({ id: "a" })];
   const original = structuredClone(candidates);
