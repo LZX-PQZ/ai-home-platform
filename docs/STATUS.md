@@ -14,7 +14,7 @@
 - 真实支付/资金托管（本次只计划模拟）。
 - CODEOWNERS 真实成员账号、成员邀请；GitHub 分支保护受当前私有仓库套餐限制，未开启（详见 docs/GITHUB.md）。
 
-需求 GET/POST/详情接口已读取或写入 Prisma；仅 seed 的 `demo-demand` 会标记为 mock，用户创建记录标记为 live。其他 GET API 仍以固定 mock 响应。
+需求 GET/POST/详情/更新/删除接口已读取或写入 Prisma；仅 seed 的 `demo-demand` 会标记为 mock，且演示需求只读，已有报价、排期、付款、评价或工单关联的需求不能删除。用户创建记录标记为 live。其他 GET API 仍以固定 mock 响应。
 动态页面当前使用固定样例，不代表任意 ID 已正确实现。
 
 ## 本地验证记录（2026-11-13）

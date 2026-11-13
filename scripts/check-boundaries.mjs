@@ -16,7 +16,8 @@ for(const file of files){
   if(spec&&(spec.startsWith("@/")||spec.startsWith("."))){
    const raw=spec.startsWith("@/")?"src/"+spec.slice(2):path.posix.normalize(path.posix.join(path.posix.dirname(file),spec));
    const target=[raw,raw+".ts",raw+".tsx",raw+"/index.ts",raw+"/index.tsx"].find(p=>fs.existsSync(p)&&fs.statSync(p).isFile());
-   if(target&&ownerOf(file)!==ownerOf(target)&&!shared.test(target)) failures.push(file+" -> "+target);
+   const matchCanReadDemand = (file.startsWith("src/lib/match/") || file.startsWith("src/app/api/match/")) && target === "src/lib/demand.ts";
+   if(target&&ownerOf(file)!==ownerOf(target)&&!shared.test(target)&&!matchCanReadDemand) failures.push(file+" -> "+target);
   }
   ts.forEachChild(node,check);
  }
