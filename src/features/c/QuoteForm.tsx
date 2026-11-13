@@ -2,13 +2,14 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import type { DemandDTO } from "@/contracts";
+import { C } from "@/components/ui";
 import {
   emptyQuoteLine, formatQuoteMoney, MAX_QUOTE_LINES, quoteUnitLabels, validateQuoteForm,
   type QuoteFormFields, type QuoteFormResult, type QuoteLineFields, type QuotePreviewData,
 } from "./quote-form";
 
-const inputClass = "mt-1 block w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:bg-slate-100";
-const buttonClass = "rounded-lg border border-teal-700 px-4 py-2 text-teal-800 hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:cursor-not-allowed disabled:opacity-50";
+const inputClass = `${C.input} mt-1 block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:bg-line/40`;
+const buttonClass = `${C.btnBase} ${C.btnSecondary} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`;
 
 function FieldError({ field, errors }: { field: string; errors: Record<string, string> }) {
   return errors[field] ? <p id={`quote-${field}-error`} className="mt-1 text-sm text-red-700">{errors[field]}</p> : null;
@@ -17,13 +18,13 @@ function FieldError({ field, errors }: { field: string; errors: Record<string, s
 export function QuotePreview({ preview }: { preview: QuotePreviewData }) {
   const pendingCount = preview.items.filter((item) => item.amountCents === null).length;
   return (
-    <section aria-labelledby="quote-preview-title" className="mt-6 rounded-xl border border-teal-200 bg-teal-50 p-4 sm:p-6">
+    <section aria-labelledby="quote-preview-title" className="mt-6 rounded-card border border-brand/20 bg-brand-soft p-4 sm:p-6">
       <h3 id="quote-preview-title" className="text-lg font-semibold">本地报价预览 · 未提交</h3>
       <p className="mt-2 text-sm">来源：本页手动填写。尚未保存或发送给业主。</p>
       <p className="text-sm">预计工期：{preview.estimatedDays} 天</p>
       <ol aria-label="报价预览明细" className="space-y-3">
         {preview.items.map((item, index) => (
-          <li key={item.code} className="min-w-0 rounded-lg border border-teal-100 bg-white p-4">
+          <li key={item.code} className="min-w-0 break-words rounded-lg border border-line bg-white p-4">
             <h4 className="break-words font-semibold">{index + 1}. {item.name}</h4>
             <p className="mb-1 mt-2 text-sm">
               {item.quantity} {quoteUnitLabels[item.unit]} × {item.unitPriceCents === null ? "单价待确认" : `${formatQuoteMoney(item.unitPriceCents)}/${quoteUnitLabels[item.unit]}`}
@@ -33,7 +34,7 @@ export function QuotePreview({ preview }: { preview: QuotePreviewData }) {
           </li>
         ))}
       </ol>
-      <p className="mb-1 mt-4 text-lg font-semibold">已知金额小计：{formatQuoteMoney(preview.knownTotalCents)}</p>
+      <p className="mb-1 mt-4 break-words text-lg font-semibold">已知金额小计：{formatQuoteMoney(preview.knownTotalCents)}</p>
       <p className="text-sm">
         {pendingCount > 0
           ? `另有 ${pendingCount} 项费用待确认，未计入小计；当前无法确定完整总价。`
@@ -75,10 +76,10 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
   }
 
   return (
-    <section className="card" aria-labelledby="quote-form-title">
+    <section className={`${C.card} my-4`} aria-labelledby="quote-form-title">
       <h2 id="quote-form-title">填写报价 · 本地预览</h2>
       <p className="break-all text-sm text-slate-600">关联需求：{demandId}</p>
-      <div id="quote-local-notice" className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+      <div id="quote-local-notice" className={`${C.note} ${C.noteWarn} mb-6`}>
         <p>报价提交和接单功能待接入。当前可填写并检查报价，业主暂时无法查看。</p>
         <p className="mb-0">填写内容仅保留在当前页面内存，刷新页面、刷新详情或离开页面会丢失；本地预览不代表保存或提交。</p>
       </div>
@@ -135,7 +136,7 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
                   <FieldError field={`${line.code}-priceYuan`} errors={errors} />
                 </div>
                 <div className="flex items-center gap-2">
-                  <input id={`quote-${line.code}-pending`} type="checkbox" className="h-4 w-4 accent-teal-700" checked={line.pending} onChange={(event) => updateLine(line.code, { pending: event.target.checked })} />
+                  <input id={`quote-${line.code}-pending`} type="checkbox" className="h-4 w-4 accent-brand" checked={line.pending} onChange={(event) => updateLine(line.code, { pending: event.target.checked })} />
                   <label htmlFor={`quote-${line.code}-pending`} className="text-sm">费用待确认（不按零元计算）</label>
                 </div>
                 <div className="sm:col-span-2">
