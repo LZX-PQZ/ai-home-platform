@@ -46,3 +46,9 @@ src/app/owner/（排除 matches/quotes）；src/components/ChatWindow.tsx、Dema
 - 列表卡片加五阶段进度条（需求澄清→匹配报价→签约定标→施工中→已完工），与契约 status 一一对应；签约后按钮切换为「施工进度 / 节点付款」。
 - 需求详情右侧新增「施工与资金」卡片，含施工/付款入口与签约前如实提示；打通 /owner/project/[id]、/owner/payments/[id] 的可达路径。
 - demand-list.ts 新增 STAGES、stageIndex、isPostContract；A-demand-list 测试 +2 条，全套 41 条通过；check/scope/build 全过；截图验证列表与详情渲染。
+
+### 2026-11-13 同步远端 + 新开 PR #6
+- 发现 PR #3 已在 49e0b49 处被合并进 main（1965222），此后 A 的三个提交未入 main。
+- 将 origin/main（含 B 匹配、C 需求大厅）合并进 feature/A-demand-chat，无冲突；集成后 60 条测试全过、check/scope/build 通过。
+- 开新 PR #6：A(P1) 施工进度甘特图、节点付款时间线与业主端导航打通。
+- 移动端实测：puppeteer 390px 下 5 个业主页 scrollWidth=390，无横向溢出（此前 CLI 截图的"截断"为视口假象）。
