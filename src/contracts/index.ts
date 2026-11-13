@@ -1,5 +1,12 @@
 import { z } from "zod";
 export const Money = z.number().int().nonnegative().safe();
+/** Prisma SQLite Int 的有符号 32 位范围；公共 Money 继续保留安全整数范围，写库前另行校验。 */
+export const SQLITE_INT_MIN = -2_147_483_648;
+export const SQLITE_INT_MAX = 2_147_483_647;
+export const DatabaseInt = z.number().int().min(SQLITE_INT_MIN).max(SQLITE_INT_MAX);
+export const DatabaseMoney = DatabaseInt.nonnegative();
+export const IDEMPOTENCY_KEY_HEADER = "Idempotency-Key" as const;
+export const IdempotencyKey = z.string().min(16).max(128).regex(/^[A-Za-z0-9_-]+$/);
 export const Id = z.string().min(1);
 export const Source = z.enum(["mock", "live"]);
 export const DemandInput = z.object({
@@ -141,6 +148,7 @@ export function envelope<T extends z.ZodTypeAny>(schema: T) {
   return z.object({ ok: z.literal(true), data: schema, meta: z.object({ source: Source }) });
 }
 export type SourceDTO = z.infer<typeof Source>;
+export type IdempotencyKeyDTO = z.infer<typeof IdempotencyKey>;
 export type DemandDTO = z.infer<typeof Demand>;
 export type DemandInputDTO = z.infer<typeof DemandInput>;
 export type DemandStatus = DemandDTO["status"];

@@ -29,7 +29,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/ticket | Ticket[] | D | 固定 mock |
 
 ## 已预留、当前返回 501
-- POST /api/quote：由 B 实现。服务端先检查已验证的服务方身份：未登录先返回 `401 UNAUTHENTICATED`，已登录但不是服务方或未绑定服务方返回 `403 FORBIDDEN`；认证失败时不消费请求体，也不查询需求。通过身份检查后，才依次进行 JSON/输入/需求状态检查。输入契约已由 D 冻结为 `QuoteSubmissionInput`（`demandId`、1–20 行 `items`、`estimatedDays`），不能让客户端自定 provider 身份、行金额、合计金额、待确认项或状态。服务端计价必须与 C 预览一致：数量按千分之一整数缩放，逐行用整数乘法并四舍五入到分后求和；禁止用浮点乘法替代。当前默认认证适配器没有真实会话，因此实际 HTTP 请求通常先返回 401；即使身份、输入和需求检查全部通过，写入尚未实现仍返回 `501 NOT_IMPLEMENTED`。401、403 和 501 都是失败，不能视为报价提交成功；业务接通后必须返回 `envelope(Quote)` 并如实标注 `meta.source`。
+- POST /api/quote：由 B 实现。服务端先检查已验证的服务方身份：未登录先返回 `401 UNAUTHENTICATED`，已登录但不是服务方或未绑定服务方返回 `403 FORBIDDEN`；认证失败时不消费请求体，也不查询需求。写入开放后必须携带 `Idempotency-Key` 请求头（16–128 位 ASCII 字母、数字、`-`、`_`）；同服务方同键同摘要重放原报价，同键不同摘要返回 409 `IDEMPOTENCY_CONFLICT`。通过身份检查后，才依次进行 JSON/输入/需求状态检查。输入契约已由 D 冻结为 `QuoteSubmissionInput`（`demandId`、1–20 行 `items`、`estimatedDays`），不能让客户端自定 provider 身份、行金额、合计金额、待确认项或状态。服务端计价必须与 C 预览一致：数量按千分之一整数缩放，逐行用整数乘法并四舍五入到分后求和；禁止用浮点乘法替代。当前默认认证适配器没有真实会话，因此实际 HTTP 请求通常先返回 401；即使身份、输入和需求检查全部通过，写入尚未实现仍返回 `501 NOT_IMPLEMENTED`。401、403 和 501 都是失败，不能视为报价提交成功；业务接通后必须返回 `envelope(Quote)` 并如实标注 `meta.source`。完整决策见 `docs/requests/D-quote-idempotency.md`。
 - POST /api/schedule、/api/ticket、/api/inspect、/api/review：由 D 完成。ReviewInput 已预留；其他写入契约先补齐再让页面提交。
 - POST /api/payment：已实现最小模拟确认动作，不做身份校验，任何调用方都可触发演示状态转换。输入为 `PaymentActionInput`，只允许 `pending → confirmed_demo` 一次转换；状态只保存在服务进程内，进程重启后恢复初始演示状态。成功返回 `Payment`，`meta.source` 为 `mock` 且 `simulated` 为 `true`；这不是支付接口，不代表真实付款、资金托管或数据库持久化。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。

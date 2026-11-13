@@ -23,6 +23,10 @@ type SuccessPayload<T extends z.ZodTypeAny> = {
   source: SourceDTO;
 };
 
+export type ApiPostOptions = {
+  headers?: HeadersInit;
+};
+
 async function requestJson(path: string, init?: RequestInit) {
   let response: Response;
   try {
@@ -84,10 +88,18 @@ export async function apiPost<T extends z.ZodTypeAny>(
   path: string,
   body: unknown,
   schema: T,
+  options: ApiPostOptions = {},
 ): Promise<SuccessPayload<T>> {
+  const headers: HeadersInit = options.headers
+    ? (() => {
+      const merged = new Headers(options.headers);
+      merged.set("content-type", "application/json");
+      return merged;
+    })()
+    : { "content-type": "application/json" };
   const response = await requestJson(path, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   const parsed = parseSuccess(response.payload, schema, response.status);
