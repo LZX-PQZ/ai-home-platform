@@ -41,7 +41,7 @@ export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof load
             <h3 className="font-semibold text-ink">暂无属于这份需求的模拟报价</h3>
             <p className="mb-0 mt-2 text-sm text-ink-2">当前报价接口仅提供演示数据，不能据此判断是否存在真实报价。真实报价查询与提交仍待接通。</p>
           </div>
-        ) : <QuoteTable quotes={response.data} providers={providers} />}
+        ) : <QuoteTable quotes={response.data} providers={providers} demand={demand} />}
       </section>
 
       <aside className="rounded-2xl border border-amber-200 bg-amber-50 p-6" aria-labelledby="quote-notes">
