@@ -5,15 +5,30 @@ import Link from "next/link";
 import { Badge, Button, Card } from "@/components/ui";
 import { QuoteComparison } from "@/features/b/QuoteComparison";
 import { loadQuoteComparison, quoteLoadErrorMessage, QuoteDemandNotFound } from "@/features/b/load-quotes";
+import { quoteReadFeedback } from "@/features/b/quote-feedback";
 
 type QuotePageState =
   | { status: "loading" }
-  | { status: "ready"; data: Awaited<ReturnType<typeof loadQuoteComparison>> }
+  | { status: "ready"; data: Awaited<ReturnType<typeof loadQuoteComparison>>; readAt: number }
   | { status: "not-found" }
   | { status: "error"; message: string };
 
 export function QuotePageContent({ state, retry }: { state: QuotePageState; retry: () => void }) {
-  if (state.status === "ready") return <div className="space-y-4"><div className="flex justify-end"><Button variant="secondary" onClick={retry}>刷新报价</Button></div><QuoteComparison data={state.data} /></div>;
+  if (state.status === "ready") return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-line bg-white p-4">
+        <div className="text-sm text-ink-2" role="status" aria-live="polite" aria-atomic="true">
+          <p className="mb-1">{quoteReadFeedback(state.data)}</p>
+          <p className="mb-0 text-xs text-ink-3">
+            本次读取完成时间（本机时间）：<time dateTime={new Date(state.readAt).toISOString()}>{new Date(state.readAt).toLocaleString("zh-CN", { hour12: false })}</time>
+            ；不代表报价的提交时间。
+          </p>
+        </div>
+        <Button variant="secondary" onClick={retry}>刷新报价</Button>
+      </div>
+      <QuoteComparison data={state.data} />
+    </div>
+  );
   return (
     <Card>
       <div aria-busy={state.status === "loading"}>
@@ -37,7 +52,7 @@ export function QuotePage({ demandId }: { demandId: string }) {
   React.useEffect(() => {
     let active = true;
     void loadQuoteComparison(demandId).then(
-      (data) => { if (active) setResult({ id: demandId, attempt, state: { status: "ready", data } }); },
+      (data) => { if (active) setResult({ id: demandId, attempt, state: { status: "ready", data, readAt: Date.now() } }); },
       (error: unknown) => {
         if (active) setResult({ id: demandId, attempt, state: error instanceof QuoteDemandNotFound
           ? { status: "not-found" }
