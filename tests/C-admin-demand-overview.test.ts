@@ -92,6 +92,14 @@ test("列表文字安全转义，长编号可换行且表格允许局部横向�
   assert.doesNotMatch(html, /<script|<img/);
 });
 
+test("看板各状态需求链接到管理详情，保留并编码各自编号", () => {
+  const data = Demand.shape.status.options.map((status) => ({ ...demand, id: `需求/${status} ?#%`, status }));
+  const html = render({ status: "ready", response: payload(data) });
+  for (const row of data) assert.ok(html.includes(`href="/admin/demand/${encodeURIComponent(row.id)}"`));
+  assert.equal((html.match(/>查看需求详情<\/a>/g) ?? []).length, data.length);
+  assert.doesNotMatch(html, /href="\/owner|href="\/provider/);
+});
+
 test("拒绝缺失来源、未知状态、非法金额、重复 ID 和业务失败响应", async (t) => {
   const bodies = [
     { ok: true, data: [demand] }, { ...payload(), meta: { source: "unknown" } },

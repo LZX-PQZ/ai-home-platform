@@ -84,7 +84,7 @@ export function AdminTicketsContent({ state, onReload }: {
                     </dl>
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
                       <p className={`min-w-0 break-all !mb-0 ${C.pageSub}`}>关联需求编号：{ticket.demandId}</p>
-                      <Link href={`/owner/demand/${encodeURIComponent(ticket.demandId)}`} prefetch={false}
+                      <Link href={`/admin/demand/${encodeURIComponent(ticket.demandId)}`} prefetch={false}
                         aria-label={`查看工单 ${ticket.id} 的关联需求`}
                         className="rounded-md text-sm font-medium underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
                         查看关联需求

@@ -37,7 +37,7 @@ test("模拟工单披露整批来源、只读和鉴权边界，保留项目及�
     "工单列表来源：含模拟数据（mock）", "不能据此认定真实售后已受理或已解决", "来源标识针对整份列表",
     "本页仅供查看", "角色导航不代表登录鉴权", "本次返回 1 条工单", "工单编号：C-ticket-test",
     "测试墙面问题", "质量问题", "已分派", "C-provider-test", "关联需求编号：C-demand-test",
-    'href="/owner/demand/C-demand-test"', "查看工单 C-ticket-test 的关联需求",
+    'href="/admin/demand/C-demand-test"', "查看工单 C-ticket-test 的关联需求",
   ]) assert.ok(html.includes(text), text);
   assert.doesNotMatch(html, /工单列表来源：实时接口|<form|<input|<select|<textarea|提交成功|派单成功/);
   assert.equal((html.match(/<button\b/g) ?? []).length, 1); // 只有刷新，不提供写入动作。
@@ -60,11 +60,11 @@ test("关联需求按每张工单的 ID 编码，缺少责任服务方不使用�
     { ...ticket, id: "ticket-2", demandId: "different-demand", responsibleProviderId: "provider-2" },
   ];
   const html = render({ status: "ready", response: payload(data) });
-  assert.ok(html.includes(`href="/owner/demand/${encodeURIComponent(data[0].demandId)}"`));
-  assert.match(html, /href="\/owner\/demand\/different-demand"/);
+  assert.ok(html.includes(`href="/admin/demand/${encodeURIComponent(data[0].demandId)}"`));
+  assert.match(html, /href="\/admin\/demand\/different-demand"/);
   assert.match(html, /暂未指定责任服务方/);
   assert.match(html, /provider-2/);
-  assert.doesNotMatch(html, /demo-demand|provider-a|C-provider-test|\/provider\/demand\//);
+  assert.doesNotMatch(html, /demo-demand|provider-a|C-provider-test|\/provider\/demand\/|\/owner\/demand\//);
 });
 
 test("live 列表使用接口来源，不标为模拟记录或已鉴权", async (t) => {

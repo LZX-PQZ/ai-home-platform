@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
 import { DemandSource } from "./DemandSource";
@@ -101,6 +102,11 @@ export function AdminDemandOverviewContent({ state, onReload }: {
                         <span className="break-words font-medium">{demand.city || "城市未填写"} · {renovationLabels[demand.renovationType]}</span>
                         <span className={`mt-1 block break-all ${C.meta}`}>需求编号：{demand.id}</span>
                         <div className="mt-2"><DemandSource source={demand.source} /></div>
+                        <Link href={`/admin/demand/${encodeURIComponent(demand.id)}`} prefetch={false}
+                          aria-label={`查看需求 ${demand.id} 的详情`}
+                          className="mt-2 inline-block rounded-md font-medium underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+                          查看需求详情
+                        </Link>
                       </th>
                       <td className="px-3 py-4"><StatusBadge label={adminDemandStatusLabels[demand.status]} /></td>
                       <td className="break-words px-3 py-4">{formatBudget(demand.budgetMinCents)} – {formatBudget(demand.budgetMaxCents)}</td>
