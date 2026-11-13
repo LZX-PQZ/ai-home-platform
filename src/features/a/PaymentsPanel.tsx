@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Button, C, Card, DataDisclosure, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
+import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
 import { demandHref, formatYuan, projectHref } from "./demand-list";
 import {
   detectPaymentIssues,
   paymentSummary,
   toPaymentNodes,
 } from "./payments";
-import { usePayments } from "./usePayments";
+import { usePayments, type PaymentsState } from "./usePayments";
 
 /**
  * 业主端「节点付款」页。
@@ -21,14 +21,23 @@ import { usePayments } from "./usePayments";
  * 页面不会出现「已支付」这种没有接口支撑的字样。
  */
 export function PaymentsPanel({ id }: { id: string }) {
-  const { phase, items, source, error, reload } = usePayments();
+  const { reload, ...state } = usePayments();
+  return <PaymentsContent key={id} id={id} state={state} reload={reload} />;
+}
+
+export function PaymentsContent({ id, state, reload }: {
+  id: string;
+  state: PaymentsState;
+  reload: () => void;
+}) {
+  const { phase, items, source, error } = state;
   const [actionNote, setActionNote] = useState<string | null>(null);
 
   if (phase === "loading") {
     return (
       <div>
         <PageHeader title="节点付款" subtitle={`正在读取需求 ${id} 的付款计划…`} />
-        <DataDisclosure what="付款节点" />
+        <p className={C.meta} role="status">本页数据可能包含模拟数据，加载完成后显示具体来源。</p>
         <Card className="animate-pulse">
           <div className="mb-4 h-4 w-1/3 rounded bg-[#EDF2F3]" />
           <div className="grid gap-3">
@@ -45,7 +54,6 @@ export function PaymentsPanel({ id }: { id: string }) {
     return (
       <div>
         <PageHeader title="节点付款" subtitle="读取付款计划失败" />
-        <DataDisclosure what="付款节点" />
         <Note tone="danger" title="接口请求失败">
           <p>{error}</p>
           <div className="mt-2">
@@ -58,18 +66,38 @@ export function PaymentsPanel({ id }: { id: string }) {
     );
   }
 
+  if (items.some((item) => item.demandId !== id)) {
+    return (
+      <div>
+        <PageHeader title="节点付款" subtitle={`未取得需求 ${id} 的付款计划`} />
+        <Note tone="warn" title="返回付款节点与当前需求不一致">
+          <p>接口返回了不属于当前需求的付款节点，本页已停止展示整份付款计划。</p>
+          <p>这不能证明当前需求没有付款计划，请重试或返回需求详情。</p>
+        </Note>
+        <p className={C.meta}>接口来源：{source ?? "未确认"}{source === "mock" ? "（模拟数据）" : ""}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
+          <LinkButton href={demandHref(id)} size="sm" variant="secondary">返回需求详情</LinkButton>
+        </div>
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <div>
-        <PageHeader title="节点付款" subtitle="这条需求还没有付款计划" />
-        <DataDisclosure what="付款节点" />
+        <PageHeader title="节点付款" subtitle="未取得付款节点" />
+        <p className={C.meta}>接口来源：{source ?? "未确认"}{source === "mock" ? "（模拟数据）" : ""}</p>
         <Empty
           title="接口没有返回付款节点"
-          hint="付款计划在签约后由合同生成（GET /api/payment 目前返回演示数据）。本页不会自己编一套节点出来。"
+          hint="当前接口尚不支持按需求查询，空响应不能证明这条需求没有付款计划。请稍后重试或返回需求详情。"
           action={
             <LinkButton href={demandHref(id)} size="sm" variant="secondary">返回需求详情</LinkButton>
           }
         />
+        <div className="mt-3">
+          <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
+        </div>
       </div>
     );
   }
@@ -77,7 +105,6 @@ export function PaymentsPanel({ id }: { id: string }) {
   const summary = paymentSummary(items);
   const nodes = toPaymentNodes(items);
   const issues = detectPaymentIssues(items);
-  const mismatch = items.some((item) => item.demandId !== id);
   const allSimulated = items.every((item) => item.simulated);
 
   return (
@@ -94,18 +121,7 @@ export function PaymentsPanel({ id }: { id: string }) {
         aside={allSimulated ? <Badge tone="accent">全部为模拟数据</Badge> : null}
       />
 
-      <DataDisclosure what="付款节点" />
-
-      {mismatch ? (
-        <div className="mb-4">
-          <Note tone="warn" title="返回数据与当前需求不一致">
-            <p>
-              接口返回的节点里含有不属于需求 <code>{id}</code> 的记录。按需求查询付款计划的接口由 D
-              负责，尚未实现，本页照实展示并提示，不做静默过滤。
-            </p>
-          </Note>
-        </div>
-      ) : null}
+      <p className={C.meta}>接口来源：{source ?? "未确认"}；付款节点均为模拟节点，不代表实际付款。</p>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
