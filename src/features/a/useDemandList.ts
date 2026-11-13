@@ -1,53 +1,49 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DemandDTO } from "@/contracts";
+import { Demand, type DemandDTO } from "@/contracts";
 import { apiGet } from "@/lib/api-client";
-import { DemandWithSource } from "./demand-source";
+import type { EnvelopeSource } from "./demand-chat";
 
 export type ListPhase = "loading" | "ready" | "failed";
 
 export type DemandListState = {
   phase: ListPhase;
   items: DemandDTO[];
-  source: "mock" | "live" | null;
+  source: EnvelopeSource | null;
   error: string | null;
 };
 
-/**
- * 读取需求列表（GET /api/demand）。
- * 失败时保留错误文案并可重试；不缓存、不本地兜造数据 —— 页面上看到的每条都必须来自接口。
- */
+const LOADING: DemandListState = { phase: "loading", items: [], source: null, error: null };
+
+/** 只解析公共契约，不读取尚未约定的逐条来源字段。 */
+export async function loadDemandList(): Promise<DemandListState> {
+  try {
+    const result = await apiGet("/api/demand", Demand.array());
+    return { phase: "ready", items: result.data, source: result.meta.source, error: null };
+  } catch (cause) {
+    return {
+      phase: "failed", items: [], source: null,
+      error: cause instanceof Error ? cause.message : "需求列表加载失败。",
+    };
+  }
+}
+
+/** 每次刷新清空旧展示，只采用最新请求；卸载后忽略迟到的响应。 */
 export function useDemandList() {
-  const [state, setState] = useState<DemandListState>({
-    phase: "loading",
-    items: [],
-    source: null,
-    error: null,
-  });
-  const inFlight = useRef(false);
+  const [state, setState] = useState<DemandListState>(LOADING);
+  const requestVersion = useRef(0);
 
   const load = useCallback(async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setState((current) => ({ ...current, phase: "loading", error: null }));
-    try {
-      const result = await apiGet("/api/demand", DemandWithSource.array());
-      setState({ phase: "ready", items: result.data, source: result.meta.source, error: null });
-    } catch (cause) {
-      setState({
-        phase: "failed",
-        items: [],
-        source: null,
-        error: cause instanceof Error ? cause.message : "需求列表加载失败。",
-      });
-    } finally {
-      inFlight.current = false;
-    }
+    const version = ++requestVersion.current;
+    setState(LOADING);
+    const next = await loadDemandList();
+    if (version === requestVersion.current) setState(next);
   }, []);
 
   useEffect(() => {
     void load();
+    return () => { requestVersion.current++; };
   }, [load]);
 
   return { ...state, reload: load };

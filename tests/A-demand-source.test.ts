@@ -44,7 +44,9 @@ test("徽标只在确认为模拟时出现，真实数据不加噪音", () => {
 test("列表说明不再断言「只返回演示需求」，按整批来源如实描述", () => {
   const mock = listSourceNote("mock");
   assert.match(mock, /模拟数据/);
-  assert.match(mock, /source: mock/);
+  assert.match(mock, /标记为 mock/);
+  assert.match(mock, /不代表每条都是模拟数据/);
+  assert.match(mock, /尚未提供逐条来源/);
   assert.doesNotMatch(mock, /只返回演示需求/);
 
   const live = listSourceNote("live");
