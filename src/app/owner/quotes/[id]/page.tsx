@@ -1,9 +1,5 @@
-import { notFound } from "next/navigation";
-import { QuoteComparison } from "@/features/b/QuoteComparison";
-import { loadQuoteData } from "@/lib/quote-engine/data";
+import { QuotePage } from "@/features/b/QuotePage";
 
 export default function Page({ params }: { params: { id: string } }) {
-  const data = loadQuoteData(params.id);
-  if (!data) notFound();
-  return <QuoteComparison data={data} />;
+  return <QuotePage key={params.id} demandId={params.id} />;
 }

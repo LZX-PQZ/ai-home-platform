@@ -60,8 +60,7 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-900 p-6 text-white">
         <div><h2 className="mb-1 text-lg">下一步：看清完整报价</h2><p className="mb-0 text-sm text-slate-300">逐项确认服务范围和未定费用，再决定与谁合作。</p></div>
-        {demand.id === "demo-demand" ? <Link className="rounded-lg bg-white px-5 py-3 text-sm font-semibold text-teal-800" href={`/owner/quotes/${encodeURIComponent(demand.id)}`}>查看该需求报价 →</Link>
-          : <p className="mb-0 text-sm text-slate-300">这份需求的报价查询尚未接通，当前报价页仅提供演示需求样例。</p>}
+        <Link className="rounded-lg bg-white px-5 py-3 text-sm font-semibold text-teal-800" href={`/owner/quotes/${encodeURIComponent(demand.id)}`}>查看该需求报价 →</Link>
       </div>
     </div>
   );

@@ -2,10 +2,10 @@ import * as React from "react";
 import Link from "next/link";
 import { QuoteTable } from "@/components/QuoteTable";
 import { formatQuoteMoney } from "@/features/b/format-quote";
-import type { loadQuoteData } from "@/lib/quote-engine/data";
+import type { loadQuoteComparison } from "@/features/b/load-quotes";
 
-export function QuoteComparison({ data }: { data: NonNullable<ReturnType<typeof loadQuoteData>> }) {
-  const { demand, providers, response } = data;
+export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof loadQuoteComparison>> }) {
+  const { demand, providers, response, demandSource, quoteSource, providerSource } = data;
   const id = encodeURIComponent(demand.id);
   return (
     <div className="space-y-7">
@@ -13,7 +13,7 @@ export function QuoteComparison({ data }: { data: NonNullable<ReturnType<typeof 
         <Link className="text-sm" href={`/owner/matches/${id}`}>← 返回服务方匹配</Link>
         <div className="mb-3 mt-6 flex flex-wrap items-center gap-3">
           <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-semibold text-teal-800">透明报价</span>
-          <span className="badge">{response.meta.source === "mock" ? "模拟数据 · 非真实市场报价" : "报价数据"}</span>
+          <span className="badge">{quoteSource === "mock" ? "模拟数据 · 非真实市场报价" : response.meta.source === "mock" ? "含模拟需求或服务方资料" : "报价数据"}</span>
         </div>
         <h1>先看清每一项，再比较报价</h1>
         <p className="max-w-2xl text-slate-600">已知费用从列明金额逐项汇总，待确认项目单独保留。套餐名称相同，也需要核对实际施工范围。</p>
@@ -21,6 +21,7 @@ export function QuoteComparison({ data }: { data: NonNullable<ReturnType<typeof 
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6" aria-labelledby="quote-demand">
         <h2 id="quote-demand">这次改造的需求</h2>
+        <p className="text-sm text-ink-3">需求来源：{demandSource === "mock" ? "模拟数据" : "已保存的需求数据"}</p>
         <p className="text-slate-600">{demand.description}</p>
         <dl className="grid gap-5 border-t border-slate-100 pt-5 sm:grid-cols-3">
           <div><dt className="text-xs text-slate-500">城市 / 面积</dt><dd className="mt-1 font-semibold">{demand.city} · {demand.areaM2}㎡</dd></div>
@@ -30,11 +31,17 @@ export function QuoteComparison({ data }: { data: NonNullable<ReturnType<typeof 
       </section>
 
       <section aria-labelledby="quote-list">
+        <p className="text-sm text-ink-3">报价来源：{quoteSource === "mock" ? "模拟报价" : "报价接口数据"}{providerSource !== null && <> · 服务方来源：{providerSource === "mock" ? "模拟资料" : "服务方接口数据"}</>}</p>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="mb-0" id="quote-list">报价明细对比 · {response.data.length} 份</h2>
           <span className="text-sm text-slate-500">展示顺序不代表价格或质量排名</span>
         </div>
-        <QuoteTable quotes={response.data} providers={providers} />
+        {quoteSource === "mock" && response.data.length === 0 ? (
+          <div className="rounded-control border border-dashed border-line bg-white p-6 text-center" role="status">
+            <h3 className="font-semibold text-ink">暂无属于这份需求的模拟报价</h3>
+            <p className="mb-0 mt-2 text-sm text-ink-2">当前报价接口仅提供演示数据，不能据此判断是否存在真实报价。真实报价查询与提交仍待接通。</p>
+          </div>
+        ) : <QuoteTable quotes={response.data} providers={providers} />}
       </section>
 
       <aside className="rounded-2xl border border-amber-200 bg-amber-50 p-6" aria-labelledby="quote-notes">
