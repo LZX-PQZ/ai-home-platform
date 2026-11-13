@@ -19,7 +19,7 @@ test("报价金额展示区分未知与零，并保留安全整数范围内的�
 test("报价页展示来源、供应方、列明费用及服务范围限制", () => {
   const data = loadQuoteData();
   assert.ok(data);
-  const html = renderToStaticMarkup(createElement(QuoteComparison, { data }));
+  const html = renderToStaticMarkup(createElement(QuoteComparison, { data: { ...data, demandSource: "mock", quoteSource: "mock", providerSource: "mock" } }));
   for (const text of ["模拟数据 · 非真实市场报价", providers[0].name, "¥12,000.00", "¥13,000.00", "垃圾清运", "待确认", "不代表最终总价更低", "实际范围需现场确认"]) {
     assert.ok(html.includes(text), text);
   }
