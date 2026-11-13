@@ -20,7 +20,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/demand | Demand[] | D | 查询 Prisma；每条 `Demand` 输出 `source`，列表含 `demo-demand` 时整体仍标 mock |
 | POST /api/demand | DemandInput → Demand | D | 校验后写入 Prisma，创建为 published，返回 live；无数据库时 503 |
 | GET /api/demand/[id] | Demand | D | 按 ID 查询 Prisma；每条输出 `source`，不存在 404，不回退到 demo-demand |
-| POST /api/demand/chat | ChatResult | D | 读取 ChatInput，固定追问，来源 mock |
+| POST /api/demand/chat | ChatResult | D | 读取 ChatInput；`AI_MODE=mock` 返回 mock，`AI_MODE=live` 调用服务端 LLM 网关并返回 live |
 | GET /api/provider | Provider[] | D | 固定 mock |
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
 | GET /api/quote | Quote[] | B | 固定 mock |
@@ -59,8 +59,8 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 `Demand.source` 是输出中的可选字段，值为 `mock` 或 `live`；字段缺失表示来源未知。需求服务会为演示需求填入 `mock`，为数据库需求填入 `live`。`DemandInput` 和更新输入不接受该字段，客户端不能声明来源。整体响应的 `meta.source` 继续按整批数据标记，混入 `demo-demand` 时仍为 `mock`。
 
 ## AI 接入
-当前 AI_MODE=mock。设 live 会明确返回不可用，不静默装作真实 AI。
-D 需要实现模型调用、超时、有限重试、JSON 校验与来源追踪。
+默认 `AI_MODE=mock`，会返回固定追问并标记 `meta.source: "mock"`。设为 `live` 后，服务端读取 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`，调用 OpenAI 兼容的 `/chat/completions` JSON 接口；响应必须通过 `ChatResult` 校验后才标记 `meta.source: "live"`。
+网关默认超时 5 秒、最多 2 次重试，可由服务端 `LLM_TIMEOUT_MS` 和 `LLM_MAX_RETRIES` 调整。缺少配置、超时、重试耗尽、非 JSON 或不符合契约的模型输出均返回 503 `AI_UNAVAILABLE`，不会伪装成成功或 mock。
 模型可生成文字解释和候选方案；费用合计、排期依赖和状态合法性由代码复核。
 照片只能辅助提示疑点，不能替代现场检测或证明施工合格。
 没有经过出题方确认的 API、性能或产品能力不能写成已接通/已验证。
