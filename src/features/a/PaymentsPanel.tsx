@@ -9,9 +9,22 @@ import {
   detectPaymentIssues,
   paymentSummary,
   toPaymentNodes,
+  type PaymentNode,
 } from "./payments";
 import { usePayments, type PaymentsState } from "./usePayments";
 import { ApiClientError } from "@/lib/api-client";
+
+export function paymentConfirmationMessage(stage: string, amountCents: number): string {
+  return `确认演示付款节点「${stage}」（${formatYuan(amountCents)}）吗？此操作只改变演示状态，确认后不能撤销，也不代表真实付款。`;
+}
+
+export function requestPaymentConfirmation(
+  confirm: (message: string) => boolean,
+  stage: string,
+  amountCents: number,
+): boolean {
+  return confirm(paymentConfirmationMessage(stage, amountCents));
+}
 
 /**
  * 业主端「节点付款」页。
@@ -36,7 +49,14 @@ export function PaymentsContent({ id, state, reload }: {
   const [actionNote, setActionNote] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
-  const handleConfirm = async (paymentId: string) => {
+  const handleConfirm = async (node: PaymentNode) => {
+    if (
+      typeof window !== "undefined"
+      && !requestPaymentConfirmation(window.confirm.bind(window), node.stage, node.amountCents)
+    ) {
+      return;
+    }
+    const paymentId = node.id;
     setConfirmingId(paymentId);
     setActionNote(null);
     try {
@@ -201,7 +221,7 @@ export function PaymentsContent({ id, state, reload }: {
                       {node.status === "pending" ? (
                         <Button
                           size="sm"
-                          onClick={() => void handleConfirm(node.id)}
+                          onClick={() => void handleConfirm(node)}
                           disabled={confirmingId !== null}
                         >
                           {confirmingId === node.id ? "确认中…" : "确认本节点"}
@@ -262,7 +282,7 @@ export function PaymentsContent({ id, state, reload }: {
           <Card>
             <SectionHead title="操作" />
             <p className={`!mb-3 ${C.meta}`}>
-              确认本节点会调用 POST /api/payment，只改变内存中的演示状态；不代表真实付款或资金托管。
+              确认本节点前会弹出二次确认；确认后调用 POST /api/payment，只改变内存中的演示状态；不代表真实付款或资金托管。
               上传凭证仍需文件存储与独立接口支持。
             </p>
             <div className="grid gap-2">
