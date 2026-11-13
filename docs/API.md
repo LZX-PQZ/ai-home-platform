@@ -17,7 +17,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | 方法/路径 | data 对应契约 | 负责 | 当前状态 |
 |---|---|---|---|
 | GET /api/health | service、stage | D | 可用 |
-| GET /api/demand | Demand[] | D | 查询 Prisma；仅 seed 的 demo-demand 标为 mock，含用户创建记录时标为 live |
+| GET /api/demand | Demand[] | D | 查询 Prisma；列表含 `demo-demand` 时整体标 mock，仅用户创建记录时标 live |
 | POST /api/demand | DemandInput → Demand | D | 校验后写入 Prisma，创建为 published，返回 live；无数据库时 503 |
 | GET /api/demand/[id] | Demand | D | 按 ID 查询 Prisma；不存在 404，不回退到 demo-demand |
 | POST /api/demand/chat | ChatResult | D | 读取 ChatInput，固定追问，来源 mock |

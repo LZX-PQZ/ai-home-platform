@@ -36,7 +36,7 @@ test("POST /api/demand 拒绝倒置预算", async () => {
   assert.deepEqual(await response.json(), { ok: false, error: { code: "VALIDATION_ERROR", message: "需求字段不符合契约。" } });
 });
 
-test("需求服务从数据库读取，并为用户创建记录标记 live", async () => {
+test("需求服务从数据库读取，并避免混合列表把演示需求标成 live", async () => {
   const result = await listDemands(fakeDb());
   assert.equal(result.source, "live");
   assert.equal(result.data[0].id, row.id);
@@ -44,6 +44,8 @@ test("需求服务从数据库读取，并为用户创建记录标记 live", asy
   assert.equal(created.status, "published");
   const demo = await listDemands(fakeDb([{ ...row, id: "demo-demand" }]));
   assert.equal(demo.source, "mock");
+  const mixed = await listDemands(fakeDb([{ ...row, id: "demo-demand" }, row]));
+  assert.equal(mixed.source, "mock");
 });
 
 test("GET /api/demand/[id] 拒绝空 ID，服务详情对未知 ID 返回空", async () => {

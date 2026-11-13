@@ -29,7 +29,8 @@ export function toDemandDTO(row: Pick<
 }
 
 export function demandSource(rows: Array<{ id: string }>): "mock" | "live" {
-  return rows.some((row) => row.id !== DEMO_DEMAND_ID) ? "live" : "mock";
+  // 列表响应只有一个 meta.source；混入演示需求时整体保持 mock，避免把 demo-demand 宣称为实时数据。
+  return rows.length > 0 && rows.every((row) => row.id !== DEMO_DEMAND_ID) ? "live" : "mock";
 }
 
 export async function listDemands(db: DemandDatabase = prisma) {
