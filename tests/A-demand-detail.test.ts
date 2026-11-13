@@ -127,9 +127,9 @@ test("加载/不存在/失败页面无匹配报价链接，也不提前断言 mo
   for (const state of states) {
     const html = render(state);
     assert.doesNotMatch(html, /href="\/owner\/(matches|quotes)\//);
-    assert.doesNotMatch(html, /模拟数据|来源 live|列表回退|尚未开放/);
+    assert.doesNotMatch(html, /本条需求为模拟数据|来源 live|列表回退|尚未开放/);
   }
-  assert.match(render({ phase: "loading" }), /数据来源尚未确认/);
+  assert.match(render({ phase: "loading" }), /本页数据可能包含模拟数据，加载完成后显示具体来源/);
   assert.match(render({ phase: "missing" }), /不存在或已被删除/);
   assert.match(render({ phase: "missing" }), /重新读取/);
   assert.match(render({ phase: "failed", error: "服务不可用" }), /role="alert"/);

@@ -30,7 +30,7 @@ export function DemandDetailContent({ id, state, reload }: {
     return (
       <div>
         <PageHeader title="需求详情" subtitle={`正在读取需求 ${id}…`} />
-        <p className={C.meta} role="status">正在加载，数据来源尚未确认。</p>
+        <p className={C.meta} role="status">本页数据可能包含模拟数据，加载完成后显示具体来源。</p>
         <Card className="animate-pulse">
           <div className="mb-3 h-4 w-1/2 rounded bg-[#EDF2F3]" />
           <div className="mb-2 h-3 w-full rounded bg-[#F4F7F8]" />
