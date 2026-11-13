@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Demand } from "@/contracts";
 import type { DemandDTO } from "@/contracts";
 import { apiGet } from "@/lib/api-client";
+import { DemandWithSource } from "./demand-source";
 
 export type ListPhase = "loading" | "ready" | "failed";
 
@@ -32,7 +32,7 @@ export function useDemandList() {
     inFlight.current = true;
     setState((current) => ({ ...current, phase: "loading", error: null }));
     try {
-      const result = await apiGet("/api/demand", Demand.array());
+      const result = await apiGet("/api/demand", DemandWithSource.array());
       setState({ phase: "ready", items: result.data, source: result.meta.source, error: null });
     } catch (cause) {
       setState({

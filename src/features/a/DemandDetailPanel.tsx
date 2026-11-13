@@ -4,7 +4,6 @@ import Link from "next/link";
 import { Badge, Button, C, Card, DataDisclosure, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
 import {
   demandTitle,
-  findDemand,
   formatBudget,
   isPostContract,
   paymentsHref,
@@ -12,16 +11,17 @@ import {
   statusLabel,
   statusTone,
 } from "./demand-list";
+import { detailMissingHint, detailViaLabel } from "./demand-detail";
+import { itemSourceBadge } from "./demand-source";
 import { renovationLabel } from "./demand-chat";
-import { useDemandList } from "./useDemandList";
+import { useDemandDetail } from "./useDemandDetail";
 
 /**
- * 需求详情：详情数据仍从 GET /api/demand 列表里按 ID 查（D 尚未提供 /api/demand/[id]）。
- * 查不到就如实说明，不用固定样例冒充这个 ID 的数据。
+ * 需求详情：首选 GET /api/demand/[id]；接口未开放时自动回退到列表按 ID 查找，
+ * 并在页面上标注本次数据走的是哪条路径。查不到就如实说明，不用固定样例冒充这个 ID 的数据。
  */
 export function DemandDetailPanel({ id }: { id: string }) {
-  const { phase, items, source, error, reload } = useDemandList();
-  const demand = phase === "ready" ? findDemand(items, id) : null;
+  const { phase, demand, source, via, fallbackReason, error, reload } = useDemandDetail(id);
 
   if (phase === "loading") {
     return (
@@ -54,18 +54,25 @@ export function DemandDetailPanel({ id }: { id: string }) {
     );
   }
 
-  if (!demand) {
+  if (phase === "missing" || !demand) {
     return (
       <div>
         <PageHeader title="需求详情" subtitle="没有找到这条需求" />
         <DataDisclosure what="需求" />
         <Empty
           title={`接口未返回需求「${id}」`}
-          hint="GET /api/demand 当前只返回演示需求；按 ID 查询的接口由 D 负责，尚未实现。本页不会用其他样例数据冒充这条需求。"
+          hint={detailMissingHint(id, fallbackReason)}
           action={
             <LinkButton href="/owner" size="sm" variant="secondary">返回我的装修</LinkButton>
           }
         />
+        {fallbackReason ? (
+          <div className="mt-3">
+            <Button variant="secondary" size="sm" onClick={() => void reload()}>
+              重新读取
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -80,8 +87,13 @@ export function DemandDetailPanel({ id }: { id: string }) {
 
       <PageHeader
         title={demandTitle(demand)}
-        subtitle={`需求编号 ${demand.id} · 来源 ${source ?? "未知"}`}
-        aside={<Badge tone={statusTone(demand.status)}>{statusLabel(demand.status)}</Badge>}
+        subtitle={`需求编号 ${demand.id} · 来源 ${source ?? "未知"} · ${via ? detailViaLabel(via) : "未知路径"}`}
+        aside={
+          <span className="flex items-center gap-2">
+            {itemSourceBadge(demand) ? <Badge tone="neutral">{itemSourceBadge(demand)}</Badge> : null}
+            <Badge tone={statusTone(demand.status)}>{statusLabel(demand.status)}</Badge>
+          </span>
+        }
       />
 
       <DataDisclosure what="需求" />
@@ -147,9 +159,14 @@ export function DemandDetailPanel({ id }: { id: string }) {
             <SectionHead title="数据说明" />
             <Note tone="info">
               <p>
-                来源：{source ?? "未知"}。字段严格按 <code>src/contracts</code> 的 Demand 契约渲染，
-                未经接口确认的信息不会出现在本页。
+                来源：{source ?? "未知"}（{via ? detailViaLabel(via) : "未知路径"}）。字段严格按{" "}
+                <code>src/contracts</code> 的 Demand 契约渲染，未经接口确认的信息不会出现在本页。
               </p>
+              {fallbackReason ? (
+                <p className="!mb-0 mt-2 text-[12.5px] text-[#7A6A2F]">
+                  {fallbackReason}；按 ID 接口上线后本页会自动切换，无需改页面。
+                </p>
+              ) : null}
             </Note>
           </Card>
         </div>

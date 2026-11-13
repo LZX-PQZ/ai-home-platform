@@ -13,6 +13,7 @@ import {
   statusLabel,
   statusTone,
 } from "./demand-list";
+import { listSourceNote, itemSourceBadge } from "./demand-source";
 import { useDemandList } from "./useDemandList";
 
 /** 加载骨架：让「正在取数据」和「没有数据」在视觉上区分开 */
@@ -117,6 +118,7 @@ export function DemandListPanel() {
                     <p className={`!mb-0 ${C.meta}`}>需求编号：{demand.id}</p>
                   </div>
                   <Badge tone={statusTone(demand.status)}>{statusLabel(demand.status)}</Badge>
+                  {itemSourceBadge(demand) ? <Badge tone="neutral">{itemSourceBadge(demand)}</Badge> : null}
                 </div>
 
                 <p className="!mb-0 line-clamp-2 text-[13px] leading-relaxed text-[#4A5A60]">
@@ -164,11 +166,7 @@ export function DemandListPanel() {
             ))}
           </div>
 
-          <p className={`mt-4 !mb-0 ${C.meta}`}>
-            {source === "live"
-              ? "说明：列表来自真实数据库（source: live），经 POST /api/demand 落库的需求会立即出现在这里。"
-              : "说明：当前列表来自 mock 接口，只返回演示需求；真实需求需等 POST /api/demand 落库后才会出现在这里。"}
-          </p>
+          <p className={`mt-4 !mb-0 ${C.meta}`}>{listSourceNote(source)}</p>
         </>
       )}
     </div>
