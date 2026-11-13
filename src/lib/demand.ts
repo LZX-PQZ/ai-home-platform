@@ -1,5 +1,5 @@
 import type { DemandOrder } from "@prisma/client";
-import { Demand, type DemandDTO, type DemandInputDTO, type DemandUpdateInputDTO } from "@/contracts";
+import { Demand, type DemandDTO, type DemandInputDTO, type DemandUpdateInputDTO, type SourceDTO } from "@/contracts";
 import { prisma } from "@/lib/prisma";
 
 export type DemandDatabase = {
@@ -13,6 +13,10 @@ export type DemandDatabase = {
 export const DEMO_OWNER_ID = "demo-owner";
 export const DEMO_DEMAND_ID = "demo-demand";
 export const EDITABLE_DEMAND_STATUSES = ["draft", "published"] as const;
+
+export function demandItemSource(id: string): SourceDTO {
+  return id === DEMO_DEMAND_ID ? "mock" : "live";
+}
 
 export function isEditableDemandStatus(status: string): status is (typeof EDITABLE_DEMAND_STATUSES)[number] {
   return EDITABLE_DEMAND_STATUSES.includes(status as (typeof EDITABLE_DEMAND_STATUSES)[number]);
@@ -33,10 +37,11 @@ export function toDemandDTO(row: Pick<
     renovationType: row.renovationType,
     desiredDays: row.desiredDays,
     status: row.status,
+    source: demandItemSource(row.id),
   });
 }
 
-export function demandSource(rows: Array<{ id: string }>): "mock" | "live" {
+export function demandSource(rows: Array<{ id: string }>): SourceDTO {
   // 列表响应只有一个 meta.source；混入演示需求时整体保持 mock，避免把 demo-demand 宣称为实时数据。
   return rows.length > 0 && rows.every((row) => row.id !== DEMO_DEMAND_ID) ? "live" : "mock";
 }
@@ -70,7 +75,7 @@ export async function createDemand(input: DemandInputDTO, db: DemandDatabase = p
 }
 
 export type DemandMutationResult<T> =
-  | { kind: "ok"; data: T; source: "mock" | "live" }
+  | { kind: "ok"; data: T; source: SourceDTO }
   | { kind: "not-found" }
   | { kind: "invalid-state"; status: string }
   | { kind: "demo-read-only" };

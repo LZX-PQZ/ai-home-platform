@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import type { SourceDTO } from "@/contracts";
 export function mockResponse<T>(data:T) { return NextResponse.json({ok:true,data,meta:{source:"mock" as const}}); }
-export function dataResponse<T>(data:T, source: "mock" | "live", status = 200) {
+export function dataResponse<T>(data:T, source: SourceDTO, status = 200) {
  return NextResponse.json({ok:true,data,meta:{source}},{status});
 }
 export function liveResponse<T>(data:T, status = 200) {
