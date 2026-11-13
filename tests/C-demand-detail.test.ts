@@ -61,7 +61,7 @@ test("未发布状态不可从详情页展示，未找到不等同于后台资�
     assert.match(html, /返回需求大厅/);
     assert.match(html, /刷新详情/);
     assert.match(html, /数据来源：模拟数据（mock）/);
-    assert.doesNotMatch(html, /<article|测试模拟需求|报价与接单/);
+    assert.doesNotMatch(html, /<article|测试模拟需求|<form/);
   }
 });
 
@@ -81,10 +81,11 @@ test("详情展示全部公共字段，按分转元，说明模拟来源及未�
   for (const text of [
     demand.id, demand.description, demand.city, "局部改造", "25.5 平方米", "0.00", "30,000.50", "15 天", "已发布",
     "数据来源：模拟数据（mock）", "不代表真实客户需求", "角色导航不代表登录鉴权",
-    "详情从当前需求列表中读取", "报价提交和接单功能待接入", "当前仅支持查看需求",
+    "详情从当前需求列表中读取", "报价提交和接单功能待接入", "填写报价 · 本地预览",
   ]) assert.ok(html.includes(text), text);
   assert.match(html, /href="\/provider"/);
-  assert.doesNotMatch(html, /已接单|报价成功|<form|<input/);
+  assert.doesNotMatch(html, /已接单|报价成功/);
+  assert.match(html, /本地预览不代表保存或提交/);
 });
 
 test("live 详情不冒充模拟来源，空描述有占位且文本被安全转义", async (t) => {
@@ -133,7 +134,7 @@ test("HTTP 501 明确为未实现错误，可重试且不显示成功或未找�
     assert.match(html, /尚未实现/);
     assert.match(html, /role="alert"/);
     assert.match(html, /重新加载/);
-    assert.doesNotMatch(html, /<article|数据来源：|未找到/);
+    assert.doesNotMatch(html, /<article|数据来源：|未找到|<form/);
     return true;
   });
 });
@@ -150,7 +151,7 @@ test("HTTP 404/500、网络失败和非 JSON 响应不能当成空详情", async
     await assert.rejects(loadDemandDetail(demand.id), (error: unknown) => {
       const html = render({ status: "error", message: demandDetailErrorMessage(error) });
       assert.match(html, /需求详情加载失败/);
-      assert.doesNotMatch(html, /<article|未找到|数据来源：/);
+      assert.doesNotMatch(html, /<article|未找到|数据来源：|<form/);
       return true;
     });
     mocked.mock.restore();
@@ -163,7 +164,7 @@ test("详情加载中禁用刷新，首次 HTML 已说明演示性质；空 ID �
   assert.match(html, /role="status"/);
   assert.match(html, /正在读取需求详情/);
   assert.match(html, /模拟数据仅用于演示/);
-  assert.doesNotMatch(html, /<article|数据来源：|未找到/);
+  assert.doesNotMatch(html, /<article|数据来源：|未找到|<form/);
   const mocked = t.mock.method(globalThis, "fetch", async () => { throw new Error("不应发送请求"); });
   await assert.rejects(loadDemandDetail(""));
   assert.equal(mocked.mock.callCount(), 0);
