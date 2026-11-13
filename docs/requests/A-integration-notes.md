@@ -56,3 +56,30 @@ D 的 GET 变成 `live` 之后这句话就是错的，已改为按 `source` 分�
 
 A 侧继续按「合并后再切换调用方」的约定：等 `GET /api/demand/[id]` 进 main 后，
 再把详情页从「列表里按 ID 查」改为直接用按 ID 接口（当前实现已能工作，不阻塞演示）。
+
+## 复检（2026-11-14 00:0x，PR #8 / #9 已开出）
+
+在 `tmp/a-plus-d3` 上重新做了一遍：main（a999e40）+ `feature/D-demand-contracts`(#9) + `feature/D-demand-crud`(#8) + A 分支。
+
+- **`DemandInputDTO` 重复导出问题依然存在**：`src/contracts/index.ts(56,13)` 与 `(69,13)`。
+  删掉第二处（CRUD 导出块里那个）后 tsc 通过。
+- `npm run db:generate` 仍是必需前置，否则报 `DemandOrder` 未导出。
+- 去重后全套 **94 条测试通过**，A 与两个 D 分支完全兼容。
+- 两个分支都是基于旧 main 拉的（`git diff origin/main` 会显示删除 B/C 文件），
+  这是基线落后的假象，真实合并不会删文件；建议 D 合并前先 `git merge origin/main` 减少噪音。
+
+## A 侧的详情页已改成「按 ID 优先 + 列表回退」
+
+A 不再等 #8 合并：详情页 `useDemandDetail` 先打 `GET /api/demand/[id]`，
+命中就用它（`via=byId`）；遇到 404/501/5xx/结构不合法/id 不符/网络异常时自动回退到
+`GET /api/demand` 按 ID 查找（`via=list`），并在页面上标注本次走的是哪条路径。
+
+两条路径都实测过：
+
+| 场景 | 请求链路 | 页面标注 |
+| --- | --- | --- |
+| main（无按 ID 接口） | `404 /api/demand/demo-demand` → `200 /api/demand` | 来源 mock · 列表回退 |
+| #8 合并后 | `200 /api/demand/{id}`（只发这一次） | 来源 live · 按 ID 查询 |
+| 不存在的 ID | `404 /api/demand/not-exist-999` → `200 /api/demand` | 没有找到这条需求（如实提示） |
+
+也就是说 #8 一合并，A 的详情页自动切到新接口，不需要再改代码。
