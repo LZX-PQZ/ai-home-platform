@@ -1,5 +1,11 @@
-import { Demand } from "@/contracts";
+import { Demand, type DemandDTO } from "@/contracts";
 import { apiGet } from "@/lib/api-client";
+
+export const renovationLabels: Record<DemandDTO["renovationType"], string> = {
+  elderly: "适老化改造",
+  partial: "局部改造",
+  repair: "维修",
+};
 
 export async function loadDemandHall() {
   const response = await apiGet("/api/demand", Demand.array());
