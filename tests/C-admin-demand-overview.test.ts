@@ -72,7 +72,7 @@ test("mock 混合列表明确来源范围，不把每条记录都认定为模拟
   const data = [demand, { ...demand, id: "newly-created", city: "广州" }];
   t.mock.method(globalThis, "fetch", async () => Response.json(payload(data)));
   const html = render({ status: "ready", response: await loadAdminDemands() });
-  for (const text of ["列表来源：含模拟数据（mock）", "也可能包含实际创建的需求", "本页尚未展示逐条来源", "不代表平台全量数据", "深圳", "广州", "newly-created"]) assert.ok(html.includes(text), text);
+  for (const text of ["列表来源：含模拟数据（mock）", "也可能包含实际创建的需求", "各条需求来源以行内标识为准", "需求来源：未知（接口未提供）", "不代表平台全量数据", "深圳", "广州", "newly-created"]) assert.ok(html.includes(text), text);
   assert.doesNotMatch(html, /固定演示数据|以下均为模拟|列表来源：实时接口|未提供逐条来源/);
 });
 

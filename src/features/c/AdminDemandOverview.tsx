@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
+import { DemandSource } from "./DemandSource";
 import { formatBudget, renovationLabels } from "./demand-hall";
 import {
   adminDemandErrorMessage,
@@ -56,13 +57,14 @@ export function AdminDemandOverviewContent({ state, onReload }: {
               {response.meta.source === "mock"
                 ? response.data.length === 0
                   ? "本次为空列表，接口来源标记为 mock；没有可展示的需求。"
-                  : "列表包含模拟数据，也可能包含实际创建的需求；本页尚未展示逐条来源，不能将每条记录都视为真实或模拟需求。"
+                  : "列表包含模拟数据，也可能包含实际创建的需求；各条需求来源以行内标识为准，未提供时显示未知。"
                 : "本次列表由实时接口返回，来源标识不代表已完成身份鉴权。"}
             </p>
           </div>
 
           <section aria-labelledby="admin-demand-counts-title">
             <h2 id="admin-demand-counts-title" className={C.sectionTitle}>本次列表状态分布</h2>
+            <p className={C.pageSub}>统计包含本次返回的所有需求，包括模拟、实际创建及来源未知的记录。</p>
             <dl aria-label="本次列表需求数量" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <div className={`${C.card} !bg-brand-soft`}>
                 <dt className="text-sm text-ink-2">列表需求数</dt>
@@ -98,6 +100,7 @@ export function AdminDemandOverviewContent({ state, onReload }: {
                       <th scope="row" className="px-5 py-4 font-normal">
                         <span className="break-words font-medium">{demand.city || "城市未填写"} · {renovationLabels[demand.renovationType]}</span>
                         <span className={`mt-1 block break-all ${C.meta}`}>需求编号：{demand.id}</span>
+                        <div className="mt-2"><DemandSource source={demand.source} /></div>
                       </th>
                       <td className="px-3 py-4"><StatusBadge label={adminDemandStatusLabels[demand.status]} /></td>
                       <td className="break-words px-3 py-4">{formatBudget(demand.budgetMinCents)} – {formatBudget(demand.budgetMaxCents)}</td>
