@@ -17,7 +17,11 @@ for(const file of files){
    const raw=spec.startsWith("@/")?"src/"+spec.slice(2):path.posix.normalize(path.posix.join(path.posix.dirname(file),spec));
    const target=[raw,raw+".ts",raw+".tsx",raw+"/index.ts",raw+"/index.tsx"].find(p=>fs.existsSync(p)&&fs.statSync(p).isFile());
    const matchCanReadDemand = (file.startsWith("src/lib/match/") || file.startsWith("src/app/api/match/")) && target === "src/lib/demand.ts";
-   if(target&&ownerOf(file)!==ownerOf(target)&&!shared.test(target)&&!matchCanReadDemand) failures.push(file+" -> "+target);
+   const quoteCanReadDemand = (file === "src/lib/quote-engine.ts" || file.startsWith("src/lib/quote-engine/") || file.startsWith("src/app/api/quote/")) && target === "src/lib/demand.ts";
+   const serverOnlyDatabase = target === "src/lib/prisma.ts";
+   const serverCanReadDatabase = file.startsWith("src/app/api/") || file.startsWith("src/lib/") || file.startsWith("prisma/");
+   if(serverOnlyDatabase&&!serverCanReadDatabase) failures.push(file+" -> "+target);
+   else if(target&&ownerOf(file)!==ownerOf(target)&&!shared.test(target)&&!matchCanReadDemand&&!quoteCanReadDemand) failures.push(file+" -> "+target);
   }
   ts.forEachChild(node,check);
  }

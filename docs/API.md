@@ -33,6 +33,15 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 - POST /api/schedule、/api/payment、/api/ticket、/api/inspect、/api/review：由 D 完成。ReviewInput 已预留；其他写入契约先补齐再让页面提交。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
 
+## 服务端身份基础设施
+
+报价服务端可通过 `src/lib/server-auth.ts` 的 `requireProviderIdentity(request, readSession)` 取得当前服务方身份。`readSession` 必须是服务端已验证会话的适配器，返回 `VerifiedSession` 后才会生成绑定的 `providerId`；请求体、角色切换和客户端自带 `providerId` 均不参与认证。
+
+- 没有已验证会话：401 `UNAUTHENTICATED`。
+- 已登录但不是服务方，或会话未绑定服务方：403 `FORBIDDEN`。
+- 当前默认 reader 不产生演示身份，因此真实认证适配器接入前不能把报价提交标记为成功。
+- 报价 API 与报价引擎可复用 `findDemand`；页面和客户端仍禁止直接导入数据库服务。
+
 ## GET /api/match 查询参数
 
 - `demandId` 是可选的单值查询参数。省略时保留 `demo-demand` 的演示入口，返回 `Match[]`，`meta.source` 为 `mock`。
