@@ -1,6 +1,7 @@
 import * as React from "react";
-import type { ProviderDTO, QuoteDTO } from "@/contracts";
+import type { DemandDTO, ProviderDTO, QuoteDTO } from "@/contracts";
 import { formatQuoteMoney } from "@/features/b/format-quote";
+import { QuoteBudgetSummary } from "@/features/b/QuoteBudgetSummary";
 import { getPendingQuoteItems, summarizeQuote } from "@/lib/quote-engine";
 
 const units: Record<QuoteDTO["items"][number]["unit"], string> = { m2: "㎡", piece: "件", job: "项" };
@@ -8,7 +9,7 @@ const statuses: Record<QuoteDTO["status"], string> = {
   draft: "草稿", submitted: "已提交", accepted: "已接受", rejected: "已拒绝",
 };
 
-export function QuoteTable({ quotes, providers = [] }: { quotes: QuoteDTO[]; providers?: ProviderDTO[] }) {
+export function QuoteTable({ quotes, providers = [], demand }: { quotes: QuoteDTO[]; providers?: ProviderDTO[]; demand?: DemandDTO }) {
   if (!quotes.length) {
     return <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center"><h2>暂无可对比的报价</h2><p className="mb-0 text-slate-600">这份需求还没有已提交或已接受的报价，请等待服务方补充。</p></div>;
   }
@@ -56,6 +57,7 @@ export function QuoteTable({ quotes, providers = [] }: { quotes: QuoteDTO[]; pro
                 <span className="text-sm font-semibold">已知费用小计</span>
                 <strong className="text-2xl tabular-nums text-teal-800">{formatQuoteMoney(summary.knownTotalCents)}</strong>
               </div>
+              {demand && <QuoteBudgetSummary demand={demand} quote={quote} />}
               {summary.pendingItems.length ? <div className="rounded-xl bg-amber-50 p-4 text-amber-950">
                 <h4 className="text-sm font-semibold">待确认项目 · {summary.pendingItems.length} 项</h4>
                 <ul className="mt-2 list-inside list-disc break-words text-sm leading-6">
