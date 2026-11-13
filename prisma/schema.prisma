@@ -9,6 +9,8 @@ model User {
   id String @id @default(cuid())
   name String
   role String @default("owner")
+  providerId String? @unique
+  provider ServiceProvider? @relation("ProviderAccount", fields: [providerId], references: [id])
   demands DemandOrder[]
 }
 model DemandOrder {
@@ -38,6 +40,8 @@ model ServiceProvider {
   tagsJson String
   rating Float @default(0)
   quotes Quote[]
+  account User? @relation("ProviderAccount")
+  quoteSubmissionReceipts QuoteSubmissionReceipt[]
 }
 model Quote {
   id String @id @default(cuid())
@@ -50,6 +54,18 @@ model Quote {
   pendingItemsJson String
   estimatedDays Int
   status String @default("draft")
+  submissionReceipt QuoteSubmissionReceipt?
+}
+model QuoteSubmissionReceipt {
+  id String @id @default(cuid())
+  providerId String
+  provider ServiceProvider @relation(fields: [providerId], references: [id])
+  idempotencyKey String
+  requestHash String
+  quoteId String @unique
+  quote Quote @relation(fields: [quoteId], references: [id])
+  createdAt DateTime @default(now())
+  @@unique([providerId, idempotencyKey])
 }
 model Schedule {
   id String @id @default(cuid())
