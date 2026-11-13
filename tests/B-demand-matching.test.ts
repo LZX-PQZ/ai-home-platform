@@ -41,13 +41,43 @@ test("实际需求城市/改造类型参与匹配，不回退深圳演示结果"
 test("分别保留需求与服务方来源，仅两个来源都 live 才标 live", async (t) => {
   for (const demandSource of ["mock", "live"] as const) {
     for (const providerSource of ["mock", "live"] as const) {
-      t.mock.method(globalThis, "fetch", async (url: string) => url === "/api/provider" ? success(providers, providerSource) : success(demoDemand, demandSource));
+      t.mock.method(globalThis, "fetch", async (url: string) => url === "/api/provider" ? success(providers, providerSource) : success({ ...demoDemand, source: demandSource }, demandSource));
       const data = await loadMatches(demoDemand.id);
       assert.equal(data.demandSource, demandSource);
       assert.equal(data.providerSource, providerSource);
       assert.equal(data.response.meta.source, demandSource === "live" && providerSource === "live" ? "live" : "mock");
       t.mock.restoreAll();
     }
+  }
+});
+
+test("需求标签只取逐条 source，缺失不由整体信封或演示 ID 推断", async (t) => {
+  for (const demandSource of ["mock", "live", undefined] as const) {
+    for (const overallSource of ["mock", "live"] as const) {
+      t.mock.method(globalThis, "fetch", async (url: string) => url === "/api/provider"
+        ? success(providers)
+        : success({ ...demoDemand, source: demandSource }, overallSource));
+      const data = await loadMatches(demoDemand.id);
+      assert.equal(data.demandSource, demandSource);
+      assert.equal(data.response.meta.source, demandSource === "live" && overallSource === "live" ? "live" : "mock");
+      const html = renderToStaticMarkup(createElement(MatchResults, { data }));
+      const label = demandSource === "mock" ? "模拟数据" : demandSource === "live" ? "已保存的需求数据" : "未知（接口未提供逐条来源）";
+      assert.ok(html.includes(`需求来源：${label}`));
+      if (demandSource === undefined) {
+        assert.ok(html.includes("需求来源未知 · 规则匹配"));
+        assert.ok(!html.includes("需求来源：已保存的需求数据"));
+        assert.ok(!html.includes("需求来源：模拟数据"));
+      }
+      t.mock.restoreAll();
+    }
+  }
+});
+
+test("非法逐条来源拒绝展示，不能当成缺失来源继续匹配", async (t) => {
+  for (const source of ["unknown", null]) {
+    t.mock.method(globalThis, "fetch", async () => success({ ...demoDemand, source }));
+    await assert.rejects(loadMatches(demoDemand.id), (error) => error instanceof ApiClientError && error.code === "INVALID_RESPONSE");
+    t.mock.restoreAll();
   }
 });
 
@@ -103,7 +133,7 @@ test("需求或服务方的 501/503/网络错误及非法响应均失败，不�
 });
 
 test("匹配结果明确显示真实需求加模拟服务方，报价链接保留当前需求 ID", async (t) => {
-  const demand = Demand.parse({ ...demoDemand, id: "new-demand", city: "上海", description: "测试实际需求" });
+  const demand = Demand.parse({ ...demoDemand, id: "new-demand", city: "上海", description: "测试实际需求", source: "live" });
   t.mock.method(globalThis, "fetch", async (url: string) => url === "/api/provider" ? success(providers, "mock") : success(demand));
   const data = await loadMatches(demand.id);
   const html = renderToStaticMarkup(createElement(MatchResults, { data }));

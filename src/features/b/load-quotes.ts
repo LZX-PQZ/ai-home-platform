@@ -29,12 +29,12 @@ export async function loadQuoteComparison(demandId: string) {
   const visible = prepareQuotes(demandId, quotes.data);
   // 没有报价时无需加载服务方，不让无关查询失败遮蔽已确认的空列表。
   const providers = visible.length ? await apiGet("/api/provider", Provider.array()) : null;
-  const source = demand.meta.source === "live" && quotes.meta.source === "live" && (!providers || providers.meta.source === "live") ? "live" : "mock";
+  const source = demand.meta.source === "live" && demand.data.source === "live" && quotes.meta.source === "live" && (!providers || providers.meta.source === "live") ? "live" : "mock";
 
   return {
     demand: demand.data,
     providers: providers?.data ?? [],
-    demandSource: demand.meta.source,
+    demandSource: demand.data.source,
     quoteSource: quotes.meta.source,
     providerSource: providers?.meta.source ?? null,
     response: envelope(Quote.array()).parse({ ok: true, data: visible, meta: { source } }),
