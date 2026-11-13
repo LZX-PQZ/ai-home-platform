@@ -45,7 +45,7 @@ export function ScheduleContent({ id, state, reload }: {
     return (
       <div>
         <PageHeader title="施工进度" subtitle={`正在读取需求 ${id} 的排期…`} />
-        <p className={C.meta} role="status">正在加载，排期来源尚未确认。</p>
+        <p className={C.meta} role="status">本页数据可能包含模拟数据，加载完成后显示具体来源。</p>
         <Card className="animate-pulse">
           <div className="mb-4 h-4 w-1/3 rounded bg-[#EDF2F3]" />
           <div className="grid gap-2">

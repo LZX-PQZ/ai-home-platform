@@ -58,8 +58,8 @@ test("mock/live 分别披露来源，不把真实响应描述为模拟", () => {
 
 test("加载、失败、空排期不展示百分比或真实日期", () => {
   const loading = render({ phase: "loading", data: null, source: null, error: null });
-  assert.match(loading, /排期来源尚未确认/);
-  assert.doesNotMatch(loading, /模拟数据|progressbar/);
+  assert.match(loading, /本页数据可能包含模拟数据，加载完成后显示具体来源/);
+  assert.doesNotMatch(loading, /本排期为模拟数据|排期来源：live|progressbar/);
   const failed = render({ phase: "failed", data: null, source: null, error: "HTTP 501" });
   assert.match(failed, /HTTP 501/);
   assert.match(failed, /重新加载/);
