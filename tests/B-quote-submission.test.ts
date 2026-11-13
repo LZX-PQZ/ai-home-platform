@@ -32,6 +32,38 @@ test("按冻结规则逐行四舍五入后求和，不先合并半分费用", ()
   assert.equal(result.knownTotalCents, 125);
 });
 
+test("C 交接的十进制半分及两侧样例得到相同金额，两行半分分别舍入", () => {
+  for (const [quantity, expected] of [[0.144, 14], [0.145, 15], [0.146, 15], [1.004, 100], [1.005, 101], [1.006, 101]]) {
+    const result = calculateQuoteSubmission({ ...input, items: [{ ...item, quantity, unitPriceCents: 100 }] });
+    assert.equal(result.items[0].amountCents, expected, `quantity=${quantity}`);
+    assert.equal(result.knownTotalCents, expected);
+  }
+  const pair = calculateQuoteSubmission({ ...input, items: [
+    { ...item, quantity: 0.145, unitPriceCents: 100 },
+    { ...item, code: "line-2", quantity: 0.145, unitPriceCents: 100 },
+  ] });
+  assert.deepEqual(pair.items.map((row) => row.amountCents), [15, 15]);
+  assert.equal(pair.knownTotalCents, 30);
+});
+
+test("数量上下限与大整数中间值保持精确，输出可安全 JSON 序列化", () => {
+  for (const [quantity, unitPriceCents, expected] of [
+    [0.001, 499, 0], [0.001, 500, 1], [0.001, 501, 1],
+    [0.001, Number.MAX_SAFE_INTEGER, 9007199254741],
+    [1000000, 1, 1000000], [1000, 9007199254740, 9007199254740000],
+  ]) {
+    const result = calculateQuoteSubmission({ ...input, items: [{ ...item, quantity, unitPriceCents }] });
+    assert.equal(result.items[0].amountCents, expected);
+    assert.equal(result.knownTotalCents, expected);
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), result);
+  }
+  const atLimit = calculateQuoteSubmission({ ...input, items: [
+    { ...item, quantity: 1, unitPriceCents: Number.MAX_SAFE_INTEGER - 1 },
+    { ...item, code: "last-cent", quantity: 0.145, unitPriceCents: 10 },
+  ] });
+  assert.equal(atLimit.knownTotalCents, Number.MAX_SAFE_INTEGER);
+});
+
 test("零元与未知费用分别保留，同名不同编号的未知项目不合并", () => {
   const result = calculateQuoteSubmission({ ...input, items: [
     { ...item, code: "free", unitPriceCents: 0 },
@@ -101,7 +133,10 @@ test("坏 JSON 返回 400，合法报价与全部未知费用仍返回 501，计
   const badJson = await POST(new Request("http://localhost/api/quote", { method: "POST", body: "{" }));
   assert.equal(badJson.status, 400);
   assert.equal((await badJson.json()).error.code, "INVALID_JSON");
-  for (const value of [input, { ...input, items: [{ ...item, unitPriceCents: null }] }]) {
+  for (const value of [input, { ...input, items: [{ ...item, unitPriceCents: null }] },
+    { ...input, items: [{ ...item, quantity: 0.145, unitPriceCents: 100 }] },
+    { ...input, items: [{ ...item, quantity: 1.005, unitPriceCents: 100 }] },
+  ]) {
     const response = await post(value);
     assert.equal(response.status, 501);
     const body = await response.json();
