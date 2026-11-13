@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { Payment } from "../src/contracts";
 import {
+  confirmDemoPayment,
   detectPaymentIssues,
   paymentStatusLabel,
   paymentStatusTone,
@@ -54,6 +56,30 @@ test("状态有中文文案与色调，不把英文枚举抛给业主", () => {
   assert.equal(paymentStatusLabel("confirmed_demo"), "已确认（演示）");
   assert.equal(paymentStatusTone("pending"), "accent");
   assert.ok(!paymentStatusLabel("confirmed_demo").includes("confirmed_demo"));
+});
+
+test("演示确认使用公共动作契约并保留接口来源", async (t) => {
+  let requestInput: RequestInfo | URL | undefined;
+  let requestInit: RequestInit | undefined;
+  t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    requestInput = input;
+    requestInit = init;
+    return Response.json({
+      ok: true,
+      data: Payment.parse({
+        id: "p1", demandId: "demo-demand", stage: "签约节点",
+        amountCents: 100000, status: "confirmed_demo", simulated: true,
+      }),
+      meta: { source: "mock" },
+    });
+  });
+
+  const result = await confirmDemoPayment("p1");
+  assert.equal(result.data.status, "confirmed_demo");
+  assert.equal(result.source, "mock");
+  assert.equal(requestInput, "/api/payment");
+  assert.equal(requestInit?.method, "POST");
+  assert.deepEqual(JSON.parse(String(requestInit?.body)), { paymentId: "p1", action: "confirm_demo" });
 });
 
 test("付款计划自检能抓出重名节点、零金额、混入其他需求", () => {

@@ -5,11 +5,13 @@ import { useState } from "react";
 import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
 import { demandHref, formatYuan, projectHref } from "./demand-list";
 import {
+  confirmDemoPayment,
   detectPaymentIssues,
   paymentSummary,
   toPaymentNodes,
 } from "./payments";
 import { usePayments, type PaymentsState } from "./usePayments";
+import { ApiClientError } from "@/lib/api-client";
 
 /**
  * 业主端「节点付款」页。
@@ -32,6 +34,25 @@ export function PaymentsContent({ id, state, reload }: {
 }) {
   const { phase, items, source, error } = state;
   const [actionNote, setActionNote] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  const handleConfirm = async (paymentId: string) => {
+    setConfirmingId(paymentId);
+    setActionNote(null);
+    try {
+      const result = await confirmDemoPayment(paymentId);
+      setActionNote(`演示确认已返回：${result.data.stage}，来源：${result.source}。这不代表真实付款。`);
+      await reload();
+    } catch (cause) {
+      if (cause instanceof ApiClientError && cause.status === 409) {
+        setActionNote(`该演示节点无法重复确认：${cause.message}`);
+      } else {
+        setActionNote(cause instanceof Error ? cause.message : "演示确认失败，请重试。");
+      }
+    } finally {
+      setConfirmingId(null);
+    }
+  };
 
   if (phase === "loading") {
     return (
@@ -175,7 +196,18 @@ export function PaymentsContent({ id, state, reload }: {
                     <span className="text-[13.5px] font-medium text-[#16242B]">
                       节点 {node.index} · {node.stage}
                     </span>
-                    <Badge tone={node.tone}>{node.statusLabel}</Badge>
+                    <span className="flex flex-wrap items-center justify-end gap-2">
+                      <Badge tone={node.tone}>{node.statusLabel}</Badge>
+                      {node.status === "pending" ? (
+                        <Button
+                          size="sm"
+                          onClick={() => void handleConfirm(node.id)}
+                          disabled={confirmingId !== null}
+                        >
+                          {confirmingId === node.id ? "确认中…" : "确认本节点"}
+                        </Button>
+                      ) : null}
+                    </span>
                   </div>
                   <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-[17px] font-semibold tabular-nums text-[#16242B]">
@@ -230,19 +262,10 @@ export function PaymentsContent({ id, state, reload }: {
           <Card>
             <SectionHead title="操作" />
             <p className={`!mb-3 ${C.meta}`}>
-              确认付款、上传凭证都需要写回后端（POST /api/payment），该接口目前返回 501；本页只读。
+              确认本节点会调用 POST /api/payment，只改变内存中的演示状态；不代表真实付款或资金托管。
+              上传凭证仍需文件存储与独立接口支持。
             </p>
             <div className="grid gap-2">
-              <Button
-                className="w-full"
-                onClick={() =>
-                  setActionNote(
-                    "确认付款需要 POST /api/payment，接口尚未实现（501）。本页不会在本地把状态改成「已付款」——那会误导业主以为钱已经付了。",
-                  )
-                }
-              >
-                确认本节点
-              </Button>
               <Button
                 variant="secondary"
                 className="w-full"

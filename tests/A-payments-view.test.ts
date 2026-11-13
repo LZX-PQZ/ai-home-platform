@@ -73,6 +73,17 @@ test("全部节点匹配才展示金额与模拟确认状态，live 来源也不
   }
 });
 
+test("付款操作说明演示确认已接通，不再把 POST /api/payment 说成 501", () => {
+  const pending = Payment.parse({
+    id: "pending-payment", demandId: "test-demand", stage: "待确认节点",
+    amountCents: 100000, status: "pending", simulated: true,
+  });
+  const html = render(ready([pending]));
+  assert.match(html, /确认本节点/);
+  assert.match(html, /只改变内存中的演示状态/);
+  assert.doesNotMatch(html, /接口目前返回 501/);
+});
+
 test("加载时显示统一静态说明，失败时显示 501 和重试，均不展示旧付款计划", () => {
   const loading = render({ ...ready(), phase: "loading" });
   assert.match(loading, /本页数据可能包含模拟数据，加载完成后显示具体来源/);
