@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Quote, QuoteSubmissionInput, type QuoteSubmissionInputDTO, type SourceDTO } from "../src/contracts";
+import { IDEMPOTENCY_KEY_HEADER, Quote, QuoteSubmissionInput, type QuoteSubmissionInputDTO, type SourceDTO } from "../src/contracts";
 import { emptyQuoteLine, quoteSubmissionInput, validateQuoteForm } from "../src/features/c/quote-form";
 import { QuoteSubmissionFeedback } from "../src/features/c/QuoteForm";
 import { quoteSubmissionFailure, submitQuote, type QuoteSubmissionState } from "../src/features/c/quote-submit";
@@ -20,6 +20,7 @@ const result = validateQuoteForm(form);
 assert.equal(result.kind, "preview");
 if (result.kind !== "preview") throw new Error("测试输入应通过预览");
 const input = quoteSubmissionInput("C-submit-test", result.preview);
+const key = "C-submit-test-key-0001";
 const quote = Quote.parse({
   ...result.preview, id: "C-test-quote", demandId: input.demandId, providerId: "C-test-provider", status: "submitted",
 });
@@ -40,12 +41,44 @@ test("提交仅 POST 公共报价接口，保持需求 ID、来源及服务端�
   const fetchMock = t.mock.method(globalThis, "fetch", async (path: string, init?: RequestInit) => {
     assert.equal(path, "/api/quote");
     assert.equal(init?.method, "POST");
-    assert.deepEqual(init.headers, { "content-type": "application/json" });
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("content-type"), "application/json");
+    assert.equal(headers.get(IDEMPOTENCY_KEY_HEADER), key);
+    assert.equal([...headers].length, 2);
     assert.deepEqual(JSON.parse(String(init.body)), input);
     return Response.json(envelope(), { status: 201 });
   });
-  assert.deepEqual(await submitQuote(input), { data: quote, source: "live" });
+  assert.deepEqual(await submitQuote(input, key), { data: quote, source: "live" });
   assert.equal(fetchMock.mock.callCount(), 1);
+});
+
+test("缺失或非法幂等键在网络前拒绝，不给请求体添加幂等或身份字段", async (t) => {
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => { throw new Error("不应发送"); });
+  for (const badKey of [undefined, null, "", "a".repeat(15), "a".repeat(129), "C-key-with-space 123", "中文幂等键测试0000000000", "C-key-with-newline\n123"]) {
+    await assert.rejects(submitQuote(input, badKey as string), (error: unknown) => {
+      const state = quoteSubmissionFailure(error);
+      assert.equal(state.status, "rejected");
+      assert.match(render(state), /本次未发送请求/);
+      return true;
+    });
+  }
+  assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+test("幂等冲突保留未知状态并阻止换键重发，不引导刷新丢掉原提交标识", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => Response.json({
+    ok: false, error: { code: "IDEMPOTENCY_CONFLICT", message: "内部摘要与数据库内容" },
+  }, { status: 409 }));
+  await assert.rejects(submitQuote(input, key), (error: unknown) => {
+    const state = quoteSubmissionFailure(error);
+    assert.equal(state.status, "uncertain");
+    const html = render(state);
+    assert.match(html, /已有报价需要核实/);
+    assert.match(html, /不会换标识重发/);
+    assert.match(html, /暂不允许再次提交/);
+    assert.doesNotMatch(html, /先刷新需求详情|内部摘要|报价已提交|本次未提交成功/);
+    return true;
+  });
 });
 
 test("非法数量、空需求编号或客户端伪造身份/金额在网络前拒绝", async (t) => {
@@ -58,7 +91,7 @@ test("非法数量、空需求编号或客户端伪造身份/金额在网络前�
     { ...input, items: [{ ...input.items[0], amountCents: 0 }] },
     { ...input, items: [{ ...input.items[0], quantity: 1000000.001 }] },
   ]) {
-    await assert.rejects(submitQuote(bad as QuoteSubmissionInputDTO), (error: unknown) => quoteSubmissionFailure(error).status === "rejected");
+    await assert.rejects(submitQuote(bad as QuoteSubmissionInputDTO, key), (error: unknown) => quoteSubmissionFailure(error).status === "rejected");
   }
   assert.equal(fetchMock.mock.callCount(), 0);
 });
@@ -70,7 +103,7 @@ test("400/401/403/404/409/501/503 显示拒绝原因，不回显内部异常或�
   ] as const) {
     const before = structuredClone(input);
     const mock = t.mock.method(globalThis, "fetch", async () => Response.json({ ok: false, error: { code: "FAILURE", message: "内部敏感错误" } }, { status }));
-    await assert.rejects(submitQuote(input), (error: unknown) => {
+    await assert.rejects(submitQuote(input, key), (error: unknown) => {
       const state = quoteSubmissionFailure(error);
       assert.equal(state.status, "rejected");
       const html = render(state);
@@ -87,7 +120,7 @@ test("400/401/403/404/409/501/503 显示拒绝原因，不回显内部异常或�
 test("HTTP 501 即使携带成功信封或非 JSON，也只能显示尚未开放", async (t) => {
   for (const response of [Response.json(envelope(), { status: 501 }), new Response("not json", { status: 501 })]) {
     const mock = t.mock.method(globalThis, "fetch", async () => response);
-    await assert.rejects(submitQuote(input), (error: unknown) => {
+    await assert.rejects(submitQuote(input, key), (error: unknown) => {
       assert.match(render(quoteSubmissionFailure(error)), /HTTP 501/);
       assert.equal(quoteSubmissionFailure(error).status, "rejected");
       return true;
@@ -104,7 +137,7 @@ test("错位需求、非 submitted、缺来源、坏字段和 200 失败均不�
     { ok: false, error: { code: "NOT_IMPLEMENTED", message: "内部错误" } },
   ]) {
     const mock = t.mock.method(globalThis, "fetch", async () => Response.json(body));
-    await assert.rejects(submitQuote(input), (error: unknown) => {
+    await assert.rejects(submitQuote(input, key), (error: unknown) => {
       const state = quoteSubmissionFailure(error);
       assert.equal(state.status, "uncertain");
       const html = render(state);
@@ -123,7 +156,7 @@ test("网络中断、500 和坏 JSON 保持结果未知，不自动重试或断�
     async () => new Response("not json"),
   ]) {
     const mock = t.mock.method(globalThis, "fetch", failure);
-    await assert.rejects(submitQuote(input), (error: unknown) => {
+    await assert.rejects(submitQuote(input, key), (error: unknown) => {
       const html = render(quoteSubmissionFailure(error));
       for (const text of ["提交结果未知", "先联系平台核实", "暂不允许再次提交", "填写内容仍保留"]) assert.ok(html.includes(text));
       assert.doesNotMatch(html, /报价已提交|本次提交失败|本次未提交成功/);
@@ -137,7 +170,7 @@ test("网络中断、500 和坏 JSON 保持结果未知，不自动重试或断�
 test("live 回执展示服务端金额且不声称已接单或业主已查看，mock 明确不是实际保存", async (t) => {
   for (const source of ["mock", "live"] as const) {
     const mock = t.mock.method(globalThis, "fetch", async () => Response.json(envelope({ ...quote, id: "<script>test</script>", knownTotalCents: 250 }, source)));
-    const html = render({ status: "received", response: await submitQuote(input) });
+    const html = render({ status: "received", response: await submitQuote(input, key) });
     for (const text of ["¥2.50", "待确认费用", "完整总价仍未确定", "本页不确认业主已可查看", "已锁定本次表单", "&lt;script&gt;"]) assert.ok(html.includes(text), text);
     assert.doesNotMatch(html, /<script|本地报价预览|本次未提交成功/);
     if (source === "mock") {
