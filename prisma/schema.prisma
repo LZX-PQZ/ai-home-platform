@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "sqlite"
+  url = env("DATABASE_URL")
+}
+model User {
+  id String @id @default(cuid())
+  name String
+  role String @default("owner")
+  demands DemandOrder[]
+}
+model DemandOrder {
+  id String @id @default(cuid())
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id])
+  description String
+  city String
+  areaM2 Float
+  budgetMinCents Int
+  budgetMaxCents Int
+  renovationType String
+  desiredDays Int
+  status String @default("draft")
+  createdAt DateTime @default(now())
+  quotes Quote[]
+  schedules Schedule[]
+  payments Payment[]
+  reviews Review[]
+  tickets Ticket[]
+}
+model ServiceProvider {
+  id String @id @default(cuid())
+  name String
+  city String
+  kind String
+  tagsJson String
+  rating Float @default(0)
+  quotes Quote[]
+}
+model Quote {
+  id String @id @default(cuid())
+  demandId String
+  demand DemandOrder @relation(fields: [demandId], references: [id])
+  providerId String
+  provider ServiceProvider @relation(fields: [providerId], references: [id])
+  itemsJson String
+  knownTotalCents Int
+  pendingItemsJson String
+  estimatedDays Int
+  status String @default("draft")
+}
+model Schedule {
+  id String @id @default(cuid())
+  demandId String
+  demand DemandOrder @relation(fields: [demandId], references: [id])
+  version Int @default(1)
+  tasksJson String
+  @@unique([demandId, version])
+}
+model Payment {
+  id String @id @default(cuid())
+  demandId String
+  demand DemandOrder @relation(fields: [demandId], references: [id])
+  stage String
+  amountCents Int
+  status String @default("pending")
+  simulated Boolean @default(true)
+}
+model Review {
+  id String @id @default(cuid())
+  demandId String
+  demand DemandOrder @relation(fields: [demandId], references: [id])
+  providerId String
+  rating Int
+  comment String
+}
+model Ticket {
+  id String @id @default(cuid())
+  demandId String
+  demand DemandOrder @relation(fields: [demandId], references: [id])
+  description String
+  category String
+  responsibleProviderId String?
+  status String @default("open")
+}

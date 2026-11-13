@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root { color-scheme: light; }
+body { margin: 0; background: #f4f6f8; color: #182a32; font-family: Arial, "Microsoft YaHei", sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 32px 20px; }
+a { color: #126c62; }
+nav { display: flex; flex-wrap: wrap; gap: 20px; padding: 18px 24px; background: white; border-bottom: 1px solid #dde5e9; }
+h1 { font-size: 30px; font-weight: 700; margin-bottom: 16px; }
+h2 { font-size: 20px; font-weight: 600; margin-bottom: 12px; }
+p { line-height: 1.8; margin-bottom: 12px; }
+.card { padding: 24px; border: 1px solid #dce5e6; border-radius: 14px; background: white; margin: 16px 0; }
+.badge { display: inline-block; border-radius: 8px; padding: 4px 10px; background: #fff0c5; color: #765409; font-size: 13px; }

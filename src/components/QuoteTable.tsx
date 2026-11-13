@@ -1,0 +1,2 @@
+import type { QuoteDTO } from "@/contracts";
+export function QuoteTable({quotes}:{quotes:QuoteDTO[]}) { return <div>{quotes.map(quote=><section className="card" key={quote.id}><h2>{quote.providerId}</h2>{quote.items.map(item=><p key={item.code}>{item.name}：{item.amountCents===null?"待确认":"¥"+(item.amountCents/100).toLocaleString()}</p>)}<strong>已知费用 ¥{(quote.knownTotalCents/100).toLocaleString()}</strong><p>{quote.pendingItems.length?"存在待确认费用，不能据此判断最终最低价。":"当前列明项目无待确认费用；需核对服务范围。"}</p></section>)}</div>; }
