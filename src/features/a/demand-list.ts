@@ -24,10 +24,13 @@ export function statusTone(status: DemandDTO["status"]): StatusTone {
   return STATUS_LABELS[status]?.tone ?? "neutral";
 }
 
-/** 分 → 「¥30,000」；负值与非整数一律按 0 处理，避免显示奇怪的数字 */
+/** 分 → 元，保留真实分值；负值、非整数和非有限值一律按 0 处理。 */
 export function formatYuan(cents: number): string {
-  if (!Number.isFinite(cents) || cents < 0) return "¥0";
-  return "¥" + Math.round(cents / 100).toLocaleString("zh-CN");
+  if (!Number.isSafeInteger(cents) || cents < 0) return "¥0";
+  return "¥" + (cents / 100).toLocaleString("zh-CN", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+  });
 }
 
 /** 预算区间：上下限相同就只显示一个数 */

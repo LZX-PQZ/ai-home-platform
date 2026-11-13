@@ -45,12 +45,15 @@ test("五种状态都有中文文案与色调，不会把英文枚举直接显�
   }
 });
 
-test("金额按分换算成元并保留千分位，负数与非法值不产生怪数字", () => {
+test("金额按分换算成元并保留真实分值，负数与非法值不产生怪数字", () => {
   assert.equal(formatYuan(3000000), "¥30,000");
   assert.equal(formatYuan(0), "¥0");
+  assert.equal(formatYuan(123456), "¥1,234.56");
+  assert.equal(formatYuan(123401), "¥1,234.01");
   assert.equal(formatYuan(-100), "¥0");
   assert.equal(formatYuan(Number.NaN), "¥0");
-  assert.equal(formatYuan(1234567), "¥12,346");
+  assert.equal(formatYuan(1.5), "¥0");
+  assert.equal(formatYuan(Number.MAX_SAFE_INTEGER + 1), "¥0");
 });
 
 test("预算区间上下限相同时只显示一个金额", () => {
