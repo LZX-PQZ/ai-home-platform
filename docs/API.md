@@ -17,9 +17,9 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | 方法/路径 | data 对应契约 | 负责 | 当前状态 |
 |---|---|---|---|
 | GET /api/health | service、stage | D | 可用 |
-| GET /api/demand | Demand[] | D | 查询 Prisma；列表含 `demo-demand` 时整体标 mock，仅用户创建记录时标 live |
+| GET /api/demand | Demand[] | D | 查询 Prisma；每条 `Demand` 输出 `source`，列表含 `demo-demand` 时整体仍标 mock |
 | POST /api/demand | DemandInput → Demand | D | 校验后写入 Prisma，创建为 published，返回 live；无数据库时 503 |
-| GET /api/demand/[id] | Demand | D | 按 ID 查询 Prisma；不存在 404，不回退到 demo-demand |
+| GET /api/demand/[id] | Demand | D | 按 ID 查询 Prisma；每条输出 `source`，不存在 404，不回退到 demo-demand |
 | POST /api/demand/chat | ChatResult | D | 读取 ChatInput，固定追问，来源 mock |
 | GET /api/provider | Provider[] | D | 固定 mock |
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
@@ -47,6 +47,10 @@ Quote.status：draft/submitted/accepted/rejected；提交报价不等于用户�
 Schedule 通过 version 表示版本；重新排期应保留旧计划，展示差异并让负责人确认。
 Payment 仅 pending/confirmed_demo；不是支付接口。
 Ticket 包含 demandId、responsibleProviderId（可空）、category、status。
+
+## 逐条来源
+
+`Demand.source` 是输出中的可选字段，值为 `mock` 或 `live`；字段缺失表示来源未知。需求服务会为演示需求填入 `mock`，为数据库需求填入 `live`。`DemandInput` 和更新输入不接受该字段，客户端不能声明来源。整体响应的 `meta.source` 继续按整批数据标记，混入 `demo-demand` 时仍为 `mock`。
 
 ## AI 接入
 当前 AI_MODE=mock。设 live 会明确返回不可用，不静默装作真实 AI。

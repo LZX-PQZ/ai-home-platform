@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { envelope } from "@/contracts";
+import { envelope, type SourceDTO } from "@/contracts";
 
 const failureEnvelope = z.object({
   ok: z.literal(false),
@@ -20,7 +20,7 @@ export class ApiClientError extends Error {
 
 type SuccessPayload<T extends z.ZodTypeAny> = {
   data: z.infer<T>;
-  source: "mock" | "live";
+  source: SourceDTO;
 };
 
 async function requestJson(path: string, init?: RequestInit) {
