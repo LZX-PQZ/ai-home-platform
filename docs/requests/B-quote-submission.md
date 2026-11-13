@@ -7,7 +7,9 @@
 
 ## 本次可独立交付
 
-B 的报价页验证已知演示需求 ID，只展示该需求的 submitted/accepted 报价。GET /api/quote 沿用当前无参数演示入口和 envelope(Quote[]) 响应；本次不新增查询参数协议。两处均重算已知费用，显示 mock 来源，不接入写入。
+B 的报价页通过已开放的 GET /api/demand/[id] 验证当前需求，再调用现有无参数 GET /api/quote，仅展示同一 demandId 的 submitted/accepted 报价；有报价时通过 GET /api/provider 取得服务方资料。三类数据分别标来源。GET /api/quote 继续沿用演示数据和 envelope(Quote[])；本次不新增查询参数协议，不接入写入。
+
+2026-11-14 页面接入：已保存的新需求可进入报价页，当前固定 mock 报价与其不匹配时显示“暂无属于这份需求的模拟报价”，不把它描述成真实报价不存在。需求 404 展示未找到，501/503/网络及契约错误展示失败且可重试，不回退默认需求或空成功。页面提供刷新，切换 ID 或刷新时立即隐藏旧结果；未知需求的页面外壳为 HTTP 200，客户端详情接口的 404 驱动未找到提示。匹配页恢复带当前 ID 的报价入口。
 
 已知费用按现有 QuoteItem.amountCents 累加；null 不推算成零或自动用数量乘单价填充。amountCents 或 unitPriceCents 为 null 的项目，以及报价中声明的额外 pendingItems，均保留为待确认。空明细不构成完整报价；已知费用不能直接作为最终总价或最低价。
 
