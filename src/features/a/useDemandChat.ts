@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { ChatResultDTO } from "@/contracts";
+import { ChatResult, type ChatResultDTO } from "@/contracts";
+import { ApiClientError, apiPost } from "@/lib/api-client";
 import {
   appendMessage,
-  describeFailure,
   fieldLabel,
   normalizeOutgoing,
-  parseChatResponse,
   toChatPayload,
   type ChatMessage,
   type EnvelopeSource,
@@ -50,25 +49,7 @@ export function useDemandChat() {
     setPhase("sending");
     setError(null);
     try {
-      const response = await fetch("/api/demand/chat", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(toChatPayload(history)),
-      });
-      let payload: unknown = null;
-      try {
-        payload = await response.json();
-      } catch {
-        payload = null;
-      }
-      if (!response.ok) {
-        const failure = describeFailure(response.status, payload);
-        failedHistory.current = history;
-        setPhase("failed");
-        setError(`${failure.message}（${failure.code}）`);
-        return;
-      }
-      const parsed = parseChatResponse(payload);
+      const parsed = await apiPost("/api/demand/chat", toChatPayload(history), ChatResult);
       failedHistory.current = null;
       setMessages((current) => appendMessage(current, { role: "assistant", content: parsed.data.reply }));
       setResult(parsed.data);
@@ -77,7 +58,9 @@ export function useDemandChat() {
     } catch (cause) {
       failedHistory.current = history;
       setPhase("failed");
-      setError(cause instanceof Error ? cause.message : "网络异常，请求没有完成。");
+      setError(cause instanceof ApiClientError
+        ? `${cause.message}（${cause.code}）`
+        : "网络异常，请求没有完成。");
     } finally {
       inFlight.current = false;
     }
@@ -107,6 +90,7 @@ export function useDemandChat() {
   }, [request]);
 
   const reset = useCallback(() => {
+    if (inFlight.current) return;
     failedHistory.current = null;
     setMessages([GREETING]);
     setResult(null);

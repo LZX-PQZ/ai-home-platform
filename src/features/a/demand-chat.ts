@@ -1,14 +1,16 @@
 import { z } from "zod";
 import { ChatResult, Demand, DemandInput, envelope } from "@/contracts";
-import type { ChatResultDTO, DemandDTO } from "@/contracts";
+import type { ChatInputDTO, ChatResultDTO, DemandDTO, DemandInputDTO } from "@/contracts";
+import { ApiClientError, apiPost } from "@/lib/api-client";
 
-/** 对话与提交用到的纯逻辑：不依赖 React、不直接发请求，便于单测。 */
+/** 对话与提交逻辑：复用公共契约和请求客户端，不依赖 React。 */
 
-export type DemandDraftInput = z.infer<typeof DemandInput>;
+export type DemandDraftInput = DemandInputDTO;
 
-export type ChatRole = "user" | "assistant";
-export type ChatMessage = { role: ChatRole; content: string };
-export type EnvelopeSource = "mock" | "live";
+export type ChatMessage = ChatInputDTO["messages"][number];
+export type ChatRole = ChatMessage["role"];
+const chatEnvelope = envelope(ChatResult);
+export type EnvelopeSource = z.infer<typeof chatEnvelope>["meta"]["source"];
 
 /** 与 ChatInput 契约一致：单条 4000 字、最多 30 条 */
 export const MAX_MESSAGE_LENGTH = 4000;
@@ -30,7 +32,7 @@ export const RENOVATION_OPTIONS = [
   { value: "repair", label: "维修" },
 ] as const;
 
-export type RenovationType = (typeof RENOVATION_OPTIONS)[number]["value"];
+export type RenovationType = DemandInputDTO["renovationType"];
 
 export function fieldLabel(field: string): string {
   return FIELD_LABELS[field] ?? field;
@@ -59,7 +61,7 @@ export function appendMessage(messages: ChatMessage[], message: ChatMessage): Ch
 }
 
 /** 只保留契约允许的字段，避免把界面状态一起发给接口 */
-export function toChatPayload(messages: ChatMessage[]): { messages: ChatMessage[] } {
+export function toChatPayload(messages: ChatMessage[]): ChatInputDTO {
   return {
     messages: messages
       .filter((m) => m.content.trim().length > 0)
@@ -90,7 +92,7 @@ export function describeFailure(status: number, payload: unknown): ApiError {
 
 /** 校验对话响应：缺 meta.source 或字段不符都按失败处理，不猜测 */
 export function parseChatResponse(payload: unknown): { data: ChatResultDTO; source: EnvelopeSource } {
-  const parsed = envelope(ChatResult).safeParse(payload);
+  const parsed = chatEnvelope.safeParse(payload);
   if (!parsed.success) throw new Error("对话接口返回格式不符合契约，已停止渲染。");
   return { data: parsed.data.data, source: parsed.data.meta.source };
 }
@@ -212,4 +214,22 @@ export function interpretDemandSubmit(status: number, payload: unknown): SubmitO
 
 export function demandPath(id: string): string {
   return `/owner/demand/${encodeURIComponent(id)}`;
+}
+
+/** 使用 D 的请求客户端；只有通过公共契约校验的成功响应才能产生详情链接。 */
+export async function submitDemand(form: DemandForm): Promise<SubmitOutcome> {
+  const checked = formToInput(form);
+  if (!checked.ok) return { kind: "rejected", messages: checked.messages };
+  try {
+    const result = await apiPost("/api/demand", checked.value, Demand);
+    return { kind: "created", demand: result.data, source: result.source };
+  } catch (cause) {
+    if (cause instanceof ApiClientError) {
+      return interpretDemandSubmit(cause.status, {
+        ok: false,
+        error: { code: cause.code, message: cause.message },
+      });
+    }
+    return { kind: "failed", message: "未收到有效的保存结果，请先到需求列表核实，再决定是否重试。" };
+  }
 }

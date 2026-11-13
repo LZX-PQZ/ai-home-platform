@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { DemandDraftPanel } from "@/features/a/DemandDraftPanel";
 import { useDemandChat } from "@/features/a/useDemandChat";
+import { normalizeOutgoing } from "@/features/a/demand-chat";
 import { Badge, Button, C, Card, Note, SectionHead } from "@/features/a/ui";
 
 const QUICK_PHRASES = [
@@ -27,12 +28,22 @@ function Avatar({ me }: { me: boolean }) {
 export function ChatWindow() {
   const { messages, phase, error, result, source, canRetry, send, retry, reset } = useDemandChat();
   const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [session, setSession] = useState(0);
   const sending = phase === "sending";
+  const busy = sending || saving;
+
+  const restart = () => {
+    if (busy) return;
+    reset();
+    setText("");
+    setSession((current) => current + 1);
+  };
 
   const submit = async () => {
-    if (sending) return;
+    if (busy) return;
     const value = text;
-    setText("");
+    if (normalizeOutgoing(value).ok) setText("");
     await send(value);
   };
 
@@ -93,11 +104,11 @@ export function ChatWindow() {
               <p>{error}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {canRetry && (
-                  <Button variant="danger" size="sm" onClick={retry} disabled={sending}>
+                  <Button variant="danger" size="sm" onClick={retry} disabled={busy}>
                     重试上一次请求
                   </Button>
                 )}
-                <Button variant="secondary" size="sm" onClick={reset}>
+                <Button variant="secondary" size="sm" onClick={restart} disabled={busy}>
                   重新开始
                 </Button>
               </div>
@@ -112,7 +123,7 @@ export function ChatWindow() {
               type="button"
               className={C.pill}
               onClick={() => setText(phrase)}
-              disabled={sending}
+              disabled={busy}
             >
               {phrase}
             </button>
@@ -121,23 +132,24 @@ export function ChatWindow() {
 
         <div className="mt-3 grid gap-2.5">
           <textarea
+            aria-label="需求描述消息"
             className={`min-h-[84px] resize-y ${C.input}`}
             placeholder="用一句话说说房子的情况和您想怎么改，例如：深圳 60 平老房，给老人住，卫生间太滑，预算 3-5 万，一个月内完工"
             value={text}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
                 event.preventDefault();
                 void submit();
               }
             }}
-            disabled={sending}
+            disabled={busy}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={() => void submit()} disabled={sending || text.trim().length === 0}>
+            <Button onClick={() => void submit()} disabled={busy || text.trim().length === 0}>
               {sending ? "发送中…" : "发送"}
             </Button>
-            <Button variant="secondary" onClick={reset} disabled={sending}>
+            <Button variant="secondary" onClick={restart} disabled={busy}>
               清空对话
             </Button>
             <span className={C.meta}>Enter 发送，Shift+Enter 换行</span>
@@ -145,7 +157,7 @@ export function ChatWindow() {
         </div>
       </Card>
 
-      <DemandDraftPanel result={result} source={source} />
+      <DemandDraftPanel key={session} result={result} source={source} onSubmittingChange={setSaving} />
     </div>
   );
 }
