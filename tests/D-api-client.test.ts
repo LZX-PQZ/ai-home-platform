@@ -1,9 +1,41 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
-import { ApiClientError, apiGet, apiPost } from "../src/lib/api-client";
+import { ApiClientError, apiDelete, apiGet, apiPost, apiPut } from "../src/lib/api-client";
 
 const responseSchema = z.object({ id: z.string(), accepted: z.boolean() });
+
+test("apiPut 发送 JSON、保留自定义请求头并返回契约数据与来源", async (t) => {
+  const fetchMock = t.mock.method(globalThis, "fetch", async (input: string, init?: RequestInit) => {
+    assert.equal(input, "/api/demand/demand-1");
+    assert.equal(init?.method, "PUT");
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("content-type"), "application/json");
+    assert.equal(headers.get("x-request-id"), "req-1");
+    assert.deepEqual(JSON.parse(String(init?.body)), { description: "更新" });
+    return Response.json({ ok: true, data: { id: "demand-1", accepted: true }, meta: { source: "live" } });
+  });
+
+  const result = await apiPut("/api/demand/demand-1", { description: "更新" }, responseSchema, {
+    headers: { "x-request-id": "req-1" },
+  });
+  assert.deepEqual(result, { data: { id: "demand-1", accepted: true }, source: "live" });
+  assert.equal(fetchMock.mock.callCount(), 1);
+});
+
+test("apiDelete 使用无请求体的 DELETE 并校验统一成功信封", async (t) => {
+  const fetchMock = t.mock.method(globalThis, "fetch", async (input: string, init?: RequestInit) => {
+    assert.equal(input, "/api/demand/demand-1");
+    assert.equal(init?.method, "DELETE");
+    assert.equal(init?.body, undefined);
+    assert.equal(new Headers(init?.headers).get("x-request-id"), "req-2");
+    return Response.json({ ok: true, data: { id: "demand-1", accepted: true }, meta: { source: "live" } });
+  });
+
+  const result = await apiDelete("/api/demand/demand-1", responseSchema, { headers: { "x-request-id": "req-2" } });
+  assert.deepEqual(result, { data: { id: "demand-1", accepted: true }, source: "live" });
+  assert.equal(fetchMock.mock.callCount(), 1);
+});
 
 test("apiPost 发送 JSON 并返回契约数据与来源", async (t) => {
   const fetchMock = t.mock.method(globalThis, "fetch", async (input: string, init?: RequestInit) => {

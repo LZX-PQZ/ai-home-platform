@@ -27,6 +27,8 @@ export type ApiPostOptions = {
   headers?: HeadersInit;
 };
 
+export type ApiRequestOptions = ApiPostOptions;
+
 async function requestJson(path: string, init?: RequestInit) {
   let response: Response;
   try {
@@ -77,6 +79,29 @@ function parseSuccess<T extends z.ZodTypeAny>(payload: unknown, schema: T, statu
   return parsed.data;
 }
 
+function jsonHeaders(options: ApiRequestOptions = {}): HeadersInit {
+  if (!options.headers) return { "content-type": "application/json" };
+  const headers = new Headers(options.headers);
+  headers.set("content-type", "application/json");
+  return headers;
+}
+
+async function requestMutation<T extends z.ZodTypeAny>(
+  method: "POST" | "PUT",
+  path: string,
+  body: unknown,
+  schema: T,
+  options: ApiRequestOptions = {},
+): Promise<SuccessPayload<T>> {
+  const response = await requestJson(path, {
+    method,
+    headers: jsonHeaders(options),
+    body: JSON.stringify(body),
+  });
+  const parsed = parseSuccess(response.payload, schema, response.status);
+  return { data: parsed.data, source: parsed.meta.source };
+}
+
 /** 浏览器端调用相对路径；响应先校验再交给页面，避免不同 AI 悄悄改字段。 */
 export async function apiGet<T extends z.ZodTypeAny>(path: string, schema: T) {
   const response = await requestJson(path);
@@ -90,17 +115,28 @@ export async function apiPost<T extends z.ZodTypeAny>(
   schema: T,
   options: ApiPostOptions = {},
 ): Promise<SuccessPayload<T>> {
-  const headers: HeadersInit = options.headers
-    ? (() => {
-      const merged = new Headers(options.headers);
-      merged.set("content-type", "application/json");
-      return merged;
-    })()
-    : { "content-type": "application/json" };
+  return requestMutation("POST", path, body, schema, options);
+}
+
+/** 更新 JSON 资源；失败时保留真实 HTTP 状态和服务端错误码。 */
+export async function apiPut<T extends z.ZodTypeAny>(
+  path: string,
+  body: unknown,
+  schema: T,
+  options: ApiRequestOptions = {},
+): Promise<SuccessPayload<T>> {
+  return requestMutation("PUT", path, body, schema, options);
+}
+
+/** 删除资源并校验统一成功信封；不会把 501 当成成功。 */
+export async function apiDelete<T extends z.ZodTypeAny>(
+  path: string,
+  schema: T,
+  options: ApiRequestOptions = {},
+): Promise<SuccessPayload<T>> {
   const response = await requestJson(path, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
+    method: "DELETE",
+    headers: options.headers,
   });
   const parsed = parseSuccess(response.payload, schema, response.status);
   return { data: parsed.data, source: parsed.meta.source };
