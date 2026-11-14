@@ -58,9 +58,13 @@ export function useDemandChat() {
     } catch (cause) {
       failedHistory.current = history;
       setPhase("failed");
-      setError(cause instanceof ApiClientError
-        ? `${cause.message}（${cause.code}）`
-        : "网络异常，请求没有完成。");
+      if (cause instanceof ApiClientError) {
+        setError(cause.status === 503
+          ? "需求助手暂时不可用，请稍后重试。"
+          : "需求助手暂时没有完成请求，请检查描述后重试。");
+      } else {
+        setError("网络异常，请求没有完成。");
+      }
     } finally {
       inFlight.current = false;
     }
