@@ -99,7 +99,8 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] POST /api/order/progress：所属业主明确确认，需求与接单原子 contracted→in_progress→completed；不跳级/回退，来源保留，失败全部回滚。
 - [x] 有排期时按依赖 start_task/complete_task，追加版本并保留历史；全部 done 才能整单完成。实际操作与当前操作者、状态、结果版本同事务记录。见 `docs/requests/D-order-progress.md`。
 - [x] 生产 HTTP 链路改为通过接口开工/逐项完成/整单完成/评价，并读取服务方接单列表和详情，不再直接改数据库模拟 completed。
-- [ ] A/C 动作按钮、评价表单、双方审批、专业验收材料、实际日期、阻塞/返工/施工中变更、付款联动、操作记录查询待后续。
+- [x] GET /api/order/progress?demandId=…：所属业主读取本人已保存操作记录，事务内验证归属与接单关联，保留来源、不公开操作者身份；无记录不补造，坏数据 503。A 页面接线与验证见 `docs/requests/D-order-progress-history.md`。
+- [ ] 双方审批、专业验收材料、实际日期、阻塞/返工/施工中变更、付款联动与操作记录页面待后续；A 的履约动作按钮已在 #144 接线。
 - [x] 照片检查 mock 结果已提供；过期照片全局配额修复 #136 与业主接单查询 #132 已合入。上传 live 与检查 mock 分开，真实 AI 仍未接通。
 - [x] 回复 B #133 的档期/履约评价请求，确认固定 mock 档期、已完成接单评价均分和样本数、mock/live 分开统计，见 `docs/requests/D-match-ranking-response.md`。
 - [x] Provider 可选 source/performance、ProviderPerformance 与 ProviderQuery，以及 GET /api/provider 的评价汇总已交付：公开目录范围不扩大，完成接单的一次评价、均分/样本数、mock/live 分开、无样本 null/0、坏数据 503。共享只读适配器供 B 后续接线，见 `docs/requests/D-provider-performance.md`。

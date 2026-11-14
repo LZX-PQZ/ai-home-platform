@@ -255,6 +255,21 @@ export const OrderProgressInput = z.discriminatedUnion("action", [
   z.object({ ...OrderProgressFields, action: z.literal("complete_task"), taskId: ScheduleTaskId }).strict(),
 ]);
 export const OrderProgressResult = z.object({ order: OrderSummary, schedule: Schedule.nullable() }).strict();
+const OrderProgressEventFields = {
+  id: Id.refine(value => value.trim().length > 0), orderId: OrderProgressFields.orderId,
+  createdAt: z.string().datetime({ offset: true }), source: Source,
+};
+/** 已保存的业主确认记录，不包含操作者身份，不代表专业验收或付款。 */
+export const OrderProgressEvent = z.discriminatedUnion("action", [
+  z.object({ ...OrderProgressEventFields, action: z.literal("start"), fromStatus: z.literal("contracted"),
+    toStatus: z.literal("in_progress"), taskId: z.null(), scheduleVersion: OrderProgressFields.scheduleVersion }).strict(),
+  z.object({ ...OrderProgressEventFields, action: z.literal("complete"), fromStatus: z.literal("in_progress"),
+    toStatus: z.literal("completed"), taskId: z.null(), scheduleVersion: OrderProgressFields.scheduleVersion }).strict(),
+  z.object({ ...OrderProgressEventFields, action: z.literal("start_task"), fromStatus: z.literal("in_progress"),
+    toStatus: z.literal("in_progress"), taskId: ScheduleTaskId, scheduleVersion: DatabaseInt.min(2) }).strict(),
+  z.object({ ...OrderProgressEventFields, action: z.literal("complete_task"), fromStatus: z.literal("in_progress"),
+    toStatus: z.literal("in_progress"), taskId: ScheduleTaskId, scheduleVersion: DatabaseInt.min(2) }).strict(),
+]);
 export const Payment = z.object({
   id: Id, demandId: Id, stage: z.string(), amountCents: Money,
   status: z.enum(["pending", "confirmed_demo"]), simulated: z.literal(true),
@@ -358,6 +373,7 @@ export type OrderQueryDTO = z.infer<typeof OrderQuery>;
 export type OwnerOrderResultDTO = z.infer<typeof OwnerOrderResult>;
 export type OrderProgressInputDTO = z.infer<typeof OrderProgressInput>;
 export type OrderProgressResultDTO = z.infer<typeof OrderProgressResult>;
+export type OrderProgressEventDTO = z.infer<typeof OrderProgressEvent>;
 export type QuoteSubmissionItemInputDTO = z.infer<typeof QuoteSubmissionItemInput>;
 export type QuoteSubmissionInputDTO = z.infer<typeof QuoteSubmissionInput>;
 export type ScheduleDTO = z.infer<typeof Schedule>;
