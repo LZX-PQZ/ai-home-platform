@@ -52,7 +52,7 @@ export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof load
       <aside className="rounded-2xl border border-amber-200 bg-amber-50 p-6" aria-labelledby="quote-notes">
         <h2 className="text-base" id="quote-notes">确认范围后，才能比较最终费用</h2>
         <p className="text-sm text-amber-950">逐项核对数量、单位、材料、施工范围与增项约定。已知小计更低，不代表最终总价更低；明细全部定价，也不代表覆盖了完整需求。</p>
-        <p className="mb-0 text-sm text-amber-950">预计天数是报价中的工期估计，不代表服务方档期已确认。本页用于查看报价，不代表接受报价或完成付款。</p>
+        <p className="mb-0 text-sm text-amber-950">预计天数是报价中的工期估计，不代表服务方档期已确认。查看报价不会自动接受；明确确认接受也不代表最终总价已确定或完成付款。</p>
       </aside>
       <Link className="inline-block text-sm" href={`/owner/demand/${id}`}>查看原始需求 →</Link>
     </div>
