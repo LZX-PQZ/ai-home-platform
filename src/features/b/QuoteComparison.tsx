@@ -5,7 +5,7 @@ import { formatQuoteMoney } from "@/features/b/format-quote";
 import type { loadQuoteComparison } from "@/features/b/load-quotes";
 
 export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof loadQuoteComparison>> }) {
-  const { demand, providers, response, demandSource, quoteSource, providerSource } = data;
+  const { demand, providers, response, demandSource, quoteSource, providerSource, providerWarning } = data;
   const id = encodeURIComponent(demand.id);
   return (
     <div className="space-y-7">
@@ -32,6 +32,10 @@ export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof load
 
       <section aria-labelledby="quote-list">
         <p className="text-sm text-ink-3">报价来源：{quoteSource === "mock" ? "模拟报价" : "报价接口数据"}{providerSource !== null && <> · 服务方来源：{providerSource === "mock" ? "模拟资料" : "服务方接口数据"}</>}</p>
+        {providerWarning && <div className="mb-4 rounded-control border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" role="alert">
+          <p>{providerWarning}</p>
+          <p className="mb-0">服务方资料未取得，来源未知；以下按报价中的服务方编号展示。</p>
+        </div>}
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="mb-0" id="quote-list">报价明细对比 · {response.data.length} 份</h2>
           <span className="text-sm text-slate-500">展示顺序不代表价格或质量排名</span>
