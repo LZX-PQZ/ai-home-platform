@@ -1,5 +1,5 @@
 import type { DemandOrder, Prisma, PrismaClient } from "@prisma/client";
-import { Demand, DemandIdParams, ProviderIdentity, envelope, type ApiFailure, type OwnerIdentityDTO, type ProviderIdentityDTO } from "@/contracts";
+import { Demand, DemandIdParams, OrderSummary, ProviderIdentity, envelope, type ApiFailure, type OwnerIdentityDTO, type ProviderIdentityDTO } from "@/contracts";
 import { DEMO_DEMAND_ID, toDemandDTO } from "@/lib/demand";
 import { readDemoVerifiedSession } from "@/lib/demo-provider-session";
 import { OWNER_SESSION_COOKIE, OwnerAccessError, readOwnerVerifiedSession } from "@/lib/owner-auth";
@@ -33,14 +33,31 @@ async function readIdentity(request: Request, tx: Prisma.TransactionClient) {
     return owner;
   }
   const provider = await readDemoVerifiedSession(request, tx);
-  // Provider authentication is optional for public reads; a valid demo session
-  // still marks the overall response as mock without granting extra access.
+  // Provider authentication is optional for public reads. Private details also
+  // require a persisted order belonging to this currently verified provider.
   return provider ? ProviderIdentity.parse(provider) : null;
 }
 
-function checkedDemand(row: DemandOrder, identity: OwnerIdentityDTO | ProviderIdentityDTO | null, id?: string) {
+const detailInclude = { serviceOrder: { include: { acceptedQuote: {
+  select: { id: true, demandId: true, providerId: true, status: true, source: true },
+} } } } as const;
+type DetailRow = Prisma.DemandOrderGetPayload<{ include: typeof detailInclude }>;
+
+function checkProviderOrder(row: DetailRow, providerId: string) {
+  const order = row.serviceOrder;
+  if (!order) throw new DemandReadRejected("DATABASE_UNAVAILABLE");
+  const data = OrderSummary.parse({ id: order.id, demandId: order.demandId, providerId: order.providerId,
+    acceptedQuoteId: order.acceptedQuoteId, status: order.status, source: order.source });
+  const quote = order.acceptedQuote;
+  if (row.id === DEMO_DEMAND_ID || data.demandId !== row.id || data.providerId !== providerId || data.status !== row.status
+    || quote.id !== data.acceptedQuoteId || quote.demandId !== row.id || quote.providerId !== providerId
+    || quote.status !== "accepted" || quote.source !== data.source) throw new DemandReadRejected("DATABASE_UNAVAILABLE");
+}
+
+function checkedDemand(row: DemandOrder, identity: OwnerIdentityDTO | ProviderIdentityDTO | null, id?: string, providerLinked = false) {
   const owned = identity?.role === "owner" && row.ownerId === identity.userId;
-  const allowed = id === undefined && identity?.role === "owner" ? owned : owned || row.status === "published";
+  const allowed = id === undefined && identity?.role === "owner" ? owned
+    : owned || row.status === "published" || (id !== undefined && identity?.role === "provider" && providerLinked);
   if ((id !== undefined && row.id !== id) || !allowed) {
     throw new DemandReadRejected("DATABASE_UNAVAILABLE");
   }
@@ -58,10 +75,15 @@ async function readDemands(request: Request, id: string | undefined, db: Pick<Pr
       const identity = await readIdentity(request, tx);
       if (id !== undefined) {
         const where: Prisma.DemandOrderWhereInput = identity?.role === "owner"
-          ? { id, OR: [{ status: "published" }, { ownerId: identity.userId }] } : { id, status: "published" };
-        const row = await tx.demandOrder.findFirst({ where });
+          ? { id, OR: [{ status: "published" }, { ownerId: identity.userId }] }
+          : identity?.role === "provider"
+            ? { id, OR: [{ status: "published" }, { serviceOrder: { is: { providerId: identity.providerId } } }] }
+            : { id, status: "published" };
+        const row = await tx.demandOrder.findFirst({ where, include: detailInclude });
         if (!row) throw new DemandReadRejected("DEMAND_NOT_FOUND");
-        const data = checkedDemand(row, identity, id);
+        const providerLinked = identity?.role === "provider" && row.status !== "published";
+        if (providerLinked) checkProviderOrder(row, identity.providerId);
+        const data = checkedDemand(row, identity, id, providerLinked);
         const source = identity?.role === "provider" || row.id === DEMO_DEMAND_ID ? "mock" : "live";
         return envelope(Demand).parse({ ok: true, data, meta: { source } });
       }
