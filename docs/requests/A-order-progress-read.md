@@ -1,12 +1,16 @@
 # A：业主端读取当前订单以接线履约推进
 
+## 状态
+
+PR132 已合入 `main`，D 已提供 `GET /api/order?demandId=<id>`。A 已完成订单读取、履约推进按钮和排期刷新接线；本任务分支中的实现可直接基于该公共接口评审。
+
 ## 背景
 
 `POST /api/order/progress` 已提供，但 A 的施工进度页目前只拿到 `demandId` 和 `Schedule`。公共 `Demand` 不含 `orderId`，也没有业主可读的订单摘要；不能把需求编号当订单编号，也不能让业主页面调用只面向服务方的 `GET /api/provider/orders`。
 
 ## 请求 D 提供的最小读取接口
 
-建议新增 `GET /api/order?demandId=<id>`，仅允许当前业主读取本人需求的实际接单关系，返回统一成功信封：
+`GET /api/order?demandId=<id>` 仅允许当前业主读取本人需求的实际接单关系，返回统一成功信封：
 
 ```ts
 {
