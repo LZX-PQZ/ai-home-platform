@@ -68,6 +68,76 @@ test("live 模式只接受经过契约校验的 JSON，并标记 live 来源", a
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://llm.example/v1/chat/completions");
   assert.match(calls[0].body, /test-model/);
+  const prompt = JSON.parse(calls[0].body).messages[0].content;
+  for (const field of ["reply", "ready", "draft", "missingFields", "description", "city", "areaM2", "budgetMinCents", "budgetMaxCents", "renovationType", "desiredDays"]) {
+    assert.ok(prompt.includes(field), `模型应知道字段 ${field}`);
+  }
+  assert.match(prompt, /人民币分/);
+  assert.match(prompt, /elderly.*partial.*repair/);
+});
+
+test("live 传递完整多轮对话与纠正，完整草稿按公共契约返回", async (t) => {
+  process.env.AI_MODE = "live";
+  process.env.LLM_API_KEY = "test-key";
+  process.env.LLM_BASE_URL = "https://llm.example/v1";
+  process.env.LLM_MODEL = "test-model";
+  const messages = [
+    { role: "user" as const, content: "深圳60平方米，适老化卫生间改造，30天完工。" },
+    { role: "assistant" as const, content: "请补充预算范围。" },
+    { role: "user" as const, content: "预算3万到5万元，城市改成广州。" },
+  ];
+  const expected = { reply: "请核对需求单", ready: true, missingFields: [], draft: {
+    description: "卫生间适老化改造", city: "广州", areaM2: 60, budgetMinCents: 3000000,
+    budgetMaxCents: 5000000, renovationType: "elderly", desiredDays: 30,
+  } };
+  t.mock.method(globalThis, "fetch", async (_url: unknown, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body));
+    assert.deepEqual(body.messages.slice(1), messages);
+    return Response.json({ choices: [{ message: { content: JSON.stringify(expected) } }] });
+  });
+  assert.deepEqual(await clarifyDemand({ messages }), { data: expected, source: "live" });
+});
+
+test("错误模式返回 503，不静默当作模拟成功", async (t) => {
+  process.env.AI_MODE = "liv";
+  const request = t.mock.method(globalThis, "fetch", async () => { throw new Error("不应请求供应商"); });
+  const response = await POST(new Request("http://localhost/api/demand/chat", { method: "POST", body: JSON.stringify(input) }));
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error.code, "AI_UNAVAILABLE");
+  assert.equal("meta" in body, false);
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test("live 拒绝就绪状态矛盾、未知缺失字段及非法草稿，不回退模拟", async (t) => {
+  process.env.AI_MODE = "live";
+  process.env.LLM_API_KEY = "test-key";
+  process.env.LLM_BASE_URL = "https://llm.example/v1";
+  process.env.LLM_MODEL = "test-model";
+  process.env.LLM_MAX_RETRIES = "1";
+  const draft = { description: "卫生间改造", city: "深圳", areaM2: 60, budgetMinCents: 3000000, budgetMaxCents: 5000000, renovationType: "elderly", desiredDays: 30 };
+  for (const candidate of [
+    { reply: "完成", ready: true, draft: null, missingFields: [] },
+    { reply: "完成", ready: true, draft, missingFields: ["city"] },
+    { reply: "继续", ready: false, draft, missingFields: ["city"] },
+    { reply: "继续", ready: false, draft: null, missingFields: [] },
+    { reply: "继续", ready: false, draft: null, missingFields: ["ownerId"] },
+    { reply: "继续", ready: false, draft: null, missingFields: ["city", "city"] },
+    { reply: "  ", ready: false, draft: null, missingFields: ["city"] },
+    { reply: "完成", ready: true, draft: { ...draft, renovationType: "luxury" }, missingFields: [] },
+    { reply: "完成", ready: true, draft: { ...draft, budgetMinCents: 6000000 }, missingFields: [] },
+  ]) {
+    const request = t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: { content: JSON.stringify(candidate) } }] }));
+    const response = await POST(new Request("http://localhost/api/demand/chat", { method: "POST", body: JSON.stringify(input) }));
+    assert.equal(response.status, 503);
+    const body = await response.json();
+    assert.equal(body.error.code, "AI_UNAVAILABLE");
+    assert.equal("data" in body, false);
+    assert.equal("meta" in body, false);
+    assert.equal(request.mock.callCount(), 2);
+    t.mock.restoreAll();
+  }
 });
 
 test("live 模式的非法响应在有限重试后失败", async (t) => {

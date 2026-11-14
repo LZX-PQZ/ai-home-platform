@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useTransition } from "react";
 import { AccountMenu } from "@/components/ui/AccountMenu";
 
 const roles = {
@@ -34,18 +34,16 @@ const roles = {
 type Role = keyof typeof roles;
 
 function roleForPath(pathname: string): Role {
-  if (pathname.startsWith("/provider")) return "provider";
-  if (pathname.startsWith("/admin")) return "operator";
+  if (pathname === "/provider" || pathname.startsWith("/provider/")) return "provider";
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return "operator";
   return "owner";
 }
 
 export function RoleNavigation() {
   const pathname = usePathname();
-  const [role, setRole] = useState<Role>("owner");
-
-  useEffect(() => {
-    setRole(roleForPath(pathname));
-  }, [pathname]);
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const role = roleForPath(pathname);
 
   const current = roles[role];
   return (
@@ -57,7 +55,8 @@ export function RoleNavigation() {
             <span className="text-[13px] text-ink-3">AI 家装履约平台</span>
           </Link>
           <div className="flex flex-wrap items-center gap-3">
-            <div role="group" aria-label="身份切换（仅切换导航）" className="inline-flex rounded-control border border-line bg-canvas p-[3px]">
+            {pending && <span role="status" className="text-[13px] text-ink-3">正在切换页面…</span>}
+            <div role="group" aria-label="身份切换" className="inline-flex rounded-control border border-line bg-canvas p-[3px]">
               {Object.entries(roles).map(([value, item]) => {
                 const active = value === role;
                 return (
@@ -65,8 +64,12 @@ export function RoleNavigation() {
                     key={value}
                     type="button"
                     aria-pressed={active}
-                    onClick={() => setRole(value as Role)}
-                    className={`rounded-[6px] px-3.5 py-1.5 text-[14px] font-medium ${active ? "bg-white text-brand shadow-[0_1px_2px_rgba(29,43,41,0.12)]" : "text-ink-2 hover:text-ink"}`}
+                    disabled={pending}
+                    onClick={() => {
+                      if (active) return;
+                      startTransition(() => router.push(roles[value as Role].links[0][1]));
+                    }}
+                    className={`rounded-[6px] px-3.5 py-1.5 text-[14px] font-medium disabled:cursor-wait ${active ? "bg-white text-brand shadow-[0_1px_2px_rgba(29,43,41,0.12)]" : "text-ink-2 hover:text-ink"}`}
                   >
                     {item.label}
                   </button>

@@ -76,7 +76,7 @@ export default function Home() {
       </nav>
 
       <aside aria-label="演示说明" className="mt-8 grid gap-1 border-t border-line pt-5 text-[13px] text-ink-3">
-        <p className="!mb-0">功能演示，含模拟数据。角色切换仅用于导航，访问范围由登录会话决定。</p>
+        <p className="!mb-0">功能演示，含模拟数据。角色切换会打开对应页面，不会自动登录；访问范围由登录会话决定。</p>
         <p className="!mb-0">AI 澄清默认使用模拟内容；演示服务方资料及部分业务数据为模拟数据，来源以各页面标识为准。</p>
         <p className="!mb-0">真实 AI 功能仍待完整验证；真实付款、生产服务方和管理员认证尚未接入。</p>
       </aside>

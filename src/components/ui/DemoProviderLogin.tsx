@@ -35,7 +35,7 @@ export function DemoProviderSessionView({ state, onAction }: { state: DemoLoginS
                 : session?.status === "disabled" ? "演示登录未开启，请联系维护者。" : "尚未登录演示服务方"}
           </span>
         </div>
-        <p className="!mb-0 mt-1.5 text-[13px] text-ink-3">演示账号不代表真实身份认证；上方角色切换仅切换导航。</p>
+        <p className="!mb-0 mt-1.5 text-[13px] text-ink-3">演示账号不代表真实身份认证；上方角色切换仅切换导航和页面，不会自动登录。</p>
         {session?.status === "signed_in" && !state.pending && !state.error && <p className="!mb-0 mt-1 text-[13px]">
           有效至 <time dateTime={session.expiresAt}>{new Date(session.expiresAt).toLocaleTimeString("zh-CN")}</time>；报价是否提交成功以接口回执为准。
         </p>}

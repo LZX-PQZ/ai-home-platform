@@ -110,7 +110,10 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
 
       {result && result.missingFields.length > 0 && (
         <div className="mb-3">
-          <Note tone="warn" title={`还缺这 ${result.missingFields.length} 项信息`}>
+          <Note tone="warn" title={source === "mock" ? "模拟追问示例" : `还缺这 ${result.missingFields.length} 项信息`}>
+            {source === "mock" && (
+              <p>以下是固定示例，不代表您没有提供这些信息。当前模拟对话不会自动整理需求，请使用手动填写需求单继续。</p>
+            )}
             <div className="flex flex-wrap gap-1.5">
               {result.missingFields.map((field) => (
                 <span

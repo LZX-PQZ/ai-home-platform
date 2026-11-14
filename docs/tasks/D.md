@@ -107,14 +107,14 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] 生产 HTTP 链路改为通过接口开工/逐项完成/整单完成/评价，并读取服务方接单列表和详情，不再直接改数据库模拟 completed。
 - [x] GET /api/order/progress?demandId=…：所属业主读取本人已保存操作记录，事务内验证归属与接单关联，保留来源、不公开操作者身份；无记录不补造，坏数据 503。A 页面接线与验证见 `docs/requests/D-order-progress-history.md`。
 - [ ] 双方审批、专业验收材料、实际日期、阻塞/返工/施工中变更和付款联动待后续；A 的履约动作按钮 #144 和操作记录展示 #162 已接入。
-- [x] 照片检查 mock 结果已提供；过期照片全局配额修复 #136 与业主接单查询 #132 已合入。上传 live 与检查 mock 分开，真实 AI 仍未接通。
+- [x] 照片检查 mock 结果已提供；过期照片全局配额修复 #136 与业主接单查询 #132 已合入。上传 live 与检查 mock 分开，真实照片 AI 分析仍未接通。
 - [x] 回复 B #133 的档期/履约评价请求，确认固定 mock 档期、已完成接单评价均分和样本数、mock/live 分开统计，见 `docs/requests/D-match-ranking-response.md`。
 - [x] Provider 可选 source/performance、ProviderPerformance 与 ProviderQuery，以及 GET /api/provider 的评价汇总已交付：公开目录范围不扩大，完成接单的一次评价、均分/样本数、mock/live 分开、无样本 null/0、坏数据 503。共享只读适配器供 B 后续接线，见 `docs/requests/D-provider-performance.md`。
 - [x] 固定 mock 档期样例：冻结 `Provider.availability` 公共契约并在六个固定演示服务方中提供明确 mock/未知样例；见 `docs/requests/D-provider-availability.md`。
 - [x] 演示报价已能展示单位/列项差异和待确认提示；新增四组合成 completed 接单/评价，mock 查询 provider-a 4.67/3、provider-b 4/1，默认 live 不回退。需求读取保留合成来源；重复 seed 不覆盖已有记录；README 补充样例验收步骤。
 - [x] B 档期/评价排序 #153、C 档期展示 #152 已合入；演示档期截至 2026-12-31，答辩更晚须提前更新样例并联验，不能自动延长。
 - [x] 已读取 A-ai-live.md，保留“AI 澄清默认是 mock”的仓库说明；本轮演示通过进程环境明确使用 mock，不覆盖本机供应商配置。
-- [ ] 真实需求澄清完整业务验收仍待完成；本机配置、单次连通或受控响应测试不能替代业务验收，任一坏评价/关联导致整个目录 503 的限制保留。
+- [x] 2026-11-15 真实需求澄清已完成本机生产构建下的完整草稿、缺失预算、补充与纠正四种真实模型调用及浏览器草稿展示；非法 JSON、超时、矛盾输出和 503 另用受控测试验证。CI 保持 mock，其他部署仍须配置供应商并验收，见 `docs/requests/D-demand-chat-live.md`。任一坏评价/关联导致整个目录 503 的限制保留。
 
 ## 演示集成（2026-11-15）
 

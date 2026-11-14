@@ -151,7 +151,13 @@ for (const [query, cookie, status, code] of [
 }
 const chat = await fetch(base + '/api/demand/chat', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({messages:[{role:'user',content:'我想翻新浴室'}]}) });
 assert.equal(chat.status, 200);
-assert.equal((await chat.json()).data.ready, false);
+const chatBody = await chat.json();
+assert.equal(chatBody.ok, true);
+assert.equal(chatBody.meta.source, 'mock', 'CI 使用 mock，不应调用真实供应商或误标 live');
+assert.equal(chatBody.data.ready, false);
+assert.equal(chatBody.data.draft, null);
+assert.match(chatBody.data.reply, /模拟/);
+assert.deepEqual(chatBody.data.missingFields, ['city', 'areaM2', 'budgetMinCents', 'budgetMaxCents', 'renovationType', 'desiredDays']);
 const bad = await fetch(base + '/api/demand/chat', { method:'POST', body:'invalid json' });
 assert.equal(bad.status, 400);
 // Revisions require an actual owner session and same-origin explicit confirmation.
