@@ -195,9 +195,10 @@ test("管理详情可见范围说明保留在成功、失败和 404 中，关联
     adminDemandDetailFailureState(new ApiClientError("", "FORBIDDEN", 403)),
   ] satisfies AdminDemandDetailState[]) {
     const html = render(state);
-    for (const text of ["已发布需求公开可读", "其他状态仅所属业主登录后可读", "管理员专属读取尚未接入",
-      "切换角色或从工单进入不会扩大可见范围", "登录、退出或身份变化后", "退出业主会话后，非公开需求不可查看"]) {
+    for (const text of ["已发布需求公开可读", "非公开需求可由所属业主读取", "没有业主会话时由具有该需求实际接单关系的服务方读取", "管理员专属读取尚未接入",
+      "切换角色或从工单进入不会扩大可见范围", "登录、退出或身份变化后", "双会话时业主身份优先", "失效业主会话不会回退为服务方权限", "以刷新后的接口授权结果为准"]) {
       assert.ok(html.includes(text), text);
     }
+    assert.doesNotMatch(html, /其他状态仅所属业主登录后可读|退出业主会话后，非公开需求不可查看/);
   }
 });

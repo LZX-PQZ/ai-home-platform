@@ -158,7 +158,8 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
       <h2 id="quote-form-title">填写报价 · 预览与提交</h2>
       <p className="break-all text-sm text-slate-600">关联需求：{demandId}</p>
       <div id="quote-local-notice" className={`${C.note} ${C.noteWarn} mb-6`}>
-        <p>报价已支持演示服务方登录后提交到已发布的非演示需求；演示身份回执标记为 mock。需求所属业主登录后可在该需求的报价对比页查看已提交报价。真实接单流程仍待完成。接口返回 501 表示尚未开放，不能视为提交成功。</p>
+        <p>报价已支持演示服务方登录后提交到已发布的非演示需求；演示身份回执标记为 mock。提交报价不等于接单；需求所属业主登录后可在报价对比页核对并确认接受，已保存的接单关系可在“我的接单”查看。</p>
+        <p>生产服务方认证仍未接入。接口返回 501 表示尚未开放，不能视为提交成功。</p>
         <p className="mb-0">填写内容仅保留在当前页面内存，刷新页面、刷新详情或离开页面会丢失；本地预览不代表保存或提交。</p>
       </div>
       <form
