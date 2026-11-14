@@ -23,18 +23,30 @@ assert.equal(chat.status, 200);
 assert.equal((await chat.json()).data.ready, false);
 const bad = await fetch(base + '/api/demand/chat', { method:'POST', body:'invalid json' });
 assert.equal(bad.status, 400);
-const created = await fetch(base + '/api/demand', {
- method: 'POST',
- headers: {'Content-Type':'application/json'},
- body: JSON.stringify({
-  description: '烟囱脚本测试需求', city: '深圳', areaM2: 60,
-  budgetMinCents: 3000000, budgetMaxCents: 5000000,
-  renovationType: 'elderly', desiredDays: 30,
- }),
+const demandBody = JSON.stringify({
+ description: '冒烟测试需求', city: '深圳', areaM2: 60,
+ budgetMinCents: 3000000, budgetMaxCents: 5000000,
+ renovationType: 'elderly', desiredDays: 30,
 });
-assert.equal(created.status, 201);
-const createdPayload = await created.json();
-assert.equal(createdPayload.ok, true);
-assert.equal(createdPayload.meta.source, 'live');
-assert.equal(createdPayload.data.status, 'published');
-console.log('13 个页面、9 个 GET 接口和 3 个 POST 场景通过。');
+// Creating a demand requires an actual owner session. Do not write anonymous fixtures.
+const unauthenticated = await fetch(base + '/api/demand', {
+ method: 'POST',
+ headers: {'Content-Type':'application/json', Origin: new URL(base).origin},
+ body: demandBody,
+});
+assert.equal(unauthenticated.status, 401, 'anonymous demand creation');
+assert.equal(unauthenticated.headers.get('cache-control'), 'private, no-store');
+assert.ok((unauthenticated.headers.get('vary') ?? '').split(',').some(value => value.trim().toLowerCase() === 'cookie'));
+const denied = await unauthenticated.json();
+assert.equal(denied.ok, false);
+assert.equal(denied.error.code, 'UNAUTHENTICATED');
+assert.equal('data' in denied, false);
+const withoutOrigin = await fetch(base + '/api/demand', {
+ method: 'POST', headers: {'Content-Type':'application/json'}, body: demandBody,
+});
+assert.equal(withoutOrigin.status, 403, 'demand creation without Origin');
+const forbidden = await withoutOrigin.json();
+assert.equal(forbidden.ok, false);
+assert.equal(forbidden.error.code, 'FORBIDDEN');
+assert.equal('data' in forbidden, false);
+console.log('13 个页面、10 个 GET 场景和 4 个 POST 场景通过（匿名创建已拒绝，未写入需求）。');

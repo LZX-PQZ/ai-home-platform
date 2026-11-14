@@ -1,7 +1,5 @@
-import { DemandInput } from "@/contracts";
-import { liveResponse } from "@/lib/api-response";
-import { createDemand } from "@/lib/demand";
 import { handleDemandList } from "@/lib/demand-read";
+import { handleDemandCreate } from "@/lib/demand-create";
 
 export const dynamic = "force-dynamic";
 
@@ -10,22 +8,5 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  let json: unknown;
-  try {
-    json = await request.json();
-  } catch {
-    return Response.json({ ok: false, error: { code: "INVALID_JSON", message: "请求不是有效 JSON。" } }, { status: 400 });
-  }
-  const input = DemandInput.safeParse(json);
-  if (!input.success) {
-    return Response.json({ ok: false, error: { code: "VALIDATION_ERROR", message: "需求字段不符合契约。" } }, { status: 400 });
-  }
-  try {
-    return liveResponse(await createDemand(input.data), 201);
-  } catch {
-    return Response.json(
-      { ok: false, error: { code: "DATABASE_UNAVAILABLE", message: "需求暂时无法保存。" } },
-      { status: 503 },
-    );
-  }
+  return handleDemandCreate(request);
 }

@@ -28,17 +28,18 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] `PUT /api/demand/[id]`：同源检查、真实业主凭证预检及写事务内重验；按 id + 当前 userId 过滤并校验可编辑状态，最终 SQL 再限制身份/状态。匿名和失效会话拒绝，跨业主与不存在统一 404；输出验证失败回滚。旧的无鉴权更新入口已移除。见 `docs/requests/D-demand-update-auth.md`。
 - [x] `DELETE /api/demand/[id]`：同源检查；同一事务验证实际业主会话、归属、状态和五类关联并删除。最终 SQL 再限制归属/状态/空关联，拒绝匿名与跨业主，演示需求只读。隔离 SQLite 覆盖角色/会话变化、并发修改/删除及失败回滚。见 `docs/requests/D-demand-delete-auth.md`。
 - [x] 业主密码登录入口与注销：维护者交互开通新账号，随机盐 scrypt 摘要；POST 验证密码后事务内重验角色/凭证并轮换会话，同源退出撤销 cookie。全局共享登录界面、持久化限频和隔离测试已提供。不支持客户端 userId/角色签发；公开注册、找回密码、MFA 和第三方登录仍未实现。见 `docs/requests/D-owner-login.md`。
-- [ ] 需求 POST 当前业主归属：由独立 PR #95 修复，历史 demo-owner 数据不自动转移。
-- [x] 需求列表/详情隔离：同一事务读取实际身份并限定 SQL；业主仅本人全部状态，演示服务方仅 published。匿名 401，越权详情与不存在统一 404；双 cookie 业主优先，坏凭证不回退。见 `docs/requests/D-demand-read-auth.md`。
+- [x] 需求 POST 当前业主归属：同源及会话预检、事务内重验后以当前 userId 创建 published 需求；禁止客户端身份字段，移除固定 demo-owner 入口。公开接口验收登录、创建、修改及本人报价读取，另一业主拒绝。见 `docs/requests/D-demand-create-auth.md`。
+- [x] 需求列表/详情隔离：同一事务核验当前身份及 SQL 范围；无业主 cookie 时公开列表仅 published，有效业主列表仅本人所有状态。published 详情公开，非公开仅所属业主可读，其余与不存在统一 404。失效业主 cookie 仍 401，不回退匿名。见 `docs/requests/D-demand-read-auth.md`。
 
-业主会话与报价读取授权见 `docs/requests/D-owner-quote-read-auth.md`。密码登录、PUT、DELETE 及 B 报价读取已合入，本轮补齐两个需求 GET 的隔离。POST 由 #95 处理；match/schedule 等其他接口仍需审计，不能宣称整个平台已隔离。
+业主会话与报价读取授权见 `docs/requests/D-owner-quote-read-auth.md`。需求 POST 沿用 #95，本轮补齐两个需求 GET 的范围控制；match/schedule 等其他接口仍需审计，不能宣称整个平台已隔离。
 
 ## 成员反馈与后续顺序（2026-11-14）
 
 - [x] PR #81 已合入；README 补充拉取 main 后运行 `npm run db:setup` 的提示，本机已执行成功。该同步保留已有记录，历史报价来源回填 mock。
 - [x] 业主密码登录、刷新和退出入口；临时合成账号浏览器验收通过，密码认证是真实实现，账号不代表实名认证。B 的报价读取 API/页面合入后仍需联验。
-- [ ] 随后的独立 PR：集成 #95 POST、#98 服务方本人报价；需求 GET 的页面登录后刷新/提示由 A/B/C 接线。生产服务方、管理员授权及其他资源读取范围仍待明确。
-- [ ] C 的按服务方过滤接单：C 已提交 `docs/requests/C-provider-orders.md`，D 后续评审接单关系、状态及查询契约。只按服务端会话的 providerId 取本人数据，拒绝客户端自报身份，覆盖匿名/跨服务方/撤销及来源测试。尚未开放新查询参数，C 当前无参数演示列表继续保留明确来源说明。
+- [ ] 提交顺序：先合入 #95，再同步并提交 #101 的公开读取修订；后续 D 功能依次交付，避免多个 PR 同时修改共享接口文档和需求基础设施。
+- [x] C 的服务方身份过滤基础查询：按 `C-provider-orders.md` 允许的最小方案提供 `GET /api/provider/quotes`，复用 Quote[]，在同一事务按实际服务方会话绑定过滤本人报价，拒绝自报身份参数，覆盖匿名/跨服务方/撤销及来源测试。演示身份整体 mock，接线协议见 `docs/requests/D-provider-own-quotes.md`。
+- [ ] 真正接单关系与履约查询、生产服务方登录仍未实现；本人报价不等于接单。C 需将页面接到新接口并使用“本人报价”文案，D 不修改 C 页面。
 
 这些是后续独立验收项，本次没有改动 B/C 的业务目录，也没有将服务方演示登录转换为业主身份。
 

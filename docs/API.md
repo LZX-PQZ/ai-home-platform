@@ -23,17 +23,26 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/auth/owner | OwnerSessionState | D | 读取业主凭证和当前账户，返回 signed_in / signed_out，不续期 |
 | POST /api/auth/owner | OwnerLoginInput → OwnerSessionState | D | 验证密码并在事务内重验凭证/角色，轮换当前浏览器的业主会话 |
 | DELETE /api/auth/owner | OwnerSessionState | D | 同源撤销当前会话，成功后清除 cookie，可重复退出 |
-| GET /api/demand | Demand[] | D | 事务内鉴权：业主仅本人，演示服务方仅 published；匿名 401，不接受查询参数 |
-| POST /api/demand | DemandInput → Demand | D | 校验后写入 Prisma，创建为 published，返回 live；无数据库时 503 |
-| GET /api/demand/[id] | Demand | D | 按精确 ID 与身份范围查询；无权限/不存在统一 404，不回退 demo-demand |
+| GET /api/demand | Demand[] | D | 无业主 cookie 可公开读取 published；有效业主仅本人所有状态；坏业主凭证 401，不接受查询参数 |
+| POST /api/demand | DemandInput → Demand | D | 验证业主会话后写入本人需求，published/live；无会话 401，存储故障 503 |
+| GET /api/demand/[id] | Demand | D | 精确 ID 查询；published 公开，非公开仅所属业主可读；不可访问/不存在统一 404 |
 | POST /api/demand/chat | ChatResult | D | 读取 ChatInput；`AI_MODE=mock` 返回 mock，`AI_MODE=live` 调用服务端 LLM 网关并返回 live |
 | GET /api/provider | Provider[] | D | 固定 mock |
+| GET /api/provider/quotes | Quote[] | D | 同一事务验证服务方会话并只查本人报价；当前演示身份整体标 mock，不代表接单 |
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
 | GET /api/quote | Quote[] | B | 固定 mock |
 | POST /api/quote | QuoteSubmissionInput → Quote | B | 已接演示会话；合法首次提交 201/mock，同键同摘要重放 200/mock；无有效会话 401 |
 | GET /api/schedule[?demandId=<id>&version=<n>] | Schedule | D | 无参数为演示 mock；带 `demandId` 读取 Prisma 最新/指定版本 |
 | GET /api/payment | Payment[] | D | 模拟节点列表；simulated 必须 true |
 | GET /api/ticket | Ticket[] | D | 固定 mock |
+
+## GET /api/provider/quotes
+
+无参数的本人报价列表，任何查询参数为 400；不能传 providerId 指定身份。使用现有服务方演示登录，在同一事务核验会话、当前角色与绑定，只查询绑定 providerId 的持久化 Quote，逐条重验归属和公共契约。返回本人 draft/submitted/accepted/rejected 报价，按 id 升序（不表示提交时间或成交顺序），不暴露内部幂等字段及业主资料。
+
+匿名/失效/撤销/过期/重复凭证、演示关闭或账号绑定变化为 401；只有业主身份为 403。存储故障或 JSON/来源/DTO 损坏为 503，不回退固定 mock 或成功空数组；鉴权成功且确实无本人报价才返回空数组。所有成功与失败响应 private, no-store、Vary: Cookie。
+
+逐条 source 保留持久化来源且严格校验，null 费用不当作 0；当前会话为演示服务方，整体 meta.source 始终 mock（含空数组及单条 live 的情况）。这提供“本人报价”，不创建或证明接单关系；`GET /api/provider/orders` 和生产服务方登录尚未交付。C 接线说明见 `docs/requests/D-provider-own-quotes.md`，页面修改由 C 维护。
 
 ## POST /api/quote
 
@@ -149,8 +158,8 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 
 | 方法 | 输入 | 成功返回 | 当前实现 |
 |---|---|---|---|
-| POST /api/demand | DemandInput | 201 envelope(Demand)，初始 published | 已实现；写入 Prisma，返回 live |
-| GET /api/demand/[id] | DemandIdParams | 200 envelope(Demand) | 事务内验证身份与范围，业主仅本人、演示服务方仅 published |
+| POST /api/demand | DemandInput | 201 envelope(Demand)，初始 published | 已接同源与实际业主会话；事务内以当前业主为 ownerId |
+| GET /api/demand/[id] | DemandIdParams | 200 envelope(Demand) | 事务内限定范围；published 公开，非公开仅所属业主可读 |
 | PUT /api/demand/[id] | DemandIdParams + DemandUpdateInput | 200 envelope(Demand) | 已接业主会话、同源检查及事务内归属/状态校验，可使用密码登录凭证 |
 | DELETE /api/demand/[id] | DemandIdParams | 200 envelope(DemandDeleteResult) | 已接业主会话、同源检查及事务内归属/状态/关联校验与删除 |
 
@@ -160,16 +169,18 @@ PUT 的非空 ID 原样精确查找，不去除首尾空白。处理顺序为路
 
 PUT 所有响应均带 `Cache-Control: private, no-store`、`Vary: Cookie`。输出 DTO 在事务内验证，拒绝、非法输出及写入异常回滚；存储/事务异常返回 503/DATABASE_UNAVAILABLE，不回退 mock。异常响应只说明暂时无法确认更新结果，调用方应刷新核实，不能推断此前一定未保存。成功返回数据库需求及 `meta.source: live`。完整协议及验证见 `docs/requests/D-demand-update-auth.md`。
 
+POST 先校验同源 Origin 和实际业主会话，在事务外读取/校验 DemandInput，再在写事务内重验会话和当前账号角色；两次身份不同为 403。ownerId 仅取最终验证的当前 userId，初始 published，禁止客户端身份/状态/来源字段。成功 201/live，公共输出在事务内验证；无会话 401、非业主/跨源 403、输入 400，存储或未知提交结果 503 提示刷新核实。所有响应 private, no-store、Vary: Cookie。已移除固定 demo-owner 创建入口，历史需求归属不自动转移。验收通过实际登录 → 创建 → 修改 → 演示服务方报价 → 本人读取，另一业主无法修改或读取该报价。详见 `docs/requests/D-demand-create-auth.md`。
+
 DELETE 无请求体，非空 ID 原样精确查找，错误顺序为路径 400 → 方法/同源 Origin 403 → 事务内业主会话 401/403/503 → 本人需求 404 → 只读/状态/关联约束 409 → 删除。凭证规则与 PUT 一致；他人和不存在统一 404。会话、当前账号、归属、状态、五类关联检查、删除及输出校验全部处于同一个 Serializable 事务；最后 DELETE SQL 也限制 ID、ownerId、可编辑状态和关联均为空，必须恰好删除一条。成功为 200/live，重复删除为 404；所有响应 private, no-store、Vary: Cookie。事务/存储故障为中性 503/DATABASE_UNAVAILABLE，提示刷新核实，不承诺之前一定未删除。详见 `docs/requests/D-demand-delete-auth.md`。
 
-需求 POST 当前业主归属由独立 PR #95 修复，本 PR 不重复其写入改动。列表/详情的访问范围见下节。历史 demo-owner 需求不自动转移；match、schedule 等其他读取接口未由本次保护，不能宣称整个模块或平台已经完成权限隔离。
+需求 POST 当前业主归属沿用 #95，列表/详情的访问范围见下节。历史 demo-owner 需求不自动转移；match、schedule 等其他读取接口未由本次保护，不能宣称整个模块或平台已经完成权限隔离。
 
 ## GET /api/demand 与 GET /api/demand/[id]：访问隔离
 
 不接受任何查询参数（包括 ownerId、providerId、role、status、分页和重复参数）；非法参数/空白 ID 返回 400/VALIDATION_ERROR。非空路径 ID 原样精确查找，不 trim。继续返回公共 Demand[] / Demand。
 
-在同一个 Serializable 事务中验证持久化会话、当前角色/绑定、执行受限 SQL 并校验输出：有业主 cookie 时仅使用该身份，列表按 ownerId 过滤、详情按 id + ownerId 查询，允许本人全部需求状态。他人与不存在详情统一 404/DEMAND_NOT_FOUND，不暴露差别。无业主 cookie 时，有效演示服务方会话可查询所有 published 需求；草稿及签约后状态均不可查看，管理员尚无全量入口。
+在同一个 Serializable 事务中验证持久化会话、当前角色/绑定、执行受限 SQL 并校验输出。列表：有效业主 cookie 只返回本人全部状态；没有业主 cookie 时按 published 过滤，匿名无需服务方登录即可访问，包含已发布的 demo-demand。详情：published 对所有访问者可读，非 published 仅所属业主可读；其他人与不存在统一 404/DEMAND_NOT_FOUND。匿名响应仍使用公共 Demand，不包含 ownerId 等业主信息；管理员尚无全量入口。
 
-匿名、伪造、重复、过期、撤销的凭证为 401/UNAUTHENTICATED；有效业主凭证对应当前角色不再是 owner 为 403/FORBIDDEN。双 cookie 时业主优先，无效业主不能回退服务方；需要看服务方大厅时先退出业主登录。演示服务方关闭/过期/撤销/绑定变化均拒绝，角色导航及请求自报身份不能扩大权限。demo-demand 不提供匿名兜底，合法空结果才返回 200 空数组。
+存在但伪造、重复、过期或撤销的业主凭证为 401/UNAUTHENTICATED；有效业主凭证对应当前角色不再是 owner 为 403/FORBIDDEN。这两条也适用于已发布详情。双 cookie 时业主优先，无效业主不能回退匿名或服务方。没有业主 cookie 时，演示服务方关闭/过期/撤销/绑定变化不妨碍访问 published 数据；它也不能授予非公开需求权限。角色导航及自报身份不能扩大权限，合法空结果才返回 200 空数组。
 
-逐条 source 保持 demo-demand 为 mock、其他数据库需求为 live。业主整体在含 demo-demand 时为 mock，否则 live（含授权空列表）；服务方整体始终 mock，表示当前只接了演示身份。所有响应 Cache-Control: private, no-store、Vary: Cookie；存储、坏 DTO 或越界查询结果统一 503/DATABASE_UNAVAILABLE，不回退 mock 或空成功。A/B/C 仍用原 URL/DTO，需登录后重试；C 管理界面不再享有匿名全量查询。完整交接与验证见 docs/requests/D-demand-read-auth.md。
+逐条 source 保持 demo-demand 为 mock、其他数据库需求为 live。普通匿名和业主整体含 demo-demand 时为 mock，否则 live（含空列表）；有效演示服务方会话整体仍为 mock，该会话只影响来源标识。所有响应 Cache-Control: private, no-store、Vary: Cookie；存储、坏 DTO 或越界查询结果统一 503/DATABASE_UNAVAILABLE，不回退 mock 或空成功。A/B/C 使用原 URL/DTO，C 大厅、管理页与匹配页可继续匿名获取 published 数据。完整交接与验证见 docs/requests/D-demand-read-auth.md。

@@ -30,6 +30,15 @@ git merge origin/main
 npm run check
 npm run build
 npm run scope -- --role A --base origin/main
+```
+另开终端运行 `npm run start` 启动刚构建的生产服务，再在原终端执行：
+```bash
+node scripts/smoke.mjs
+```
+默认服务地址为 `http://127.0.0.1:3000`，可用 `SMOKE_BASE_URL` 指定。冒烟使用已同步 seed 的本地测试数据库及 `AI_MODE=mock`；匿名创建需求应返回 401/403，不能断言匿名写入成功。完成后停止本次启动的服务；dev 和 build 不得同时写 `.next`。鉴权或接口变更须同步更新冒烟断言，并实际在生产服务上运行。
+
+检查通过后提交：
+```bash
 git status --short
 git add 本次明确修改的文件
 git commit -m "feat(owner): 完成需求澄清页面"

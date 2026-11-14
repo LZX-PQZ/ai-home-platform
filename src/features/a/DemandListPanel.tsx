@@ -1,17 +1,20 @@
 "use client";
 
-import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader } from "./ui";
+import { useState } from "react";
+import { Badge, Button, C, Card, Empty, Field, LinkButton, Note, PageHeader } from "./ui";
 import {
   STAGES,
   demandHref,
   demandTitle,
   formatBudget,
+  filterDemands,
   isPostContract,
   paymentsHref,
   projectHref,
   stageIndex,
   statusLabel,
   statusTone,
+  type DemandStatusFilter,
 } from "./demand-list";
 import { itemSourceBadge, listSourceNote } from "./demand-source";
 import { useDemandList, type DemandListState } from "./useDemandList";
@@ -62,6 +65,13 @@ export function DemandListPanel() {
 
 export function DemandListContent({ state, reload }: { state: DemandListState; reload: () => void }) {
   const { phase, items, source, error } = state;
+  const [keyword, setKeyword] = useState("");
+  const [status, setStatus] = useState<DemandStatusFilter>("all");
+  const filteredItems = filterDemands(items, keyword, status);
+  const clearFilters = () => {
+    setKeyword("");
+    setStatus("all");
+  };
 
   return (
     <div>
@@ -126,8 +136,38 @@ export function DemandListContent({ state, reload }: { state: DemandListState; r
 
       {phase === "ready" && items.length > 0 && (
         <>
+          <Card className="mb-3">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.6fr)_auto] sm:items-end">
+              <Field label="搜索需求">
+                <input
+                  className={C.input}
+                  type="search"
+                  placeholder="需求编号、城市或描述"
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                />
+              </Field>
+              <Field label="需求状态">
+                <select className={C.input} value={status} onChange={(event) => setStatus(event.target.value as DemandStatusFilter)}>
+                  <option value="all">全部状态</option>
+                  {STAGES.map((stage) => <option key={stage.status} value={stage.status}>{statusLabel(stage.status)}</option>)}
+                </select>
+              </Field>
+              <Button variant="secondary" onClick={clearFilters} disabled={keyword === "" && status === "all"}>清空筛选</Button>
+            </div>
+            <p className={`!mb-0 mt-3 ${C.meta}`} role="status" aria-live="polite">
+              显示 {filteredItems.length} / {items.length} 条需求；仅筛选当前已加载的数据。
+            </p>
+          </Card>
+          {filteredItems.length === 0 ? (
+            <Empty
+              title="没有符合筛选条件的需求"
+              hint="已加载的需求中没有匹配项，请调整关键词、状态或清空筛选。"
+              action={<Button variant="secondary" size="sm" onClick={clearFilters}>查看全部已加载需求</Button>}
+            />
+          ) : null}
           <div className="grid gap-3 md:grid-cols-2">
-            {items.map((demand) => (
+            {filteredItems.map((demand) => (
               <Card key={demand.id} className="flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
