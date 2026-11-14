@@ -138,11 +138,13 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 |---|---|---|---|
 | POST /api/demand | DemandInput | 201 envelope(Demand)，初始 published | 已实现；写入 Prisma，返回 live |
 | GET /api/demand/[id] | DemandIdParams | 200 envelope(Demand) | 已实现；按 ID 查询 Prisma，不存在 404 |
-| PUT /api/demand/[id] | DemandIdParams + DemandUpdateInput | 200 envelope(Demand) | 已实现状态/关联检查；鉴权待接入 |
+| PUT /api/demand/[id] | DemandIdParams + DemandUpdateInput | 200 envelope(Demand) | 已接业主会话、同源检查及事务内归属/状态校验；业主登录入口待实现 |
 | DELETE /api/demand/[id] | DemandIdParams | 200 envelope(DemandDeleteResult) | 已实现状态/关联检查；鉴权待接入 |
 
-PUT 完整替换可编辑字段，全部必填，不提供 PATCH。创建/更新禁止客户端设置 id、status 或未知字段；description/city 去除首尾空白后不可为空，面积为有限正数，预算为非负安全整数分且下限不超过上限。更新/删除允许 draft 或尚未签约的 published 需求；进入 contracted、in_progress 或 completed 后返回 409/INVALID_STATE。`demo-demand` 是只读演示数据，更新或删除返回 409/DEMO_DEMAND_READ_ONLY。不存在返回 404/DEMAND_NOT_FOUND，非法输入返回 400/VALIDATION_ERROR。删除前会检查报价、排期、付款、评价和工单关联；存在关联时返回 409/DEMAND_HAS_RELATED_RECORDS。删除结果为 {id,deleted:true}，仍须包含来源信封。
+PUT 完整替换可编辑字段，全部必填，不提供 PATCH。创建/更新禁止客户端设置 id、ownerId、status、source 或未知字段；description/city 去除首尾空白后不可为空，面积为有限正数，预算为非负安全整数分且下限不超过上限。更新/删除只允许 draft 或 published；进入 contracted、in_progress 或 completed 后返回 409/INVALID_STATE。PUT 先验证归属，再检查状态和只读规则：本人 `demo-demand` 返回 409/DEMO_DEMAND_READ_ONLY，他人的演示需求仍为 404。DELETE 保留演示需求只读规则；删除前检查报价、排期、付款、评价和工单关联，存在关联时返回 409/DEMAND_HAS_RELATED_RECORDS。删除结果为 {id,deleted:true}，仍须包含来源信封。
 
-需求路由必须实现鉴权与数据隔离，不得将查询失败回退成 mock。当前需求列表、创建、详情、更新和删除均访问 Prisma；聊天仍为 mock；状态流转仍由后续业务层负责。当前 `PUT /api/demand/[id]` 和 `DELETE /api/demand/[id]` 尚未校验已验证会话或 `ownerId`，因此任何能访问接口的调用方都可能修改或删除非本人真实需求；这是一项已知的答辩前安全缺口，不能视为生产权限边界。后续必须由服务端会话确定业主身份，并在查询、更新、删除中同时执行所有者过滤。`POST /api/demand` 当前也使用固定演示业主归属，接入真实会话前只能作为本地演示能力。
+PUT 的非空 ID 原样精确查找，不去除首尾空白。处理顺序为路径 400 → 同源 Origin 403 → 业主会话预检 401/403/503 → JSON/公共输入校验 400 → 写事务内重新鉴权、按 id + 当前 userId 查询、校验状态并更新。缺少/伪造/重复/过期/撤销的业主凭证返回 401；仅有服务方演示 cookie 也为 401；有效业主凭证对应账户已不再是 owner 为 403。预检失败不消费请求体或读取需求，读取请求体时不持有事务。两次身份不一致为 403。他人和不存在的需求统一返回相同的 404/DEMAND_NOT_FOUND；最后一次更新 SQL 同时过滤 ID、ownerId 和可编辑状态。
 
-需求修改、删除、创建和查询隔离已登记在 `docs/tasks/D.md` 的高优先级鉴权待办。本次业主报价读取授权不修复这些写入接口，不能将 GET 的读取权限直接用于修改或删除。
+PUT 所有响应均带 `Cache-Control: private, no-store`、`Vary: Cookie`。输出 DTO 在事务内验证，拒绝、非法输出及写入异常回滚；存储/事务异常返回 503/DATABASE_UNAVAILABLE，不回退 mock。异常响应只说明暂时无法确认更新结果，调用方应刷新核实，不能推断此前一定未保存。成功返回数据库需求及 `meta.source: live`。完整协议及验证见 `docs/requests/D-demand-update-auth.md`。
+
+需求列表、创建、详情和删除仍未接入完整鉴权：DELETE 尚未校验会话或 ownerId，仍可被调用方用于删除非本人需求；POST 仍固定归属 demo-owner，列表/详情仍缺少访问隔离。PUT 的修复不能代表整个需求模块已形成生产权限边界。业主密码/外部认证入口尚未交付，普通浏览器目前无法获得业主凭证，现有编辑表单会收到 401；测试使用临时数据库合成账号及 D 内部签发函数，不是公开登录流程。后续事项已登记在 `docs/tasks/D.md`。

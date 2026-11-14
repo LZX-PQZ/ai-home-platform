@@ -1,12 +1,12 @@
 import type { DemandOrder } from "@prisma/client";
-import { Demand, type DemandDTO, type DemandInputDTO, type DemandUpdateInputDTO, type SourceDTO } from "@/contracts";
+import { Demand, type DemandDTO, type DemandInputDTO, type SourceDTO } from "@/contracts";
 import { prisma } from "@/lib/prisma";
 
 export type DemandDatabase = {
   user: Pick<typeof prisma.user, "upsert">;
   demandOrder: Pick<
     typeof prisma.demandOrder,
-    "findMany" | "findUnique" | "create" | "update" | "delete"
+    "findMany" | "findUnique" | "create" | "delete"
   >;
 };
 
@@ -81,20 +81,6 @@ export type DemandMutationResult<T> =
   | { kind: "demo-read-only" };
 
 export type DemandDeleteResult = DemandMutationResult<{ id: string; deleted: true }> | { kind: "has-related-records"; related: string[] };
-
-export async function updateDemand(
-  id: string,
-  input: DemandUpdateInputDTO,
-  db: DemandDatabase = prisma,
-): Promise<DemandMutationResult<DemandDTO>> {
-  const existing = await db.demandOrder.findUnique({ where: { id } });
-  if (!existing) return { kind: "not-found" };
-  if (id === DEMO_DEMAND_ID) return { kind: "demo-read-only" };
-  if (!isEditableDemandStatus(existing.status)) return { kind: "invalid-state", status: existing.status };
-
-  const row = await db.demandOrder.update({ where: { id }, data: input });
-  return { kind: "ok", data: toDemandDTO(row), source: demandSource([row]) };
-}
 
 export async function deleteDemand(
   id: string,
