@@ -27,8 +27,14 @@ export async function loadQuoteComparison(demandId: string) {
 
   const quotes = await apiGet("/api/quote", Quote.array());
   const visible = prepareQuotes(demandId, quotes.data);
-  // 没有报价时无需加载服务方，不让无关查询失败遮蔽已确认的空列表。
-  const providers = visible.length ? await apiGet("/api/provider", Provider.array()) : null;
+  // 服务方资料仅用于补充名称；失败不能抹掉已通过校验的需求和报价。
+  let providerWarning: string | undefined;
+  const providers = visible.length ? await apiGet("/api/provider", Provider.array()).catch((error: unknown) => {
+    providerWarning = error instanceof ApiClientError && error.status === 501
+      ? "服务方资料接口尚未开放，名称待确认。可继续核对报价明细，稍后点击“刷新报价”重试。"
+      : "服务方资料读取失败，名称待确认。可继续核对报价明细，点击“刷新报价”重试。";
+    return null;
+  }) : null;
   const source = demand.meta.source === "live" && demand.data.source === "live" && quotes.meta.source === "live" && (!providers || providers.meta.source === "live") ? "live" : "mock";
 
   return {
@@ -37,6 +43,7 @@ export async function loadQuoteComparison(demandId: string) {
     demandSource: demand.data.source,
     quoteSource: quotes.meta.source,
     providerSource: providers?.meta.source ?? null,
+    ...(providerWarning ? { providerWarning } : {}),
     response: envelope(Quote.array()).parse({ ok: true, data: visible, meta: { source } }),
   };
 }

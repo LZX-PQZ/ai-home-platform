@@ -128,18 +128,18 @@ test("特殊 ID 精确编码，空 ID 不请求，响应 ID 错误立即失败",
   await assert.rejects(loadQuoteComparison("other"), (error) => error instanceof ApiClientError && error.code === "INVALID_RESPONSE");
 });
 
-test("只有详情 404/DEMAND_NOT_FOUND 是需求未找到，报价和服务方失败不能伪装为无需求", async (t) => {
+test("只有详情 404/DEMAND_NOT_FOUND 是需求未找到，报价失败不能伪装为无需求", async (t) => {
   t.mock.method(globalThis, "fetch", async () => failure(404, "DEMAND_NOT_FOUND"));
   await assert.rejects(loadQuoteComparison("unknown"), QuoteDemandNotFound);
   t.mock.restoreAll();
-  for (const stage of ["/api/quote", "/api/provider"]) {
+  for (const stage of ["/api/quote"]) {
     t.mock.method(globalThis, "fetch", async (url: string) => url === stage ? failure(404, "DEMAND_NOT_FOUND") : url === "/api/quote" ? success(quotes) : success(demoDemand));
     await assert.rejects(loadQuoteComparison(demoDemand.id), ApiClientError);
     t.mock.restoreAll();
   }
 });
 
-test("每个读取阶段的 501/503/网络/坏 JSON/业务失败均中止，不产生空成功", async (t) => {
+test("需求或报价的 501/503/网络/坏 JSON/业务失败均中止，不产生空成功", async (t) => {
   const failures = [
     () => failure(501, "NOT_IMPLEMENTED"),
     () => failure(503, "DATABASE_UNAVAILABLE"),
@@ -149,7 +149,7 @@ test("每个读取阶段的 501/503/网络/坏 JSON/业务失败均中止，不�
     () => Response.json({ ok: true, data: [], meta: { source: "unknown" } }),
     () => Response.json({ ok: true, data: {} }),
   ];
-  for (const stage of [`/api/demand/${demoDemand.id}`, "/api/quote", "/api/provider"]) {
+  for (const stage of [`/api/demand/${demoDemand.id}`, "/api/quote"]) {
     for (const reply of failures) {
       t.mock.method(globalThis, "fetch", async (url: string) => url === stage ? reply() : url === "/api/quote" ? success(quotes) : success(demoDemand));
       await assert.rejects(loadQuoteComparison(demoDemand.id), ApiClientError);
