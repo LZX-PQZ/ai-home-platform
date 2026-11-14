@@ -89,6 +89,6 @@ test("匹配 API 拒绝空、纯空白和重复 ID", async () => {
   for (const query of ["?demandId=", "?demandId=%20%20", "?demandId=demo-demand&demandId=other"]) {
     const response = await GET(new Request(`http://localhost/api/match${query}`));
     assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), { ok: false, error: { code: "VALIDATION_ERROR", message: "请提供一个非空的需求 ID。" } });
+    assert.deepEqual(await response.json(), { ok: false, error: { code: "VALIDATION_ERROR", message: "匹配查询参数不符合契约。" } });
   }
 });

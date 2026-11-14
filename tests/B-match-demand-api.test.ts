@@ -6,14 +6,17 @@ import { prisma } from "../src/lib/prisma";
 import { GET } from "../src/app/api/match/route";
 
 // Prisma 的代理方法没有普通 value 描述符，使用可恢复的显式替换隔离真实数据库。
-function mockLookup(t: TestContext, implementation: (args: { where: { id: string } }) => Promise<unknown>) {
+function mockLookup(t: TestContext, implementation: (args: { where: { id: string; status: string } }) => Promise<unknown>) {
   const transaction = prisma.$transaction;
-  prisma.$transaction = (async (run: (tx: unknown) => Promise<unknown>) => run({ review: { findMany: async () => [] } })) as typeof transaction;
+  const lookup = t.mock.fn(async (args: { where: { id: string; status: string } }) => {
+    assert.equal(args.where.status, "published");
+    return implementation(args);
+  });
+  prisma.$transaction = (async (run: (tx: unknown) => Promise<unknown>, options: { isolationLevel: string }) => {
+    assert.equal(options.isolationLevel, "Serializable");
+    return run({ demandOrder: { findFirst: lookup }, review: { findMany: async () => [] } });
+  }) as typeof transaction;
   t.after(() => { prisma.$transaction = transaction; });
-  const original = prisma.demandOrder.findUnique;
-  const lookup = t.mock.fn(implementation);
-  prisma.demandOrder.findUnique = lookup as unknown as typeof original;
-  t.after(() => { prisma.demandOrder.findUnique = original; });
   return lookup;
 }
 
@@ -21,6 +24,8 @@ const request = (id: string) => new Request(`http://localhost/api/match?demandId
 const success = async (id: string) => {
   const response = await GET(request(id));
   assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(response.headers.get("vary"), "Cookie");
   const body = envelope(Match.array()).parse(await response.json());
   assert.equal(body.meta.source, "mock");
   return body.data;
@@ -85,9 +90,11 @@ test("非法或重复参数在查询前被拒绝，合法特殊字符 ID 原样�
     assert.equal(where.id, id);
     return { ...demoDemand, id };
   });
-  for (const query of ["?demandId=", "?demandId=%20%09", "?demandId=a&demandId=a", "?demandId=&demandId=demo-demand"]) {
+  for (const query of ["?demandId=", "?demandId=%20%09", "?demandId=a&demandId=a", "?demandId=&demandId=demo-demand", "?unknown=1", "?demandId=a&ownerId=other"]) {
     const response = await GET(new Request(`http://localhost/api/match${query}`));
     assert.equal(response.status, 400);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    assert.equal(response.headers.get("vary"), "Cookie");
     const body = await response.json();
     assert.equal(body.error.code, "VALIDATION_ERROR");
     assert.equal("data" in body, false);
@@ -118,4 +125,37 @@ test("数据库异常、契约不符或返回其他需求均返回 503，不泄�
     assert.equal(demo.status, 200);
     assert.equal(envelope(Match.array()).parse(await demo.json()).meta.source, "mock");
   }
+});
+
+test("授权或参数拒绝时不读目录；目录失败仍保留私有响应头", async t => {
+  const transaction = prisma.$transaction;
+  let directoryReads = 0;
+  let publish = false;
+  prisma.$transaction = (async (run: (tx: unknown) => Promise<unknown>) => run({
+    demandOrder: { findFirst: async () => publish ? { ...demoDemand, id: "saved" } : null },
+    ownerSession: { findUnique: async () => null },
+    review: { findMany: async () => { directoryReads++; throw Error("private directory failure"); } },
+  })) as typeof transaction;
+  t.after(() => { prisma.$transaction = transaction; });
+  for (const [path, cookie, status] of [
+    ["?unknown=1", "", 400], ["?demandId=saved", "", 404],
+    ["?demandId=saved", "__Host-ai_home_owner_session=bad", 401],
+    ["", "__Host-ai_home_owner_session=bad", 401],
+  ] as const) {
+    const response = await GET(new Request(`http://localhost/api/match${path}`, { headers: { cookie } }));
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    assert.equal(response.headers.get("vary"), "Cookie");
+    assert.equal(directoryReads, 0);
+  }
+  publish = true;
+  const response = await GET(request("saved"));
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(response.headers.get("vary"), "Cookie");
+  const body = await response.json();
+  assert.equal(body.error.code, "PROVIDER_UNAVAILABLE");
+  assert.equal("data" in body, false);
+  assert.doesNotMatch(JSON.stringify(body), /private directory/);
+  assert.equal(directoryReads, 1);
 });
