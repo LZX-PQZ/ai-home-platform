@@ -65,8 +65,8 @@ test("明确的需求 404 显示未找到，权限、未实现和服务异常保
   const cases = [
     [404, "DEMAND_NOT_FOUND", "需求不存在或不可查看", "not-found"],
     [400, "VALIDATION_ERROR", "需求编号无效", "error"],
-    [401, "UNAUTHENTICATED", "身份验证", "error"],
-    [403, "FORBIDDEN", "无权查看", "error"],
+    [401, "UNAUTHENTICATED", "业主登录已失效", "error"],
+    [403, "FORBIDDEN", "当前身份无法查看", "error"],
     [501, "NOT_IMPLEMENTED", "尚未实现", "error"],
     [503, "DATABASE_UNAVAILABLE", "暂时不可用", "error"],
     [404, "ROUTE_NOT_FOUND", "加载失败", "error"],
@@ -161,6 +161,43 @@ test("刷新重新获取状态与来源，失败后可读取恢复结果而不�
   const html = render({ status: "ready", response: await loadAdminDemandDetail(demand.id) });
   assert.match(html, /已完成/);
   assert.match(html, /需求来源：实际创建（live）/);
-  assert.doesNotMatch(html, /已发布|详情接口来源：模拟/);
+  assert.doesNotMatch(html, />已发布<|详情接口来源：模拟/);
   assert.equal(mock.mock.callCount(), 3);
+});
+
+test("管理详情仅对明确的业主身份错误提供恢复，404 和其他错误不触发退出", async (t) => {
+  for (const [status, code, recoverable] of [
+    [401, "UNAUTHENTICATED", true], [403, "FORBIDDEN", true],
+    [401, "INVALID_RESPONSE", false], [403, "HTTP_403", false],
+    [404, "DEMAND_NOT_FOUND", false], [501, "NOT_IMPLEMENTED", false],
+    [503, "DATABASE_UNAVAILABLE", false],
+  ] as const) {
+    const fetched = t.mock.method(globalThis, "fetch", async (path: string, init?: RequestInit) => {
+      assert.equal(path, `/api/demand/${demand.id}`);
+      assert.equal(init, undefined);
+      return Response.json({ ok: false, error: { code, message: "credential secret" } }, { status });
+    });
+    await assert.rejects(loadAdminDemandDetail(demand.id), error => {
+      const html = render(adminDemandDetailFailureState(error));
+      assert.equal(html.includes("退出业主会话并刷新页面"), recoverable);
+      assert.doesNotMatch(html, /<article|<dd|<form|详情接口来源：|credential secret|请完成平台管理身份验证|请核实平台管理权限/);
+      if (recoverable) assert.match(html, /演示服务方登录不受影响/);
+      return true;
+    });
+    assert.equal(fetched.mock.callCount(), 1);
+    fetched.mock.restore();
+  }
+});
+
+test("管理详情可见范围说明保留在成功、失败和 404 中，关联工单不代表额外权限", () => {
+  for (const state of [
+    { status: "loading" }, { status: "ready", response: payload() }, { status: "not-found" },
+    adminDemandDetailFailureState(new ApiClientError("", "FORBIDDEN", 403)),
+  ] satisfies AdminDemandDetailState[]) {
+    const html = render(state);
+    for (const text of ["已发布需求公开可读", "其他状态仅所属业主登录后可读", "管理员专属读取尚未接入",
+      "切换角色或从工单进入不会扩大可见范围", "登录、退出或身份变化后", "退出业主会话后，非公开需求不可查看"]) {
+      assert.ok(html.includes(text), text);
+    }
+  }
 });

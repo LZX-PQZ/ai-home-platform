@@ -5,9 +5,10 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
 import { DemandSource } from "./DemandSource";
+import { DemandAccessRecovery } from "./DemandAccessRecovery";
 import { formatBudget, renovationLabels } from "./demand-hall";
 import {
-  adminDemandErrorMessage,
+  adminDemandFailureState,
   adminDemandStatusLabels,
   adminDemandStatuses,
   loadAdminDemands,
@@ -37,6 +38,8 @@ export function AdminDemandOverviewContent({ state, onReload }: {
 
       <div className={`${C.note} ${C.noteWarn}`}>
         <p>当前为平台管理演示入口，可能包含模拟数据，来源以加载后的标识为准。角色导航不代表登录鉴权。</p>
+        <p>未登录业主时仅显示已发布的公开需求；业主登录后仅显示本人的所有状态需求。管理员专属登录与全量需求查询尚未接入，切换角色不会扩大可见范围。</p>
+        <p>登录、退出或身份变化后，请点击“刷新概览”（加载失败时点击“重新加载”），按当前身份重新查询。</p>
         <p className="!mb-0">统计范围仅为本次返回的需求列表，不代表平台全量数据。预算为业主预算，期望工期不等于实际工期；成交额、实际工期和售后统计尚未接入。</p>
       </div>
 
@@ -45,6 +48,7 @@ export function AdminDemandOverviewContent({ state, onReload }: {
         <div className={`${C.card} border-danger/30`} role="alert">
           <h2>暂时无法加载需求概览</h2>
           <p className="!mb-0">{state.message}</p>
+          {state.canExitOwnerSession && <DemandAccessRecovery />}
         </div>
       )}
 
@@ -131,7 +135,7 @@ export function AdminDemandOverview() {
     let active = true;
     loadAdminDemands().then(
       (response) => { if (active) setState({ status: "ready", response }); },
-      (error: unknown) => { if (active) setState({ status: "error", message: adminDemandErrorMessage(error) }); },
+      (error: unknown) => { if (active) setState(adminDemandFailureState(error)); },
     );
     return () => { active = false; };
   }, [reloadKey]);

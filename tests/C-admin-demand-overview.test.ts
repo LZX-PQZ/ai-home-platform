@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Demand, type DemandDTO } from "../src/contracts";
+import { ApiClientError } from "../src/lib/api-client";
 import { AdminDemandOverviewContent } from "../src/features/c/AdminDemandOverview";
 import {
-  adminDemandErrorMessage, loadAdminDemands, summarizeAdminDemands, type AdminDemandState,
+  adminDemandErrorMessage, adminDemandFailureState, loadAdminDemands, summarizeAdminDemands, type AdminDemandState,
 } from "../src/features/c/admin-demand-overview";
 
 // 仅测试使用的模拟记录；运行页面不会生成或回退到这些记录。
@@ -121,17 +122,69 @@ test("拒绝缺失来源、未知状态、非法金额、重复 ID 和业务失�
 });
 
 test("401、403、501、503 明确显示失败并支持重试，不回显内部错误", async (t) => {
-  for (const [status, text] of [[401, "身份验证"], [403, "无权查看"], [501, "尚未实现"], [503, "暂时不可用"]] as const) {
+  for (const [status, text] of [[401, "业主登录已失效"], [403, "当前身份无法查看"], [501, "尚未实现"], [503, "暂时不可用"]] as const) {
     const fetchMock = t.mock.method(globalThis, "fetch", async () => Response.json({
       ok: false, error: { code: "TEST_FAILURE", message: "内部敏感错误细节" },
     }, { status }));
     await assert.rejects(loadAdminDemands(), (error: unknown) => {
-      const html = render({ status: "error", message: adminDemandErrorMessage(error) });
+      const html = render(adminDemandFailureState(error));
       for (const expected of [text, 'role="alert"', "重新加载"]) assert.ok(html.includes(expected), expected);
-      assert.doesNotMatch(html, /<dd|<table|本次列表暂无需求|列表来源：|内部敏感/);
+      assert.doesNotMatch(html, /<dd|<table|本次列表暂无需求|列表来源：|内部敏感|退出业主会话并刷新页面/);
       return true;
     });
     fetchMock.mock.restore();
+  }
+});
+
+test("管理概览已知业主凭证错误提供手动恢复，不自行退出或显示成功统计", async (t) => {
+  for (const [status, code] of [[401, "UNAUTHENTICATED"], [403, "FORBIDDEN"]] as const) {
+    const fetched = t.mock.method(globalThis, "fetch", async (path: string, init?: RequestInit) => {
+      assert.equal(path, "/api/demand");
+      assert.equal(init, undefined);
+      return Response.json({ ok: false, error: { code, message: "credential secret" } }, { status });
+    });
+    await assert.rejects(loadAdminDemands(), error => {
+      const html = render(adminDemandFailureState(error));
+      assert.match(html, /退出业主会话并刷新页面/);
+      assert.match(html, /退出当前浏览器的业主登录并刷新本页/);
+      assert.match(html, /演示服务方登录不受影响/);
+      assert.doesNotMatch(html, /<dd|<table|本次列表暂无需求|列表来源：|credential secret|请完成平台管理身份验证/);
+      return true;
+    });
+    assert.equal(fetched.mock.callCount(), 1);
+    fetched.mock.restore();
+  }
+});
+
+test("管理概览坏回执、伪成功 501 和网络错误不提供退出入口", async (t) => {
+  for (const send of [
+    async () => new Response("not json", { status: 401 }),
+    async () => Response.json(payload(), { status: 403 }),
+    async () => Response.json(payload(), { status: 501 }),
+    async () => { throw new Error("HTTP 401 UNAUTHENTICATED"); },
+  ]) {
+    const fetched = t.mock.method(globalThis, "fetch", send);
+    await assert.rejects(loadAdminDemands(), error => {
+      const html = render(adminDemandFailureState(error));
+      assert.doesNotMatch(html, /退出业主会话并刷新页面|<dd|<table|本次列表暂无需求|列表来源：/);
+      if (error instanceof ApiClientError && error.status === 501) assert.match(html, /尚未实现/);
+      return true;
+    });
+    fetched.mock.restore();
+  }
+});
+
+test("管理概览所有视图说明身份可见范围，不把管理导航或空结果当作全平台权限", () => {
+  for (const state of [
+    { status: "loading" }, { status: "ready", response: payload([]) },
+    { status: "ready", response: payload() },
+    adminDemandFailureState(new ApiClientError("", "UNAUTHENTICATED", 401)),
+  ] satisfies AdminDemandState[]) {
+    const html = render(state);
+    for (const text of ["未登录业主时仅显示已发布的公开需求", "业主登录后仅显示本人的所有状态需求",
+      "管理员专属登录与全量需求查询尚未接入", "切换角色不会扩大可见范围", "登录、退出或身份变化后", "不代表平台全量数据"]) {
+      assert.ok(html.includes(text), text);
+    }
   }
 });
 

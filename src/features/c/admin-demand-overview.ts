@@ -1,5 +1,6 @@
 import { Demand, type DemandDTO, type DemandStatus } from "@/contracts";
 import { apiGet, ApiClientError } from "@/lib/api-client";
+import { demandAccessFailure } from "./demand-access-recovery";
 
 export const adminDemandStatuses = Demand.shape.status.options;
 export const adminDemandStatusLabels: Record<DemandStatus, string> = {
@@ -29,14 +30,18 @@ export function summarizeAdminDemands(demands: readonly DemandDTO[]) {
 export type AdminDemandState =
   | { status: "loading" }
   | { status: "ready"; response: Awaited<ReturnType<typeof loadAdminDemands>> }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; canExitOwnerSession?: boolean };
 
 export function adminDemandErrorMessage(error: unknown) {
+  return adminDemandFailureState(error).message;
+}
+
+export function adminDemandFailureState(error: unknown): Extract<AdminDemandState, { status: "error" }> {
+  const access = demandAccessFailure(error);
+  if (access) return { status: "error", ...access };
   if (error instanceof ApiClientError) {
-    if (error.status === 401) return "请完成平台管理身份验证后重试。角色导航不能代替登录。";
-    if (error.status === 403) return "当前身份无权查看需求概览。";
-    if (error.status === 501) return "需求查询尚未实现，暂时无法展示概览。";
-    if (error.status === 503) return "需求服务暂时不可用，请稍后重试。";
+    if (error.status === 501) return { status: "error", message: "需求查询尚未实现，暂时无法展示概览。" };
+    if (error.status === 503) return { status: "error", message: "需求服务暂时不可用，请稍后重试。" };
   }
-  return "需求概览加载失败，请检查网络或稍后重试。";
+  return { status: "error", message: "需求概览加载失败，请检查网络或稍后重试。" };
 }
