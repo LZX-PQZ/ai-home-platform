@@ -11,6 +11,7 @@ import {
   formToInput,
   submitDemand,
   renovationLabel,
+  sourceLabel,
   type DemandForm,
   type EnvelopeSource,
   type SubmitOutcome,
@@ -38,7 +39,7 @@ function filledCount(form: DemandForm): number {
 
 /**
  * 结构化需求单：展示对话产出的草稿，允许人工修正后确认提交。
- * 草稿来自 mock 时明确标注；提交返回 501 时只显示“尚未开放”，不制造成功态。
+ * 草稿来源明确标注；提交失败时只显示真实失败状态，不制造成功态。
  */
 export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) {
   const draft = result?.draft ?? null;
@@ -96,15 +97,14 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
         title="结构化需求单"
         aside={
           <Badge tone={draft ? "brand" : "neutral"}>
-            {draft ? `草稿来源：${source ?? "未知"}` : "尚无 AI 草稿"}
+            {draft ? `草稿来源：${sourceLabel(source)}` : "尚无需求草稿"}
           </Badge>
         }
       />
 
       {result === null && (
         <p className={`!mb-0 ${C.meta}`}>
-          可以在左侧描述需求，也可以直接手动填写。当前对话接口为 mock；
-          即使对话暂时不可用，也可填写需求单，核对后提交。
+          可以在左侧描述需求，也可以直接手动填写；即使对话暂时不可用，也可填写需求单，核对后提交。
         </p>
       )}
 
@@ -128,7 +128,7 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
       {result && result.ready && draft && (
         <div className="mb-3">
           <Note tone="ok">
-            <p>对话接口认为信息已齐全。请核对下面字段后再确认提交，提交前不会写入任何数据。</p>
+            <p>助手已整理出一份草稿。请核对下面字段后再确认提交，提交前不会写入任何数据。</p>
           </Note>
         </div>
       )}
@@ -136,9 +136,9 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
       {!draft && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Button variant="secondary" size="sm" onClick={() => setManual((value) => !value)} disabled={submitting || Boolean(created)}>
-            {manual ? "收起手动填写" : "手动填写需求单（不是 AI 生成）"}
+            {manual ? "收起手动填写" : "手动填写需求单"}
           </Button>
-          <span className={C.meta}>手动填写的内容由您提供，不是 AI 生成。</span>
+          <span className={C.meta}>这部分内容由您填写，不是助手整理的结果。</span>
         </div>
       )}
 
@@ -249,11 +249,9 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
 
       {outcome?.kind === "not_implemented" && (
         <div className="mt-3">
-          <Note tone="info" title="需求保存尚未开放">
+          <Note tone="info" title="暂时无法保存需求">
             <p>{outcome.message}</p>
-            <p className={C.meta}>
-              这条需求没有保存，也没有生成需求 ID；等 D 实现 POST /api/demand 后再重试。
-            </p>
+            <p className={C.meta}>这次没有保存成功，也没有生成需求编号；请稍后重试。</p>
           </Note>
         </div>
       )}
@@ -271,7 +269,7 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
         <div className="mt-3">
           <Note tone="danger" title="当前没有需求创建权限">
             <p>{outcome.message}</p>
-            <p className={C.meta}>请检查页面来源和业主登录状态；表单内容仍保留。</p>
+            <p className={C.meta}>请确认已使用业主账号登录；表单内容仍保留。</p>
           </Note>
         </div>
       )}
@@ -299,7 +297,7 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
 
       {created && (
         <div className="mt-3">
-          <Note tone="ok" title={`需求已创建（来源：${outcome?.kind === "created" ? outcome.source : "未知"}）`}>
+          <Note tone="ok" title={`需求已创建（来源：${outcome?.kind === "created" ? sourceLabel(outcome.source) : "尚未确认"}）`}>
             <p>
               需求 ID：<code className="rounded bg-white/70 px-1.5 py-0.5">{created.id}</code> ·
               状态：{created.status}

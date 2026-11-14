@@ -12,11 +12,18 @@ import {
   interpretDemandSubmit,
   normalizeOutgoing,
   parseChatResponse,
+  sourceLabel,
   toChatPayload,
   submitDemand,
   yuanToCents,
   type ChatMessage,
 } from "../src/features/a/demand-chat";
+
+test("来源枚举转换为业主可理解的文案", () => {
+  assert.equal(sourceLabel("mock"), "模拟结果");
+  assert.equal(sourceLabel("live"), "实时结果");
+  assert.equal(sourceLabel(null), "尚未确认");
+});
 
 test("空消息与超长消息在本地被拦下，不发给接口", () => {
   assert.equal(normalizeOutgoing("   ").ok, false);
