@@ -4,8 +4,9 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DemandSource } from "./DemandSource";
+import { DemandAccessRecovery } from "./DemandAccessRecovery";
 import {
-  demandHallErrorMessage,
+  demandHallFailureState,
   formatBudget,
   loadDemandHall,
   renovationLabels,
@@ -59,6 +60,7 @@ export function DemandHallContent({
         <div className="card" role="alert">
           <h2>暂时无法加载需求</h2>
           <p>{state.message}</p>
+          {state.canExitOwnerSession && <DemandAccessRecovery />}
         </div>
       )}
 
@@ -153,7 +155,7 @@ export function DemandHall() {
         if (active) setState({ status: "ready", response });
       },
       (error: unknown) => {
-        if (active) setState({ status: "error", message: demandHallErrorMessage(error) });
+        if (active) setState(demandHallFailureState(error));
       },
     );
     return () => {

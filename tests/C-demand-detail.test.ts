@@ -134,7 +134,7 @@ test("详情拒绝数组、null、无效字段、缺失来源和 HTTP 200 的失
 
 test("400、401、403、501、503 按 HTTP 状态说明问题，不当作成功或不存在", async (t) => {
   for (const [status, message] of [
-    [400, "需求编号无效"], [401, "身份授权"], [403, "当前身份无法查看"],
+    [400, "需求编号无效"], [401, "业主登录已失效"], [403, "当前身份无法查看"],
     [501, "尚未实现"], [503, "服务暂时不可用"],
   ] as const) {
     const fetchMock = t.mock.method(globalThis, "fetch", async () => Response.json({

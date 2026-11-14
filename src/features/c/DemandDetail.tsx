@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DemandSource } from "./DemandSource";
+import { DemandAccessRecovery } from "./DemandAccessRecovery";
 import { QuoteForm } from "./QuoteForm";
 import { formatBudget, renovationLabels } from "./demand-hall";
 import {
@@ -65,6 +66,7 @@ export function DemandDetailContent({
         <div className="card" role="alert">
           <h2>暂时无法加载详情</h2>
           <p>{state.message}</p>
+          {state.canExitOwnerSession && <DemandAccessRecovery />}
         </div>
       )}
       {state.status === "not-found" && (

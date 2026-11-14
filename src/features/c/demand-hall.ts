@@ -1,5 +1,6 @@
 import { Demand, type DemandDTO } from "@/contracts";
-import { apiGet } from "@/lib/api-client";
+import { apiGet, ApiClientError } from "@/lib/api-client";
+import { demandAccessFailure } from "./demand-access-recovery";
 
 export const renovationLabels: Record<DemandDTO["renovationType"], string> = {
   elderly: "适老化改造",
@@ -18,7 +19,7 @@ export async function loadDemandHall() {
 export type DemandHallState =
   | { status: "loading" }
   | { status: "ready"; response: Awaited<ReturnType<typeof loadDemandHall>> }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; canExitOwnerSession?: boolean };
 
 const currency = new Intl.NumberFormat("zh-CN", {
   style: "currency",
@@ -32,8 +33,17 @@ export function formatBudget(cents: number) {
 }
 
 export function demandHallErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message.includes("HTTP 501")) {
-    return "需求接口尚未实现，暂时无法读取需求，请等待接口接入后重试。";
+  return demandHallFailureState(error).message;
+}
+
+export function demandHallFailureState(error: unknown): Extract<DemandHallState, { status: "error" }> {
+  const access = demandAccessFailure(error);
+  if (access) return { status: "error", ...access };
+  if (error instanceof ApiClientError && error.status === 501) {
+    return { status: "error", message: "需求接口尚未实现，暂时无法读取需求，请等待接口接入后重试。" };
   }
-  return "需求列表加载失败，请检查网络或稍后重试。";
+  if (error instanceof ApiClientError && error.status === 503) {
+    return { status: "error", message: "需求服务暂时不可用，请稍后重试。" };
+  }
+  return { status: "error", message: "需求列表加载失败，请检查网络或稍后重试。" };
 }
