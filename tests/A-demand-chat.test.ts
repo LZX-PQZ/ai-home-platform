@@ -123,6 +123,18 @@ test("401 明确引导业主登录并保留表单，403 明确提示权限问题
   }
 });
 
+test("保存失败保留服务端说明，但不把错误码或 HTTP 状态码展示给业主", () => {
+  const result = interpretDemandSubmit(503, {
+    ok: false,
+    error: { code: "DEMAND_UNAVAILABLE", message: "需求服务暂时不可用，请稍后重试。" },
+  });
+  assert.deepEqual(result, { kind: "failed", message: "需求服务暂时不可用，请稍后重试。" });
+
+  const malformed = interpretDemandSubmit(500, "not json");
+  assert.deepEqual(malformed, { kind: "failed", message: "服务暂时无法完成保存，请稍后重试。" });
+  if (malformed.kind === "failed") assert.doesNotMatch(malformed.message, /HTTP 500|DEMAND_UNAVAILABLE/);
+});
+
 test("错误 JSON、缺失来源、错误信封与 503 均不能生成成功态", async (t) => {
   const responses = [
     new Response("invalid", { status: 201 }),
