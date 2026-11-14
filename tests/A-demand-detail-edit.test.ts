@@ -147,7 +147,7 @@ test("两种操作均编码特殊需求 ID，保留 mock/live 信封来源", asy
 test("更新和删除保留 HTTP 状态、业务错误码与对应提示，不自动重试", async (t) => {
   for (const [status, code, message] of [
     [400, "VALIDATION_ERROR", /HTTP 400/],
-    [401, "UNAUTHENTICATED", /请先登录/],
+    [401, "UNAUTHENTICATED", /请先完成业主登录/],
     [403, "FORBIDDEN", /没有权限/],
     [404, "DEMAND_NOT_FOUND", /HTTP 404/],
     [409, "DEMAND_HAS_RELATED_RECORDS", /不允许修改/],
@@ -166,6 +166,27 @@ test("更新和删除保留 HTTP 状态、业务错误码与对应提示，不�
       }
     }
     assert.equal(request.mock.callCount(), 2);
+    t.mock.restoreAll();
+  }
+});
+
+test("更新遇到 401 非 JSON 或伪造成功信封仍要求业主登录，不产生成功结果或重试", async (t) => {
+  for (const [response, code] of [
+    [new Response("not json", { status: 401 }), "INVALID_RESPONSE"],
+    [Response.json(ok(demand), { status: 401 }), "HTTP_401"],
+  ] as const) {
+    const request = t.mock.method(globalThis, "fetch", async () => response);
+    const editedForm = { ...form, description: "保留尚未保存的改造说明" };
+    const originalForm = { ...editedForm };
+    const result = await updateDemand("d-1", editedForm);
+    assert.equal(result.kind, "failed");
+    if (result.kind === "failed") {
+      assert.equal(result.status, 401);
+      assert.equal(result.code, code);
+      assert.match(result.message, /请先完成业主登录/);
+    }
+    assert.deepEqual(editedForm, originalForm);
+    assert.equal(request.mock.callCount(), 1);
     t.mock.restoreAll();
   }
 });
