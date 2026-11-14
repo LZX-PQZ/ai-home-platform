@@ -49,13 +49,13 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 ## 服务方目录与评价汇总
 
-`GET /api/provider` 只接受可选且唯一的 `performanceSource=live|mock`，缺省 live；空值、未知值、重复和其他参数 400/VALIDATION_ERROR。保持原六个固定演示服务方公开目录，不公开任意数据库服务方。Provider 新增可选 `source` 和可选/可空 `performance`，旧 DTO 兼容；本接口始终给出明确的汇总。基础资料 source=mock，故整体 meta.source=mock；performance.source 独立表示选择的统计口径，不能用整体来源覆盖逐维度来源。
+`GET /api/provider` 只接受可选且唯一的 `performanceSource=live|mock`，缺省 live；空值、未知值、重复和其他参数 400/VALIDATION_ERROR。保持原六个固定演示服务方公开目录，不公开任意数据库服务方。Provider 新增可选 `source`、`availability` 和可选/可空 `performance`，旧 DTO 兼容；本接口返回固定 mock 档期样例和评价汇总。基础资料与档期 source=mock，故整体 meta.source=mock；performance.source 独立表示选择的统计口径，不能用整体来源覆盖逐维度来源。
 
 公共 `ProviderPerformance` 为 `{ basis: 'completed_order_review_average', averageRating: number | null, reviewCount: number, calculatedAt: ISO8601, source }`。仅统计需求与实际接单均 completed、同需求/业主/服务方且 accepted 报价关系一致、评价/接单/报价来源一致的绑定评价。每接单最多一个样本，均分四舍五入到两位（1–5），无样本明确 null/0；不使用旧 Provider.rating 或其他来源补齐。`calculatedAt` 只要求 ISO 8601 datetime 格式，不用浏览器当前时间判断未来，以容忍客户端时钟偏差。无 orderId 旧评价不在口径内；一致但未完成的关系排除；错绑/坏来源/非法评分/存储异常返回整批 503/PROVIDER_UNAVAILABLE，不伪装空样本。公开响应没有评论、业主、需求、接单或评价 ID。
 
-服务端 `readProviderDirectory({ performanceSource: 'live' | 'mock' })` 在 Serializable 事务内生成同一快照时间并返回公共信封，默认参数为 live；HTTP 与 B 后续 `/api/match` 可复用，抛错为 `ProviderDirectoryError`。浏览器使用 `apiGet('/api/provider?performanceSource=mock', Provider.array())`，不要导入服务端适配器。所有 HTTP 响应 no-store，不依赖 cookie、不写库或更新服务方 rating。当前任一查询范围内的坏评价或坏关联会让整个目录返回 503：C 的需求页和 B 的匹配页会无法完成目录加载；B 的报价对比页会保留报价，但服务方名称与来源提示待确认。此指标是业主评价均分，不是准时率、质量认证或信用分；少于 3 个样本由调用方显示样本少。
+服务端 `readProviderDirectory({ performanceSource: 'live' | 'mock' })` 在 Serializable 事务内生成同一快照时间并返回公共信封，默认参数为 live；HTTP 与 B 后续 `/api/match` 可复用，抛错为 `ProviderDirectoryError`。浏览器使用 `apiGet('/api/provider?performanceSource=mock', Provider.array())`，不要导入服务端适配器。所有 HTTP 响应 no-store，不依赖 cookie、不写库或更新服务方 rating。`availability` 的窗口按 Asia/Shanghai 自然日解释，固定样例 source=mock；缺省/null 是未知，空窗口只表示覆盖区间内无窗口，过期后不参与排序。当前任一查询范围内的坏评价或坏关联会让整个目录返回 503：C 的需求页和 B 的匹配页会无法完成目录加载；B 的报价对比页会保留报价，但服务方名称与来源提示待确认。此指标是业主评价均分，不是准时率、质量认证或信用分；少于 3 个样本由调用方显示样本少。
 
-B 排序/来源展示和 `/api/match` 新数据接线仍由 B 后续完成；本次只交付共享契约与目录接口。固定 mock 档期、报价种子调整和最终演示步骤另做。详见 `docs/requests/D-provider-performance.md`。
+B 排序/来源展示和 `/api/match` 新数据接线仍由 B 后续完成。固定 mock 档期、报价单位/列项差异样例与四组合成 completed 接单/评价已提供；运行 db:seed 补齐固定记录。仅种子样本时 mock 汇总为 provider-a 4.67/3、provider-b 4/1；默认 live 不回退这些样本。样例验收步骤见 README，最终演示版本待集成。详见 `docs/requests/D-provider-performance.md` 和 `docs/requests/D-provider-availability.md`。
 
 ## 接受报价与本人接单
 
@@ -319,4 +319,4 @@ DELETE 无请求体，非空 ID 原样精确查找，错误顺序为路径 400 �
 
 存在但伪造、重复、过期或撤销的业主凭证为 401/UNAUTHENTICATED；有效业主凭证对应当前角色不再是 owner 为 403/FORBIDDEN。这两条也适用于已发布详情。双 cookie 时业主优先，无效业主不能回退匿名或服务方。没有业主 cookie 时，演示服务方关闭/过期/撤销/绑定变化不妨碍访问 published 数据，但会失去非公开接单详情权限。角色导航及自报身份不能扩大权限，合法空结果才返回 200 空数组。
 
-逐条 source 保持 demo-demand 为 mock、其他数据库需求为 live。普通匿名和业主整体含 demo-demand 时为 mock，否则 live（含空列表）；有效演示服务方会话整体仍为 mock，包括已接单需求详情。所有响应 Cache-Control: private, no-store、Vary: Cookie；存储、坏 DTO、异常接单关联或越界查询结果统一 503/DATABASE_UNAVAILABLE，不回退 mock 或空成功。A/B/C 使用原 URL/DTO，C 大厅、管理页与匹配页可继续匿名获取 published 数据。完整交接与验证见 docs/requests/D-demand-read-auth.md 及 docs/requests/D-provider-demand-access.md。状态推进由 `/api/order/progress` 在同一事务条件更新需求和接单，避免两侧状态不一致。
+逐条 source 将精确固定 ID demo-demand、demo-completed-a/b/c/d 标为 mock，其他数据库需求为 live；不按前缀猜测。普通匿名和业主整体含这些模拟需求时为 mock，否则 live（含空列表）；有效演示服务方会话整体仍为 mock，包括已接单需求详情。合成 completed 需求不会进入匿名列表，原有归属及接单权限保持。所有响应 Cache-Control: private, no-store、Vary: Cookie；存储、坏 DTO、异常接单关联或越界查询结果统一 503/DATABASE_UNAVAILABLE，不回退 mock 或空成功。A/B/C 使用原 URL/DTO，C 大厅、管理页与匹配页可继续匿名获取 published 数据。完整交接与验证见 docs/requests/D-demand-read-auth.md 及 docs/requests/D-provider-demand-access.md。状态推进由 `/api/order/progress` 在同一事务条件更新需求和接单，避免两侧状态不一致。

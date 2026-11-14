@@ -39,7 +39,14 @@ macOS / Linux：使用 npm 而非 npm.cmd，使用 cp .env.example .env。
 
 评价后端已提供 `POST /api/review` 和 `GET /api/review?demandId=…`，更新后运行 `npm.cmd run db:setup` 同步评价接单关联与来源列，再重启；历史评价保留，不自动补造成真实接单评价。仅所属业主可对需求与接单均已完成的实际关系提交一次评价，来源沿用接单，mock 不升级。详见 [评价交接](docs/requests/D-review-create.md)。
 
-服务方公开目录新增评价汇总：`GET /api/provider?performanceSource=live|mock`，缺省 live。返回已完成接单的业主评价均分、样本数和计算时间，mock/live 分开；没有所选来源样本时返回 null/0，不用种子评分补齐。六个演示服务方基础资料仍 mock，整体来源仍 mock，每条评价汇总保留自己的来源。只公开统计，不公开评论或业主/接单编号；坏关联或存储错误返回 503。无需新依赖或数据库变更，B 的排序展示和固定 mock 档期待后续，见 [汇总交接](docs/requests/D-provider-performance.md)。
+服务方公开目录新增评价汇总：`GET /api/provider?performanceSource=live|mock`，缺省 live。返回已完成接单的业主评价均分、样本数和计算时间，mock/live 分开；没有所选来源样本时返回 null/0，不用种子评分补齐。六个演示服务方基础资料和固定档期样例仍明确为 mock，整体来源仍 mock，每条评价汇总保留自己的来源。档期窗口只用于演示资料，不代表预约或施工承诺；只公开统计和档期字段，不公开评论或业主/接单编号。**已知限制：任一查询范围内的坏评价/关联或存储错误会使整个目录返回 503**，影响 C 需求页和 B 匹配页；B 报价页保留报价，服务方名称与来源待确认。档期、报价和评价演示样例已提供；B 的排序/来源展示接线仍待完成。见 [汇总交接](docs/requests/D-provider-performance.md) 和 [档期与演示数据交接](docs/requests/D-provider-availability.md)。
+
+本轮固定演示验收（不需要新增依赖或 schema）：
+
+1. 使用已有本机数据库运行 `npm.cmd run db:seed`，再重启应用。只新增缺失的固定记录，不覆盖已有报价或账号；不为 demo-owner 设置密码。
+2. 打开 `/owner/quotes/demo-demand`：同名“防滑地面”分别按平方米/项报价；“成品保护”只在 quote-b 单独列明，触发列项差异；quote-a 的“垃圾清运”仍待确认。已知小计仍为 ¥12,000.00 / ¥13,000.00，全部标 mock，不代表最终总价。
+3. 打开 `/api/provider?performanceSource=mock`：在仅含种子样本的数据库中，provider-a 的评价均分为 4.67、样本 3，provider-b 为 4、样本 1；来自四条明确 mock 的合成已完成接单/评价。已有其他 mock 样本时按全部有效样本重新汇总。无 live 评价时，`/api/provider` 仍返回 live 的 null/0。
+4. 同一目录返回固定档期：provider-a 为 31 天连续窗口，provider-b 为两段较短窗口，另含空窗口与未知样例。覆盖 2026-11-15 至 2026-12-31；到期后须标为待更新，不能继续排序。当前只交付接口数据，B 的档期排序和评价分展示尚未接线，完整演示版本仍待最终集成。
 
 履约后端新增 `POST /api/order/progress`，业主明确确认后，需求与接单在同一事务中“已签约→施工中→已完成”。有排期时按依赖逐项开工/确认完成，保留历史版本，全部完成才允许整单完成；无排期也须显式确认。运行 `npm.cmd run db:setup` 同步操作记录表后重启。生产 HTTP 冒烟已通过正常接口推进到评价，不再直接改库伪造完工。A/C 的按钮及评价表单仍待接线，专业验收、返工/阻塞和付款联动未实现。详见 [履约交接](docs/requests/D-order-progress.md)。
 
