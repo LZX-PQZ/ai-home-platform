@@ -3,9 +3,10 @@ import test, { after, before } from "node:test";
 import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Demand, Ticket } from "../src/contracts";
+import { ApiClientError } from "../src/lib/api-client";
 import { DemandDetailContent } from "../src/features/a/DemandDetailPanel";
 import {
-  categoryLabel, createTicket, formToTicketInput, loadTickets, statusLabel, submitTicket,
+  categoryLabel, createTicket, formToTicketInput, isTicketAccessDenied, loadTickets, statusLabel, submitTicket,
   ticketErrorMessage,
 } from "../src/features/a/ticket-create";
 
@@ -77,6 +78,14 @@ test("401 返回登录提示且不丢失表单语义，403/404/409 诚实分类"
   }
 });
 
+test("工单列表权限失败时隐藏面板，其他失败仍可显示重试提示", async () => {
+  for (const status of [401, 403, 404]) {
+    assert.equal(isTicketAccessDenied(new ApiClientError("denied", "DENIED", status)), true);
+  }
+  assert.equal(isTicketAccessDenied(new ApiClientError("unavailable", "UNAVAILABLE", 503)), false);
+  assert.equal(isTicketAccessDenied(new Error("network")), false);
+});
+
 test("503 后先 GET 核实，不自动重复 POST", async (t) => {
   const calls: string[] = [];
   const request = t.mock.method(globalThis, "fetch", async (path: string, init?: RequestInit) => {
@@ -91,11 +100,11 @@ test("503 后先 GET 核实，不自动重复 POST", async (t) => {
   assert.equal(request.mock.callCount(), 2);
 });
 
-test("详情页只为真实非草稿需求显示可写工单表单", () => {
+test("详情页不会在本人权限预检完成前静态渲染可写工单表单", () => {
   const render = (item: typeof demand) => renderToStaticMarkup(createElement(DemandDetailContent, {
     id: item.id, state: { phase: "ready", demand: item, source: "live" }, reload() {},
   }));
-  assert.match(render(demand), /提交售后工单/);
+  assert.doesNotMatch(render(demand), /提交售后工单/);
   assert.doesNotMatch(render({ ...demand, source: "mock" }), /提交售后工单/);
   assert.doesNotMatch(render({ ...demand, status: "draft" }), /提交售后工单/);
   assert.match(ticketErrorMessage(new Error("x")), /暂时不可用/);

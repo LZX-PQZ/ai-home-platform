@@ -54,6 +54,14 @@ export function ticketErrorMessage(error: unknown): string {
   return `${error.message}（${error.code}）`;
 }
 
+/**
+ * 工单列表是“本人需求”的权限预检。
+ * 公开需求对匿名用户和其他业主仍可读，但他们不应看到工单写入面板。
+ */
+export function isTicketAccessDenied(error: unknown): boolean {
+  return error instanceof ApiClientError && (error.status === 401 || error.status === 403 || error.status === 404);
+}
+
 export function isUncertainTicketError(error: unknown): boolean {
   return error instanceof ApiClientError && (error.status === 503 || error.status === 0 || error.code === "NETWORK_ERROR");
 }

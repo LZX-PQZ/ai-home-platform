@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { DemandDTO, TicketDTO } from "@/contracts";
 import { Badge, Button, C, Card, Field, Note, SectionHead } from "./ui";
 import {
-  categoryLabel, loadTickets, statusLabel, submitTicket, ticketErrorMessage,
+  categoryLabel, isTicketAccessDenied, loadTickets, statusLabel, submitTicket, ticketErrorMessage,
   type TicketCreateForm, type TicketCreateOutcome, type TicketListResponse,
 } from "./ticket-create";
 
@@ -61,7 +61,12 @@ function TicketRow({ ticket }: { ticket: TicketDTO }) {
 }
 
 export function TicketCreatePanel({ demand }: { demand: DemandDTO }) {
-  const [listState, setListState] = useState<{ status: "loading" } | { status: "ready"; response: TicketListResponse } | { status: "error"; message: string }>({ status: "loading" });
+  const [listState, setListState] = useState<
+    | { status: "loading" }
+    | { status: "ready"; response: TicketListResponse }
+    | { status: "inaccessible" }
+    | { status: "error"; message: string }
+  >({ status: "loading" });
   const [form, setForm] = useState<TicketCreateForm>({ description: "", category: "quality" });
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<TicketCreateOutcome | null>(null);
@@ -72,11 +77,25 @@ export function TicketCreatePanel({ demand }: { demand: DemandDTO }) {
     try {
       setListState({ status: "ready", response: await loadTickets(demand.id) });
     } catch (error) {
-      setListState({ status: "error", message: ticketErrorMessage(error) });
+      setListState(isTicketAccessDenied(error) ? { status: "inaccessible" } : { status: "error", message: ticketErrorMessage(error) });
     }
   }, [demand.id]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  // 先成功读取本人列表，再公开工单面板；匿名或其他业主访问公开需求时不泄露写入口。
+  if (listState.status === "loading" || listState.status === "inaccessible") return null;
+  if (listState.status === "error") {
+    return (
+      <Card>
+        <SectionHead title="售后工单" aside={<Badge tone="accent">本人需求</Badge>} />
+        <Note tone="warn" title="暂时无法确认工单权限">
+          <p>{listState.message}</p>
+          <Button variant="secondary" size="sm" onClick={() => void refresh()}>重新读取</Button>
+        </Note>
+      </Card>
+    );
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,7 +126,6 @@ export function TicketCreatePanel({ demand }: { demand: DemandDTO }) {
       <SectionHead title="售后工单" aside={<Badge tone="accent">本人需求</Badge>} />
       <p className={`mb-4 ${C.pageSub}`}>遇到质量、进度、付款或服务态度问题，可以提交一条售后工单。提交失败或网络不确定时不会自动重复提交。</p>
       {outcome ? (() => { const note = outcomeNote(outcome); return <Note tone={note.tone} title={note.title}><p>{note.text}</p></Note>; })() : null}
-      {listState.status === "error" ? <Note tone="warn" title="暂时无法读取已有工单"><p>{listState.message}</p><Button variant="secondary" size="sm" onClick={() => void refresh()}>重新读取</Button></Note> : null}
       {listState.status === "ready" ? <div className="mb-5"><TicketList response={listState.response} /></div> : null}
       <form onSubmit={handleSubmit} className="space-y-4" aria-label="提交售后工单">
         <Field label="问题分类">
