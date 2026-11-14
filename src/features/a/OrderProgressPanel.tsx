@@ -96,23 +96,23 @@ export function OrderProgressPanel({
   return (
     <Card className="mt-4">
       <SectionHead title="履约推进" aside={<Badge tone={order.source === "mock" ? "accent" : "brand"}>接单来源：{order.source}</Badge>} />
-      <p className={`mb-3 ${C.meta}`}>订单 {order.id} · 当前状态 {orderStatusLabel[order.status]} · 排期版本 {schedule?.version ?? "无"}</p>
+      <p className={`mb-3 ${C.meta}`}>订单 {order.id}，当前状态 {orderStatusLabel[order.status]}，排期版本 {schedule?.version ?? "无"}</p>
       {actions.length === 0 ? (
         <Note tone="info">当前没有满足前置条件的履约动作。工序完成只表示业主确认当前工序完成，不等于专业验收或付款完成。</Note>
       ) : (
         <div className="grid gap-2">
           {actions.map((action) => (
-            <div key={`${action.action}-${action.taskId ?? "order"}`} className="rounded-[10px] border border-[#EEF3F4] p-3">
+            <div key={`${action.action}-${action.taskId ?? "order"}`} className="rounded-control border border-line p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[13px] font-medium text-[#16242B]">{action.label}</span>
+                <span className="text-[15px] font-medium text-ink">{action.label}</span>
                 <Button variant="secondary" size="sm" disabled={phase === "submitting"} onClick={() => { setPending(action); setPhase("idle"); setMessage(null); }}>
                   先查看确认
                 </Button>
               </div>
               <p className={`mt-1 !mb-0 ${C.meta}`}>{action.description}</p>
               {pending?.action === action.action && pending.taskId === action.taskId ? (
-                <div className="mt-3 rounded-[8px] bg-[#FEF6E7] p-3">
-                  <p className="!mb-2 text-[12.5px] text-[#8A5A06]">请再次确认：{action.label}？确认后才会发送请求。</p>
+                <div className="mt-3 rounded-control bg-warn-soft p-3">
+                  <p className="!mb-2 text-[14px] text-warn">请再次确认：{action.label}？确认后才会发送请求。</p>
                   <div className="flex flex-wrap gap-2">
                     <Button disabled={phase === "submitting"} onClick={() => void confirm()}>{phase === "submitting" ? "提交中…" : "确认并发送"}</Button>
                     <Button variant="ghost" disabled={phase === "submitting"} onClick={() => setPending(null)}>取消</Button>

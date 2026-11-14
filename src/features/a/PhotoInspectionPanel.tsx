@@ -63,7 +63,7 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
         选择施工现场照片后可提交辅助检查。照片只能提示疑点，不能替代现场检测或证明施工合格。
       </p>
 
-      <label className="grid gap-1.5 text-[13px] font-medium text-[#16242B]" htmlFor="photo-inspection-files">
+      <label className="grid gap-1.5 text-[14px] font-medium text-ink" htmlFor="photo-inspection-files">
         现场照片
         <input
           id="photo-inspection-files"
@@ -71,14 +71,14 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
           accept="image/png,image/jpeg"
           multiple
           onChange={onSelect}
-          className="block w-full rounded-[10px] border border-[#D7E2E4] bg-white px-3 py-2 text-[13px] file:mr-3 file:rounded-md file:border-0 file:bg-[#E7F3EF] file:px-2.5 file:py-1 file:text-[12px] file:font-medium file:text-[#0C5A47]"
+          className="block w-full rounded-input border border-line bg-white px-3 py-2.5 text-[14px] file:mr-3 file:rounded-tag file:border-0 file:bg-brand-soft file:px-2.5 file:py-1 file:text-[13px] file:font-medium file:text-brand-hover"
         />
       </label>
 
       <p className={`mt-2 ${C.meta}`} role="status">{photoInspectionStatus(phase, files.length)}</p>
 
       {files.length > 0 ? (
-        <ul className="mt-2 grid gap-1 text-[12px] text-[#4A5A60]" aria-label="已选择的照片">
+        <ul className="mt-2 grid gap-1 text-[14px] text-ink-2" aria-label="已选择的照片">
           {files.map((file, index) => <li key={`${file.name}-${index}`} className="truncate">{file.name}</li>)}
         </ul>
       ) : null}
@@ -93,7 +93,7 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
         <Button variant="secondary" onClick={submit} disabled={files.length === 0 || phase === "invalid"}>
           {phase === "submitting" ? "提交中…" : "提交辅助检查"}
         </Button>
-        <span className={C.meta}>需求 {demandId} · 当前不会自动确认验收</span>
+        <span className={C.meta}>需求 {demandId}，当前不会自动确认验收</span>
       </div>
 
       <Note tone="info" title="人工复核提示">
@@ -105,7 +105,7 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
       {phase === "ready" && result ? (
         <div className="mt-3">
           <Note tone="ok" title={`辅助检查结果（来源：${inspectionSourceLabel(result.source)}）`}>
-            <pre className="mb-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-[#F7FAFA] p-2 text-[12px] leading-relaxed text-[#16242B]">{formatInspectionResult(result.data)}</pre>
+            <pre className="mb-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-control bg-canvas p-3 text-[14px] leading-relaxed text-ink">{formatInspectionResult(result.data)}</pre>
             <p className="!mb-0">以上内容只提示疑点，不能代替现场检测，也不等于验收合格。</p>
           </Note>
         </div>

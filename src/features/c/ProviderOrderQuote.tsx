@@ -17,9 +17,9 @@ export function ProviderOrderQuoteContent({ state, onReload }: {
   const quote = response?.quote;
   const hasPending = quote && (quote.pendingItems.length > 0 || quote.items.some(item => item.unitPriceCents === null || item.amountCents === null));
   return (
-    <div className="mt-4 min-w-0 space-y-4 rounded-lg border border-line p-4">
+    <div className="mt-4 min-w-0 space-y-4 rounded-card border border-line bg-canvas/50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className={C.sectionTitle}>接单关联报价</h3>
+        <h3 className={`!mb-0 ${C.sectionTitle}`}>接单关联报价</h3>
         <Button size="sm" variant="secondary" onClick={onReload} disabled={state.status === "loading"}>
           {state.status === "loading" ? "正在读取报价…" : state.status === "error" ? "重新加载关联报价" : "刷新关联报价"}
         </Button>
@@ -33,14 +33,14 @@ export function ProviderOrderQuoteContent({ state, onReload }: {
             <QuoteSource source={quote.source} />
             <StatusBadge label="报价已接受" />
           </div>
-          <p className={`!mb-0 ${C.pageSub}`}>以下报价与本条接单的报价、需求和服务方编号一致。演示身份查询仍为 mock；来源标识不代表付款、开工或施工验收。</p>
-          <dl className="grid gap-4 text-sm sm:grid-cols-2">
-            <div className="min-w-0"><dt className="text-ink-2">关联报价编号</dt><dd className="mt-1 break-all">{quote.id}</dd></div>
-            <div><dt className="text-ink-2">接口返回的已知金额小计</dt><dd className="mt-1 font-medium">{formatQuoteMoney(quote.knownTotalCents)}</dd></div>
-            <div><dt className="text-ink-2">报价预计工期</dt><dd className="mt-1">{quote.estimatedDays} 天</dd></div>
-            <div><dt className="text-ink-2">待确认费用</dt><dd className="mt-1">{hasPending ? "有，完整总价未确定" : quote.items.length === 0 ? "未提供明细，无法确认" : "接口未列出"}</dd></div>
+          <p className={`!mb-0 ${C.meta}`}>以下报价与本条接单的报价、需求和服务方编号一致。演示身份查询仍为 mock；来源标识不代表付款、开工或施工验收。</p>
+          <dl className="num m-0 grid gap-4 text-sm sm:grid-cols-2">
+            <div className="min-w-0"><dt className="text-[13px] text-ink-3">关联报价编号</dt><dd className="m-0 mt-1 break-all">{quote.id}</dd></div>
+            <div><dt className="text-[13px] text-ink-3">接口返回的已知金额小计</dt><dd className="m-0 mt-1 font-medium">{formatQuoteMoney(quote.knownTotalCents)}</dd></div>
+            <div><dt className="text-[13px] text-ink-3">报价预计工期</dt><dd className="m-0 mt-1">{quote.estimatedDays} 天</dd></div>
+            <div><dt className="text-[13px] text-ink-3">待确认费用</dt><dd className="m-0 mt-1">{hasPending ? "有，完整总价未确定" : quote.items.length === 0 ? "未提供明细，无法确认" : "接口未列出"}</dd></div>
           </dl>
-          <p className={`!mb-0 ${C.pageSub}`}>已知小计不代表最终总价；未知费用不按零计算，报价预计工期不代表实际排期。收起后再次查看会重新读取；登录或身份变化后请刷新接单。</p>
+          <p className={`!mb-0 ${C.meta}`}>已知小计不代表最终总价；未知费用不按零计算，报价预计工期不代表实际排期。收起后再次查看会重新读取；登录或身份变化后请刷新接单。</p>
           <ProviderQuoteDetails quote={quote} />
         </>
       )}
@@ -72,7 +72,7 @@ export function ProviderOrderQuote({ order }: { order: OrderSummaryDTO }) {
   return (
     <div className="mt-4 min-w-0">
       <button type="button" aria-expanded={expanded} aria-controls={panelId}
-        className={`${C.btnBase} ${C.btnSecondary} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`}
+        className={`${C.btnBase} ${C.btnSecondary}`}
         onClick={() => setExpanded(previous => !previous)}>
         {expanded ? "收起关联报价" : "查看已接受报价"}
         <span className="sr-only">，接单编号：{order.id}</span>

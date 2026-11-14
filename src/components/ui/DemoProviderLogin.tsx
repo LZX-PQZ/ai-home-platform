@@ -24,10 +24,10 @@ export async function requestDemoProviderSession(action: SessionAction): Promise
 
 export function DemoProviderSessionView({ state, onAction }: { state: DemoLoginState; onAction: (action: SessionAction) => void }) {
   const session = state.session;
-  return <section aria-label="演示服务方登录" className="border-b border-line bg-brand-soft/40 px-6 py-3">
-    <div className="mx-auto flex max-w-[1080px] flex-wrap items-center justify-between gap-3">
-      <div className="text-[12.5px] text-ink-2">
-        <div className="flex flex-wrap items-center gap-2">
+  return <section aria-label="演示服务方登录">
+    <div className="grid gap-3">
+      <div className="text-[14px] leading-relaxed text-ink-2">
+        <div className="flex flex-wrap items-center gap-2 text-ink">
           <Badge tone="accent">模拟身份 · 演示专用</Badge>
           <span role="status" aria-live="polite">
             {state.pending ? "正在确认演示登录状态…" : state.error ? "演示登录状态未确认"
@@ -35,16 +35,16 @@ export function DemoProviderSessionView({ state, onAction }: { state: DemoLoginS
                 : session?.status === "disabled" ? "演示登录未开启，请联系维护者。" : "尚未登录演示服务方"}
           </span>
         </div>
-        <p className="mt-1">演示账号不代表真实身份认证；上方角色切换仅切换导航。</p>
-        {session?.status === "signed_in" && !state.pending && !state.error && <p className="mt-1">
+        <p className="!mb-0 mt-1.5 text-[13px] text-ink-3">演示账号不代表真实身份认证；上方角色切换仅切换导航。</p>
+        {session?.status === "signed_in" && !state.pending && !state.error && <p className="!mb-0 mt-1 text-[13px]">
           有效至 <time dateTime={session.expiresAt}>{new Date(session.expiresAt).toLocaleTimeString("zh-CN")}</time>；报价是否提交成功以接口回执为准。
         </p>}
-        {state.error && <p role="alert" className="mt-1 text-danger">{state.error}</p>}
+        {state.error && <p role="alert" className="!mb-0 mt-1 text-danger">{state.error}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {session?.status === "signed_out" && !state.error && <Button size="sm" disabled={state.pending} onClick={() => onAction("POST")}>演示服务方登录</Button>}
         {session?.status === "signed_in" && !state.error && <>
-          <Link href="/provider" className="rounded-input px-2 py-1 text-sm text-brand focus-visible:outline focus-visible:outline-2">进入需求大厅</Link>
+          <Link href="/provider" className="rounded-input px-2 py-1.5 text-[14px] font-medium text-brand">进入需求大厅</Link>
           <Button size="sm" variant="secondary" disabled={state.pending} onClick={() => onAction("DELETE")}>退出演示登录</Button>
         </>}
         <Button size="sm" variant="ghost" disabled={state.pending} onClick={() => onAction("GET")}>刷新登录状态</Button>
@@ -53,7 +53,7 @@ export function DemoProviderSessionView({ state, onAction }: { state: DemoLoginS
   </section>;
 }
 
-export function DemoProviderLogin() {
+export function DemoProviderLogin({ onStatusChange }: { onStatusChange?: (signedIn: boolean) => void } = {}) {
   const [state, setState] = useState<DemoLoginState>({ session: null, pending: true, error: null });
   const requests = useRef({ active: true, busy: false, version: 0 });
   const run = useCallback(async (action: SessionAction) => {
@@ -94,5 +94,7 @@ export function DemoProviderLogin() {
     const timer = window.setTimeout(() => { void run("GET"); }, delay);
     return () => window.clearTimeout(timer);
   }, [state.session, run]);
+  const signedIn = !state.pending && !state.error && state.session?.status === "signed_in";
+  useEffect(() => { onStatusChange?.(signedIn); }, [signedIn, onStatusChange]);
   return <DemoProviderSessionView state={state} onAction={action => { void run(action); }} />;
 }

@@ -15,8 +15,8 @@ const QUICK_PHRASES = [
 function Avatar({ me }: { me: boolean }) {
   return (
     <span
-      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11.5px] font-semibold ${
-        me ? "bg-[#E7F3EF] text-[#0C5A47]" : "bg-[#FDF0E2] text-[#8A5A06]"
+      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[13px] font-semibold ${
+        me ? "bg-brand-soft text-brand-hover" : "bg-wood-soft text-warn"
       }`}
       aria-hidden
     >
@@ -51,7 +51,7 @@ export function ChatWindow() {
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)]">
       <Card>
         <SectionHead
-          title="AI 需求澄清"
+          title="对话"
           aside={
             <Badge tone={source === "live" ? "brand" : "accent"}>
               结果来源：{sourceLabel(source)}
@@ -63,7 +63,7 @@ export function ChatWindow() {
         </p>
 
         <ol
-          className="mt-3.5 grid max-h-[440px] gap-3 overflow-y-auto rounded-[12px] bg-[#F7FAFA] p-3.5"
+          className="mt-4 grid max-h-[480px] gap-3 overflow-y-auto rounded-card bg-canvas p-4"
           aria-live="polite"
         >
           {messages.map((message, index) => {
@@ -74,12 +74,12 @@ export function ChatWindow() {
                 <div
                   className={
                     me
-                      ? "max-w-[84%] rounded-[12px] rounded-tl-[4px] bg-[#0F6E56] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-white"
-                      : "max-w-[84%] rounded-[12px] rounded-tl-[4px] border border-[#E2E9EB] bg-white px-3.5 py-2.5 text-[13.5px] leading-relaxed text-[#16242B]"
+                      ? "max-w-[84%] rounded-card rounded-tl-[4px] bg-brand px-4 py-3 text-[15px] leading-relaxed text-white"
+                      : "max-w-[84%] rounded-card rounded-tl-[4px] border border-line bg-white px-4 py-3 text-[15px] leading-relaxed text-ink"
                   }
                 >
                   <span
-                    className={`mb-1 block text-[11px] ${me ? "text-white/65" : "text-[#7A8A90]"}`}
+                    className={`mb-1 block text-[13px] ${me ? "text-white/80" : "text-ink-3"}`}
                   >
                     {me ? "我" : "需求澄清助手"}
                   </span>
@@ -91,7 +91,7 @@ export function ChatWindow() {
           {sending && (
             <li className="flex items-start gap-2.5">
               <Avatar me={false} />
-              <div className="rounded-[12px] rounded-tl-[4px] border border-[#E2E9EB] bg-white px-3.5 py-2.5 text-[13.5px] text-[#7A8A90]">
+              <div className="rounded-card rounded-tl-[4px] border border-line bg-white px-4 py-3 text-[15px] text-ink-3">
                 助手正在整理需求…
               </div>
             </li>
@@ -116,7 +116,7 @@ export function ChatWindow() {
           </div>
         )}
 
-        <div className="mt-3.5 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           {QUICK_PHRASES.map((phrase) => (
             <button
               key={phrase}
@@ -133,7 +133,7 @@ export function ChatWindow() {
         <div className="mt-3 grid gap-2.5">
           <textarea
             aria-label="需求描述消息"
-            className={`min-h-[84px] resize-y ${C.input}`}
+            className={`min-h-[96px] resize-y ${C.input}`}
             placeholder="用一句话说说房子的情况和您想怎么改，例如：深圳 60 平老房，给老人住，卫生间太滑，预算 3-5 万，一个月内完工"
             value={text}
             onChange={(event) => setText(event.target.value)}

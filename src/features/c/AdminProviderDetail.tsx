@@ -4,11 +4,11 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import type { ProviderDTO } from "@/contracts";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Button, C, Empty } from "@/components/ui";
+import { Button, C, Empty, Explainer, PageHeader } from "@/components/ui";
 import { ProviderAvailability } from "./ProviderAvailability";
 import { adminProviderDetailFailureState, loadAdminProviderDetail, providerKindLabels, type AdminProviderDetailState } from "./admin-provider-detail";
 
-const linkClass = "rounded-md text-sm font-medium underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+const linkClass = "text-[15px] font-medium hover:underline";
 
 export function AdminProviderDetailContent({ providerId, state, onReload }: {
   providerId: ProviderDTO["id"];
@@ -24,25 +24,25 @@ export function AdminProviderDetailContent({ providerId, state, onReload }: {
       <nav aria-label="管理端返回导航">
         <Link href="/admin/tickets" className={linkClass}>返回售后工单</Link>
       </nav>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 id="admin-provider-title" className={C.pageTitle}>服务方资料</h1>
-          <p className={`${C.pageSub} break-all`}>服务方编号：{providerId}</p>
-        </div>
-        <Button onClick={onReload} variant="secondary" disabled={state.status === "loading"}
-          className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-          {state.status === "loading" ? "正在加载…" : state.status === "error" ? "重新加载" : "刷新资料"}
-        </Button>
-      </div>
-      <div className={`${C.note} ${C.noteWarn}`}>
+      <PageHeader
+        id="admin-provider-title"
+        title="服务方资料"
+        subtitle={<span className="break-all">服务方编号：{providerId}</span>}
+        aside={
+          <Button onClick={onReload} variant="secondary" disabled={state.status === "loading"}>
+            {state.status === "loading" ? "正在加载…" : state.status === "error" ? "重新加载" : "刷新资料"}
+          </Button>
+        }
+      />
+      <Explainer summary="模拟资料的用途与查询范围说明">
         <p>本页仅查看公开服务方资料，角色导航不代表登录鉴权。资料用于识别工单关联对象，不代表已核实责任、资质或履约能力。</p>
-        <p className="!mb-0">资料与工单分别查询，来源可能不同。查看资料不会派单、变更责任方或修改工单状态。</p>
-      </div>
+        <p>资料与工单分别查询，来源可能不同。查看资料不会派单、变更责任方或修改工单状态。</p>
+      </Explainer>
 
       {state.status === "loading" && <div className={C.card} role="status" aria-live="polite">正在读取服务方资料，请稍候…</div>}
       {state.status === "error" && (
         <div className={`${C.card} border-danger/30`} role="alert">
-          <h2>暂时无法加载服务方资料</h2>
+          <h2 className={C.sectionTitle}>暂时无法加载服务方资料</h2>
           <p className="!mb-0">{state.message}</p>
         </div>
       )}
@@ -50,7 +50,7 @@ export function AdminProviderDetailContent({ providerId, state, onReload }: {
         <>
           <div role="status" aria-live="polite">
             <StatusBadge label={result.source === "mock" ? "资料查询来源：模拟标识（mock）" : "资料查询来源：实时接口（live）"} />
-            <p className={`${C.pageSub} mt-2 !mb-0`}>
+            <p className={`${C.meta} mt-2 !mb-0`}>
               {result.source === "mock"
                 ? "本次服务方目录查询含模拟资料；基础资料与档期分别标明来源，模拟内容仅供演示。"
                 : "本次服务方列表由实时接口返回，来源标识不代表已认证或已核实资料。"}
@@ -63,13 +63,13 @@ export function AdminProviderDetailContent({ providerId, state, onReload }: {
               </h2>
               <div className="mt-3">
                 <StatusBadge label={provider.source === "mock" ? "基础资料来源：模拟标识（mock）" : provider.source === "live" ? "基础资料来源：实时接口（live）" : "基础资料来源未知"} />
-                <p className={`${C.pageSub} mt-2 !mb-0`}>{provider.source === "mock"
+                <p className={`${C.meta} mt-2 !mb-0`}>{provider.source === "mock"
                   ? "基础资料仅供演示，不代表真实机构或认证结果。"
                   : provider.source === "live" ? "基础资料由实时接口返回，不代表已认证或已核实资料。" : "接口未提供基础资料来源，不能由目录查询来源推断。"}</p>
               </div>
               <dl className="mt-4 grid gap-6 sm:grid-cols-2">
-                <div className="min-w-0"><dt className={C.meta}>所在城市</dt><dd className="mt-1 break-words [overflow-wrap:anywhere]">{provider.city.trim() ? provider.city : "城市未填写"}</dd></div>
-                <div><dt className={C.meta}>服务类型</dt><dd className="mt-1">{providerKindLabels[provider.kind]}</dd></div>
+                <div className="min-w-0"><dt className={C.meta}>所在城市</dt><dd className="m-0 mt-1 break-words [overflow-wrap:anywhere]">{provider.city.trim() ? provider.city : "城市未填写"}</dd></div>
+                <div><dt className={C.meta}>服务类型</dt><dd className="m-0 mt-1">{providerKindLabels[provider.kind]}</dd></div>
                 <div className="min-w-0 sm:col-span-2">
                   <dt className={C.meta}>资料标签</dt>
                   <dd className="mt-2">

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Explainer } from "@/components/ui";
 import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
 import { demandHref, formatYuan, projectHref } from "./demand-list";
 import {
@@ -80,10 +81,10 @@ export function PaymentsContent({ id, state, reload }: {
         <PageHeader title="节点付款" subtitle={`正在读取需求 ${id} 的付款计划…`} />
         <p className={C.meta} role="status">本页数据可能包含模拟数据，加载完成后显示具体来源。</p>
         <Card className="animate-pulse">
-          <div className="mb-4 h-4 w-1/3 rounded bg-[#EDF2F3]" />
+          <div className="mb-4 h-4 w-1/3 rounded bg-mist" />
           <div className="grid gap-3">
             {[0, 1].map((row) => (
-              <div key={row} className="h-16 w-full rounded bg-[#F4F7F8]" />
+              <div key={row} className="h-16 w-full rounded bg-canvas" />
             ))}
           </div>
         </Card>
@@ -151,14 +152,14 @@ export function PaymentsContent({ id, state, reload }: {
   return (
     <div>
       <div className="mb-3">
-        <Link href={projectHref(id)} className="text-[13px] font-medium text-[#0F6E56]">
+        <Link href={projectHref(id)} className="text-[14px] font-medium text-brand">
           ← 返回施工进度
         </Link>
       </div>
 
       <PageHeader
         title="节点付款"
-        subtitle={`需求 ${id} · ${summary.count} 个节点 · 数据来源 ${source ?? "未知"}`}
+        subtitle={`需求 ${id}，${summary.count} 个节点，数据来源 ${source ?? "未知"}`}
         aside={allSimulated ? <Badge tone="accent">全部为模拟数据</Badge> : null}
       />
 
@@ -185,10 +186,10 @@ export function PaymentsContent({ id, state, reload }: {
         ].map((item) => (
           <Card key={item.label} className="!p-4">
             <div className={C.meta}>{item.label}</div>
-            <div className="mt-1 text-[20px] font-bold tabular-nums tracking-tight text-[#16242B]">
+            <div className="num mt-1 text-[22px] font-bold leading-tight text-ink">
               {item.value}
             </div>
-            <div className="mt-0.5 truncate text-[11.5px] text-[#7A8A90]" title={item.hint}>
+            <div className="mt-0.5 truncate text-[13px] text-ink-3" title={item.hint}>
               {item.hint}
             </div>
           </Card>
@@ -202,19 +203,20 @@ export function PaymentsContent({ id, state, reload }: {
             aside={<span className={C.meta}>按接口返回顺序</span>}
           />
           <ol className="relative grid gap-3 pl-6">
-            <span className="absolute bottom-3 left-[7px] top-3 w-px bg-[#E2E9EB]" aria-hidden />
+            <span className="absolute bottom-3 left-[7px] top-3 w-px bg-line" aria-hidden />
             {nodes.map((node) => (
               <li key={node.id} className="relative">
                 <span
                   className={`absolute -left-6 top-3 h-[15px] w-[15px] rounded-full border-2 border-white ${
-                    node.tone === "brand" ? "bg-[#0F6E56]" : "bg-[#E8A23C]"
+                    node.tone === "brand" ? "bg-brand" : "bg-wood"
                   }`}
                   aria-hidden
                 />
-                <div className="rounded-[10px] border border-[#EEF3F4] bg-[#FCFDFD] px-3 py-2.5">
+                <div className="rounded-control border border-line bg-canvas/50 px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[13.5px] font-medium text-[#16242B]">
-                      节点 {node.index} · {node.stage}
+                    <span className="text-[15px] font-medium text-ink">
+                      <span className="num mr-2 text-[13px] font-normal text-ink-3">节点 {node.index}</span>
+                      {node.stage}
                     </span>
                     <span className="flex flex-wrap items-center justify-end gap-2">
                       <Badge tone={node.tone}>{node.statusLabel}</Badge>
@@ -230,17 +232,17 @@ export function PaymentsContent({ id, state, reload }: {
                     </span>
                   </div>
                   <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-[17px] font-semibold tabular-nums text-[#16242B]">
+                    <span className="num text-[18px] font-semibold text-ink">
                       {formatYuan(node.amountCents)}
                     </span>
-                    <span className="text-[11.5px] text-[#7A8A90]">
+                    <span className="num text-[13px] text-ink-3">
                       占总额 {node.sharePercent}%
-                      {node.simulated ? " · 模拟节点" : ""}
+                      {node.simulated ? "，模拟节点" : ""}
                     </span>
                   </div>
-                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[#EDF2F3]">
+                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-mist">
                     <div
-                      className="h-full rounded-full bg-[#0F6E56]/70"
+                      className="h-full rounded-full bg-brand/70"
                       style={{ width: `${Math.min(100, node.sharePercent)}%` }}
                     />
                   </div>
@@ -305,15 +307,12 @@ export function PaymentsContent({ id, state, reload }: {
             ) : null}
           </Card>
 
-          <Card>
-            <SectionHead title="关于资金安全" />
-            <Note tone="warn" title="当前为演示数据">
-              <p className="!mb-0">
-                本页不接支付通道、不做资金托管，所有节点 <code>simulated</code> 均为 true。
-                真实上线前必须接入持牌资金托管账户，且「已确认」只代表业主看过单据，不代表平台代收款项。
-              </p>
-            </Note>
-          </Card>
+          <Explainer summary="资金安全说明：当前为模拟演示，不涉及真实付款" className="!my-0">
+            <p>
+              本页不接支付通道、不做资金托管，所有节点 <code>simulated</code> 均为 true。
+              真实上线前必须接入持牌资金托管账户，且「已确认」只代表业主看过单据，不代表平台代收款项。
+            </p>
+          </Explainer>
         </div>
       </div>
     </div>

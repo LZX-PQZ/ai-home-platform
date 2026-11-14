@@ -17,7 +17,7 @@ export function QuoteOrderVerificationContent({ state, selectedQuoteId }: { stat
   if (state.status !== "ready") return null;
   const { data: order, meta } = state.result;
   if (order === null) return <p>本次只读查询：尚无实际接单关系；查询来源：{meta.source}。这仅代表本次读取结果；报价标为已接受也不会自动补造接单。</p>;
-  return <div className="rounded-control border border-line p-3">
+  return <div className="rounded-control border border-line bg-canvas p-4 text-[15px]">
     <p>{order.acceptedQuoteId === selectedQuoteId ? "只读核实成功：所选报价已有实际接单关系。" : "只读核实：已接受其他报价，不能改选。"}</p>
     <p className="break-all">接单编号：{order.id}；报价编号：{order.acceptedQuoteId}；服务方：{order.providerId}</p>
     <p>接单状态：{({ contracted: "已签约", in_progress: "施工中", completed: "已完成" } as const)[order.status]}；接单及查询来源：{order.source}{order.source === "mock" ? "（模拟来源，不代表生产服务方认证）" : "（已保存数据）"}。</p>

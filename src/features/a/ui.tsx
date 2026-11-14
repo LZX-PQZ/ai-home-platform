@@ -11,85 +11,17 @@
  */
 
 import Link from "next/link";
+import { C as SharedC, T as SharedT, PageHeader as SharedPageHeader } from "@/components/ui";
 
-/** 色板：与 app-preview 原型一致，墨绿主色 + 暖橙强调 + 中性灰 */
-export const T = {
-  brand: "#0F6E56",
-  brandHover: "#0C5A47",
-  brandSoft: "#E7F3EF",
-  accent: "#C2681C",
-  accentSoft: "#FDF0E2",
-  ink: "#16242B",
-  ink2: "#4A5A60",
-  muted: "#7A8A90",
-  line: "#E2E9EB",
-  surface: "#FFFFFF",
-  canvas: "#F3F6F7",
-  danger: "#B42318",
-  dangerSoft: "#FEF3F2",
-  warn: "#8A5A06",
-  warnSoft: "#FEF6E7",
-} as const;
-
-/* ---------- 类名常量：其他三位可直接复用 ---------- */
-export const C = {
-  card: "rounded-[14px] border border-[#E2E9EB] bg-white p-5 shadow-[0_1px_2px_rgba(22,36,43,0.04)]",
-  cardFlush: "rounded-[14px] border border-[#E2E9EB] bg-white shadow-[0_1px_2px_rgba(22,36,43,0.04)]",
-  sectionTitle: "text-[15px] font-semibold text-[#16242B]",
-  pageTitle: "text-[26px] font-bold tracking-tight text-[#16242B]",
-  pageSub: "text-[13.5px] leading-relaxed text-[#4A5A60]",
-  meta: "text-[12px] text-[#7A8A90]",
-
-  btnBase:
-    "inline-flex items-center justify-center gap-1.5 rounded-[10px] px-4 py-2 text-[13.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45",
-  btnPrimary: "bg-[#0F6E56] text-white hover:bg-[#0C5A47]",
-  btnSecondary:
-    "border border-[#E2E9EB] bg-white text-[#16242B] hover:border-[#0F6E56] hover:text-[#0F6E56]",
-  btnGhost: "text-[#0F6E56] hover:bg-[#E7F3EF]",
-  btnDanger: "border border-[#EAC7C3] bg-white text-[#B42318] hover:bg-[#FEF3F2]",
-  btnSm: "px-3 py-1.5 text-[12.5px]",
-
-  pill: "inline-flex items-center rounded-full border border-[#E2E9EB] bg-white px-3 py-1 text-[12px] text-[#4A5A60] hover:border-[#0F6E56] hover:text-[#0F6E56]",
-
-  badge: "inline-flex items-center gap-1 rounded-[7px] px-2 py-0.5 text-[11.5px] font-medium",
-  badgeBrand: "bg-[#E7F3EF] text-[#0C5A47]",
-  badgeAccent: "bg-[#FDF0E2] text-[#8A5A06]",
-  badgeNeutral: "bg-[#F0F3F4] text-[#4A5A60]",
-  badgeDanger: "bg-[#FEF3F2] text-[#B42318]",
-
-  label: "grid gap-1.5 text-[12.5px]",
-  labelText: "font-medium text-[#4A5A60]",
-  input:
-    "w-full rounded-[9px] border border-[#E2E9EB] bg-white px-3 py-2 text-[13.5px] text-[#16242B] outline-none placeholder:text-[#A8B4B8] focus:border-[#0F6E56] focus:ring-2 focus:ring-[#0F6E561F]",
-
-  note: "rounded-[10px] px-3 py-2.5 text-[12.5px] leading-relaxed",
-  noteWarn: "bg-[#FEF6E7] text-[#8A5A06]",
-  noteInfo: "bg-[#F0F3F4] text-[#4A5A60]",
-  noteDanger: "bg-[#FEF3F2] text-[#B42318]",
-  noteOk: "bg-[#E7F3EF] text-[#0C5A47]",
-} as const;
+/** 色板与类名常量已统一到 D 的共享出口（视觉基线 v2），这里转出以保持原有调用方式。 */
+export const T = SharedT;
+export const C = SharedC;
 
 /* ---------- 基础组件 ---------- */
 
 /** 页面头部：标题 + 说明 + 右侧动作，统一所有业主端页面的开屏样式 */
-export function PageHeader({
-  title,
-  subtitle,
-  aside,
-}: {
-  title: string;
-  subtitle?: string;
-  aside?: React.ReactNode;
-}) {
-  return (
-    <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className={`!mb-1 ${C.pageTitle}`}>{title}</h1>
-        {subtitle ? <p className={`!mb-0 ${C.pageSub}`}>{subtitle}</p> : null}
-      </div>
-      {aside}
-    </header>
-  );
+export function PageHeader(props: { title: string; subtitle?: string; aside?: React.ReactNode }) {
+  return <SharedPageHeader {...props} />;
 }
 
 export function Card({
@@ -214,7 +146,7 @@ export function Field({
     <label className={C.label}>
       <span className={C.labelText}>
         {label}
-        {hint ? <span className="ml-1 font-normal text-[#A8B4B8]">（{hint}）</span> : null}
+        {hint ? <span className="ml-1 font-normal text-ink-3">（{hint}）</span> : null}
       </span>
       {children}
     </label>
@@ -255,8 +187,8 @@ export function Empty({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="grid place-items-center gap-2 rounded-[12px] border border-dashed border-[#E2E9EB] bg-[#FAFCFC] px-4 py-8 text-center">
-      <p className="!mb-0 text-[13.5px] font-medium text-[#4A5A60]">{title}</p>
+    <div className="grid place-items-center gap-2 rounded-card border border-dashed border-line bg-white px-4 py-10 text-center">
+      <p className="!mb-0 text-[16px] font-medium text-ink-2">{title}</p>
       {hint ? <p className={`!mb-0 ${C.meta}`}>{hint}</p> : null}
       {action}
     </div>

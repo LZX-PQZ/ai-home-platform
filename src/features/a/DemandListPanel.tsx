@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Explainer, FulfillmentRuler } from "@/components/ui";
 import { Badge, Button, C, Card, Empty, Field, LinkButton, Note, PageHeader } from "./ui";
 import {
   STAGES,
@@ -11,7 +12,6 @@ import {
   isPostContract,
   paymentsHref,
   projectHref,
-  stageIndex,
   statusLabel,
   statusTone,
   type DemandStatusFilter,
@@ -23,37 +23,10 @@ import { useDemandList, type DemandListState } from "./useDemandList";
 function SkeletonCard() {
   return (
     <div className={`${C.card} animate-pulse`}>
-      <div className="mb-3 h-4 w-2/3 rounded bg-[#EDF2F3]" />
-      <div className="mb-2 h-3 w-full rounded bg-[#F4F7F8]" />
-      <div className="h-3 w-4/5 rounded bg-[#F4F7F8]" />
-      <div className="mt-4 h-3 w-1/2 rounded bg-[#EDF2F3]" />
-    </div>
-  );
-}
-
-/** 五阶段进度条：已走过的高亮成浅绿，当前阶段实心，未到的置灰 */
-function StageBar({ status }: { status: Parameters<typeof stageIndex>[0] }) {
-  const current = stageIndex(status);
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {STAGES.map((stage, index) => {
-        const done = index < current;
-        const active = index === current;
-        return (
-          <span
-            key={stage.status}
-            className={`rounded-full px-2 py-0.5 text-[11px] ${
-              active
-                ? "bg-[#0F6E56] font-medium text-white"
-                : done
-                  ? "bg-[#E7F3EF] text-[#0C5A47]"
-                  : "bg-[#F0F3F4] text-[#A8B4B8]"
-            }`}
-          >
-            {stage.label}
-          </span>
-        );
-      })}
+      <div className="mb-3 h-4 w-2/3 rounded bg-mist" />
+      <div className="mb-2 h-3 w-full rounded bg-canvas" />
+      <div className="h-3 w-4/5 rounded bg-canvas" />
+      <div className="mt-4 h-3 w-1/2 rounded bg-mist" />
     </div>
   );
 }
@@ -88,7 +61,7 @@ export function DemandListContent({ state, reload }: { state: DemandListState; r
         }
       />
 
-      <div className="mt-3 mb-3 flex flex-wrap items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <Badge tone={source === "live" ? "brand" : source === "mock" ? "accent" : "neutral"}>
           列表接口来源：{source ?? "未确认"}
         </Badge>
@@ -98,9 +71,9 @@ export function DemandListContent({ state, reload }: { state: DemandListState; r
       </div>
 
       {phase === "ready" && (
-        <div className="mb-3">
-          <Note tone={source === "mock" ? "warn" : "info"}>{listSourceNote(source)}</Note>
-        </div>
+        <Explainer summary="列表来源说明" className="!mt-0">
+          <p>{listSourceNote(source)}</p>
+        </Explainer>
       )}
 
       {phase === "loading" && (
@@ -166,9 +139,9 @@ export function DemandListContent({ state, reload }: { state: DemandListState; r
               action={<Button variant="secondary" size="sm" onClick={clearFilters}>查看全部已加载需求</Button>}
             />
           ) : null}
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {filteredItems.map((demand) => (
-              <Card key={demand.id} className="flex flex-col gap-3">
+              <Card key={demand.id} className="flex flex-col gap-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -180,28 +153,28 @@ export function DemandListContent({ state, reload }: { state: DemandListState; r
                   <Badge tone={statusTone(demand.status)}>{statusLabel(demand.status)}</Badge>
                 </div>
 
-                <p className="!mb-0 line-clamp-2 text-[13px] leading-relaxed text-[#4A5A60]">
+                <p className="!mb-0 line-clamp-2 text-[15px] leading-relaxed text-ink-2">
                   {demand.description}
                 </p>
 
-                <StageBar status={demand.status} />
+                <FulfillmentRuler status={demand.status} compact />
 
-                <dl className="grid grid-cols-3 gap-2 rounded-[10px] bg-[#F7FAFA] px-3 py-2.5">
+                <dl className="num !mb-0 grid grid-cols-3 gap-3">
                   <div>
                     <dt className={C.meta}>预算</dt>
-                    <dd className="!mb-0 text-[13px] font-medium text-[#16242B]">
+                    <dd className="!mb-0 text-[17px] font-semibold leading-snug text-ink">
                       {formatBudget(demand.budgetMinCents, demand.budgetMaxCents)}
                     </dd>
                   </div>
                   <div>
                     <dt className={C.meta}>期望工期</dt>
-                    <dd className="!mb-0 text-[13px] font-medium text-[#16242B]">
+                    <dd className="!mb-0 text-[17px] font-semibold leading-snug text-ink">
                       {demand.desiredDays} 天
                     </dd>
                   </div>
                   <div>
                     <dt className={C.meta}>面积</dt>
-                    <dd className="!mb-0 text-[13px] font-medium text-[#16242B]">
+                    <dd className="!mb-0 text-[17px] font-semibold leading-snug text-ink">
                       {demand.areaM2} ㎡
                     </dd>
                   </div>

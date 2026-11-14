@@ -18,25 +18,25 @@ type QuotePageState =
 
 export function QuotePageContent({ state, retry, demo = false }: { state: QuotePageState; retry: () => void; demo?: boolean }) {
   if (state.status === "ready") return (
-    <div className="space-y-4">
-      {demo && <Card>
-        <Badge tone="accent">固定演示 · mock · 只读</Badge>
-        <h2 className="mt-4 text-xl">固定样例报价，无需登录</h2>
-        <p className="mb-0 text-sm text-ink-2">此处展示固定模拟需求、服务方和报价，不是当前账号的真实报价，也不会读取数据库中的同名需求。查看自己创建的需求报价仍需业主登录；本页不提供提交、接受或付款操作。</p>
-      </Card>}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-line bg-white p-4">
-        <div className="text-sm text-ink-2" role="status" aria-live="polite" aria-atomic="true">
-          <p className="mb-1">{demo ? `本次读取完成，展示 ${state.data.response.data.length} 份固定模拟报价，仅供演示。` : quoteReadFeedback(state.data)}</p>
-          <p className="mb-0 text-xs text-ink-3">
-            本次读取完成时间（本机时间）：<time dateTime={new Date(state.readAt).toISOString()}>{new Date(state.readAt).toLocaleString("zh-CN", { hour12: false })}</time>
-            ；不代表报价的提交时间。
-          </p>
-          <p className="mb-0 mt-1 text-xs text-ink-3">返回此页面时会重新读取，也可点击“刷新报价”。</p>
+    <QuoteComparison data={state.data} intro={<>
+      {demo && <section className="rounded-control border border-wood/25 bg-wood-soft px-4 py-3" aria-label="固定演示说明">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="accent">固定演示 · mock · 只读</Badge>
+          <h2 className="!mb-0 text-[16px] font-semibold text-ink">固定样例报价，无需登录</h2>
         </div>
-        <Button variant="secondary" onClick={retry}>刷新报价</Button>
+        <p className="!mb-0 mt-2 text-[14px] text-ink-2">此处展示固定模拟需求、服务方和报价，不是当前账号的真实报价，也不会读取数据库中的同名需求。查看自己创建的需求报价仍需业主登录；本页不提供提交、接受或付款操作。</p>
+      </section>}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-line bg-white px-4 py-3">
+        <div className="min-w-0 text-[14px] text-ink-2" role="status" aria-live="polite" aria-atomic="true">
+          <p className="mb-1">{demo ? `本次读取完成，展示 ${state.data.response.data.length} 份固定模拟报价，仅供演示。` : quoteReadFeedback(state.data)}</p>
+          <p className="mb-0 text-[13px] text-ink-3">
+            本次读取完成时间（本机时间）：<time dateTime={new Date(state.readAt).toISOString()}>{new Date(state.readAt).toLocaleString("zh-CN", { hour12: false })}</time>
+            ；不代表报价的提交时间。返回此页面时会重新读取，也可点击“刷新报价”。
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={retry}>刷新报价</Button>
       </div>
-      <QuoteComparison data={state.data} />
-    </div>
+    </>} />
   );
   return (
     <Card>
@@ -48,7 +48,7 @@ export function QuotePageContent({ state, retry, demo = false }: { state: QuoteP
         {state.status === "error" && <p role="alert">{state.message}</p>}
         <div className="flex flex-wrap items-center gap-4">
           <Button disabled={state.status === "loading"} onClick={retry}>{state.status === "loading" ? "加载中…" : "重新加载"}</Button>
-          <Link href="/owner">返回需求列表 →</Link>
+          <Link className="text-[15px] font-medium" href="/owner">返回需求列表</Link>
         </div>
       </div>
     </Card>
@@ -82,8 +82,9 @@ function QuotePageSession({ demandId }: { demandId: string }) {
 
   // 更换需求或刷新立即隐藏旧报价，迟到的响应不能覆盖新需求。
   const state: QuotePageState = result?.id === demandId && result.attempt === attempt ? result.state : { status: "loading" };
-  return <div className="space-y-4">
-    {!demo && <QuoteAcceptance data={state.status === "ready" ? state.data : null} onBusy={onBusy} refresh={retry} />}
+  // 先看明细，再在页面底部接受报价。
+  return <div className="space-y-7">
     <QuotePageContent state={state} retry={retry} demo={demo} />
+    {!demo && <QuoteAcceptance data={state.status === "ready" ? state.data : null} onBusy={onBusy} refresh={retry} />}
   </div>;
 }

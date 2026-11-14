@@ -80,10 +80,10 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
         <PageHeader title="施工进度" subtitle={`正在读取需求 ${id} 的${version === undefined ? "最新排期" : `排期版本 v${version}`}…`} />
         <p className={C.meta} role="status">本页数据可能包含模拟数据，加载完成后显示具体来源。</p>
         <Card className="animate-pulse">
-          <div className="mb-4 h-4 w-1/3 rounded bg-[#EDF2F3]" />
+          <div className="mb-4 h-4 w-1/3 rounded bg-mist" />
           <div className="grid gap-2">
             {[0, 1, 2].map((row) => (
-              <div key={row} className="h-9 w-full rounded bg-[#F4F7F8]" />
+              <div key={row} className="h-9 w-full rounded bg-canvas" />
             ))}
           </div>
         </Card>
@@ -161,7 +161,7 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
   if (!data || data.tasks.length === 0) {
     return (
       <div>
-        <PageHeader title="施工进度" subtitle={data ? `需求 ${id} · 排期版本 v${data.version}` : "未取得排期数据"} />
+        <PageHeader title="施工进度" subtitle={data ? `需求 ${id}，排期版本 v${data.version}` : "未取得排期数据"} />
         <p className={C.meta}>排期来源：{source ?? "未确认"}{source === "mock" ? "（模拟数据）" : ""}</p>
         <Empty
           title="接口没有返回任何工序"
@@ -189,14 +189,14 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
   return (
     <div>
       <div className="mb-3">
-        <Link href={demandHref(id)} className="text-[13px] font-medium text-[#0F6E56]">
+        <Link href={demandHref(id)} className="text-[14px] font-medium text-brand">
           ← 返回需求详情
         </Link>
       </div>
 
       <PageHeader
         title="施工进度"
-        subtitle={`需求 ${data.demandId} · 排期版本 v${data.version} · 数据来源 ${source ?? "未知"}`}
+        subtitle={`需求 ${data.demandId}，排期版本 v${data.version}，数据来源 ${source ?? "未知"}`}
         aside={
           <div className="flex items-center gap-2">
             <Badge tone={status.tone}>{status.label}</Badge>
@@ -220,10 +220,10 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
         ].map((item) => (
           <Card key={item.label} className="!p-4">
             <div className={C.meta}>{item.label}</div>
-            <div className="mt-1 text-[22px] font-bold tracking-tight text-[#16242B]">
+            <div className="num mt-1 text-[24px] font-bold leading-tight text-ink">
               {item.value}
             </div>
-            <div className="mt-0.5 truncate text-[11.5px] text-[#7A8A90]" title={item.hint}>
+            <div className="mt-0.5 truncate text-[13px] text-ink-3" title={item.hint}>
               {item.hint}
             </div>
           </Card>
@@ -234,15 +234,15 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
         <SectionHead
           title="工序时间轴"
           aside={
-            <span className="text-[12px] text-[#7A8A90]">
+            <span className="text-[13px] text-ink-3">
               单位：天（第 1 天 = 开工首日）
             </span>
           }
         />
         <p className={`mb-3 ${C.meta}`}>完成比例 = 已完成工序的计划时长 ÷ 全部工序的计划时长。100% 仅表示工序状态全部为已完成，不代表验收通过。</p>
-        <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-[#EDF2F3]" role="progressbar" aria-label="工序完成比例" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-mist" role="progressbar" aria-label="工序完成比例" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
           <div
-            className="h-full rounded-full bg-[#0F6E56] transition-[width] duration-500"
+            className="h-full rounded-full bg-brand transition-[width] duration-500"
             style={{ width: `${percent}%` }}
           />
         </div>
@@ -258,13 +258,13 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
               return (
                 <li
                   key={task.id}
-                  className="rounded-[10px] border border-[#EEF3F4] bg-[#FCFDFD] px-3 py-2.5"
+                  className="rounded-control border border-line bg-canvas/50 px-4 py-3"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[13.5px] font-medium text-[#16242B]">{task.name}</span>
+                    <span className="text-[15px] font-medium text-ink">{task.name}</span>
                     <Badge tone={taskStatusTone(task.status)}>{taskStatusLabel(task.status)}</Badge>
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-[#7A8A90]">
+                  <div className="num mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-3">
                     <span>{dayRangeLabel(task)}</span>
                     <span>工期 {task.durationDays} 天</span>
                     <span>
@@ -289,10 +289,10 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
             ) : (
               <ul className="grid gap-2">
                 {ready.map((task) => (
-                  <li key={task.id} className="flex items-center justify-between gap-2 text-[13px]">
-                    <span className="font-medium text-[#16242B]">{task.name}</span>
-                    <span className="text-[11.5px] text-[#7A8A90]">
-                      计划 {dayRangeLabel(task)} · {task.durationDays} 天
+                  <li key={task.id} className="flex items-center justify-between gap-2 text-[15px]">
+                    <span className="font-medium text-ink">{task.name}</span>
+                    <span className="text-[13px] text-ink-3">
+                      计划 {dayRangeLabel(task)}，{task.durationDays} 天
                     </span>
                   </li>
                 ))}

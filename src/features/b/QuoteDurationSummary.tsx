@@ -15,11 +15,11 @@ export function QuoteDurationSummary({ demand, quote }: { demand: DemandDTO; quo
   }
 
   return (
-    <section className="rounded-xl border border-line bg-canvas p-4" aria-label="与期望工期对照">
-      <h4 className="text-sm font-semibold text-ink">与期望工期对照</h4>
-      {comparison.position !== "unavailable" && <p className="mb-0 mt-2 text-xs text-ink-3">需求期望：{demand.desiredDays} 天 · 报价预计：{quote.estimatedDays} 天</p>}
-      <p className={`mb-0 mt-2 text-sm ${comparison.position === "longer" ? "font-semibold text-amber-900" : "text-ink-2"}`}>{message}</p>
-      <p className="mb-0 mt-2 text-xs text-ink-3">仅对照预计施工天数，不代表可立即开工、档期已确认或承诺按期完工；施工范围和起止日期仍需双方确认。</p>
+    <section className={`rounded-control border p-4 ${comparison.position === "longer" ? "border-warn/25 bg-warn-soft" : "border-line bg-canvas"}`} aria-label="与期望工期对照">
+      <h4 className="text-[14px] font-semibold text-ink">与期望工期对照</h4>
+      {comparison.position !== "unavailable" && <p className="num mb-0 mt-2 text-[13px] text-ink-3">需求期望：{demand.desiredDays} 天 · 报价预计：{quote.estimatedDays} 天</p>}
+      <p className={`num mb-0 mt-2 text-[15px] ${comparison.position === "longer" ? "font-semibold text-warn" : "text-ink-2"}`}>{message}</p>
+      <p className="mb-0 mt-2 text-[13px] text-ink-3">仅对照预计施工天数，不代表可立即开工、档期已确认或承诺按期完工；施工范围和起止日期仍需双方确认。</p>
     </section>
   );
 }

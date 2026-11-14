@@ -4,14 +4,14 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import type { DemandDTO } from "@/contracts";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Button, C, Empty } from "@/components/ui";
+import { Button, C, Empty, Explainer, PageHeader } from "@/components/ui";
 import { DemandSource } from "./DemandSource";
 import { DemandAccessRecovery } from "./DemandAccessRecovery";
 import { formatBudget, renovationLabels } from "./demand-hall";
 import { adminDemandStatusLabels } from "./admin-demand-overview";
 import { adminDemandDetailFailureState, loadAdminDemandDetail, type AdminDemandDetailState } from "./admin-demand-detail";
 
-const linkClass = "rounded-md text-sm font-medium underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+const linkClass = "text-[15px] font-medium hover:underline";
 
 export function AdminDemandDetailContent({ demandId, state, onReload }: {
   demandId: DemandDTO["id"];
@@ -27,27 +27,27 @@ export function AdminDemandDetailContent({ demandId, state, onReload }: {
         <Link href="/admin" className={linkClass}>返回平台看板</Link>
         <Link href="/admin/tickets" className={linkClass}>返回售后工单</Link>
       </nav>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 id="admin-demand-detail-title" className={C.pageTitle}>管理端需求详情</h1>
-          <p className={`${C.pageSub} break-all`}>需求编号：{demandId}</p>
-        </div>
-        <Button onClick={onReload} variant="secondary" disabled={state.status === "loading"}
-          className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-          {state.status === "loading" ? "正在加载…" : state.status === "error" ? "重新加载" : "刷新详情"}
-        </Button>
-      </div>
-      <div className={`${C.note} ${C.noteWarn}`}>
+      <PageHeader
+        id="admin-demand-detail-title"
+        title="管理端需求详情"
+        subtitle={<span className="break-all">需求编号：{demandId}</span>}
+        aside={
+          <Button onClick={onReload} variant="secondary" disabled={state.status === "loading"}>
+            {state.status === "loading" ? "正在加载…" : state.status === "error" ? "重新加载" : "刷新详情"}
+          </Button>
+        }
+      />
+      <Explainer summary="模拟数据、读取权限与只读范围说明">
         <p>当前为平台管理演示入口，可能包含模拟数据，来源以加载后的标识为准。角色导航不代表登录鉴权。</p>
         <p>已发布需求公开可读；非公开需求可由所属业主读取，或在没有业主会话时由具有该需求实际接单关系的服务方读取。管理员专属读取尚未接入，切换角色或从工单进入不会扩大可见范围。</p>
         <p>登录、退出或身份变化后，请点击“刷新详情”（加载失败时点击“重新加载”）。双会话时业主身份优先，失效业主会话不会回退为服务方权限；退出后是否可读，以刷新后的接口授权结果为准。</p>
-        <p className="!mb-0">本页仅供查看需求，不能修改需求、接单或处理工单。需求状态由接口提供；关联需求不代表已确认责任服务方或售后处理结果。</p>
-      </div>
+        <p>本页仅供查看需求，不能修改需求、接单或处理工单。需求状态由接口提供；关联需求不代表已确认责任服务方或售后处理结果。</p>
+      </Explainer>
 
       {state.status === "loading" && <div className={C.card} role="status" aria-live="polite">正在读取需求详情，请稍候…</div>}
       {state.status === "error" && (
         <div className={`${C.card} border-danger/30`} role="alert">
-          <h2>暂时无法加载需求详情</h2>
+          <h2 className={C.sectionTitle}>暂时无法加载需求详情</h2>
           <p className="!mb-0">{state.message}</p>
           {state.canExitOwnerSession && <DemandAccessRecovery />}
         </div>
@@ -61,7 +61,7 @@ export function AdminDemandDetailContent({ demandId, state, onReload }: {
         <>
           <div role="status" aria-live="polite">
             <StatusBadge label={response.meta.source === "mock" ? "详情接口来源：模拟标识（mock）" : "详情接口来源：实时接口（live）"} />
-            <p className={`${C.pageSub} mt-2 !mb-0`}>当前需求来源以记录内标识为准，未提供时显示未知；模拟需求仅供演示，来源标识不代表已完成身份鉴权。</p>
+            <p className={`${C.meta} mt-2 !mb-0`}>当前需求来源以记录内标识为准，未提供时显示未知；模拟需求仅供演示，来源标识不代表已完成身份鉴权。</p>
           </div>
           <article aria-labelledby="admin-demand-summary-title" className={`${C.card} min-w-0`}>
             <div className="mb-4 flex flex-wrap gap-2">
@@ -69,18 +69,18 @@ export function AdminDemandDetailContent({ demandId, state, onReload }: {
               <DemandSource source={demand.source} />
             </div>
             <h2 id="admin-demand-summary-title" className={`${C.sectionTitle} break-words [overflow-wrap:anywhere]`}>
-              {demand.city.trim() ? demand.city : "城市未填写"} · {renovationLabels[demand.renovationType]}
+              {demand.city.trim() ? demand.city : "城市未填写"} {renovationLabels[demand.renovationType]}
             </h2>
             <h3 className="mt-6 font-semibold">需求描述</h3>
             <p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
               {demand.description.trim() ? demand.description : "暂未填写需求描述。"}
             </p>
             <dl className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <div className="min-w-0"><dt className={C.meta}>所在城市</dt><dd className="mt-1 break-words [overflow-wrap:anywhere]">{demand.city.trim() ? demand.city : "城市未填写"}</dd></div>
-              <div><dt className={C.meta}>改造类型</dt><dd className="mt-1">{renovationLabels[demand.renovationType]}</dd></div>
-              <div><dt className={C.meta}>改造面积</dt><dd className="mt-1">{demand.areaM2} 平方米</dd></div>
-              <div><dt className={C.meta}>期望工期</dt><dd className="mt-1">{demand.desiredDays} 天</dd></div>
-              <div className="sm:col-span-2"><dt className={C.meta}>业主预算（人民币）</dt><dd className="mt-1 break-words text-xl font-semibold text-brand">{formatBudget(demand.budgetMinCents)} – {formatBudget(demand.budgetMaxCents)}</dd></div>
+              <div className="min-w-0"><dt className={C.meta}>所在城市</dt><dd className="m-0 mt-1 break-words [overflow-wrap:anywhere]">{demand.city.trim() ? demand.city : "城市未填写"}</dd></div>
+              <div><dt className={C.meta}>改造类型</dt><dd className="m-0 mt-1">{renovationLabels[demand.renovationType]}</dd></div>
+              <div><dt className={C.meta}>改造面积</dt><dd className="m-0 mt-1">{demand.areaM2} 平方米</dd></div>
+              <div><dt className={C.meta}>期望工期</dt><dd className="m-0 mt-1">{demand.desiredDays} 天</dd></div>
+              <div className="sm:col-span-2"><dt className={C.meta}>业主预算（人民币）</dt><dd className="m-0 mt-1 break-words text-[22px] font-semibold text-brand">{formatBudget(demand.budgetMinCents)} – {formatBudget(demand.budgetMaxCents)}</dd></div>
             </dl>
             <p className={`${C.pageSub} mt-4 !mb-0`}>以上为业主预算与期望工期，不代表成交金额、实际工期或履约完成证明。</p>
           </article>
