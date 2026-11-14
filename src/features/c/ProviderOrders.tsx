@@ -8,23 +8,31 @@ import { formatQuoteMoney } from "./quote-form";
 import { QuoteSource } from "./QuoteSource";
 import { ProviderQuoteDetails } from "./ProviderQuoteDetails";
 import {
+  defaultProviderQuoteFilters,
+  filterProviderQuotes,
   loadProviderOrders,
   providerOrderStatusLabels,
   providerOrdersErrorMessage,
+  providerQuoteStatusOptions,
   summarizeProviderOrders,
   type ProviderOrdersState,
+  type ProviderQuoteFilters,
 } from "./provider-orders";
 
 function QuoteStatus({ status }: { status: keyof typeof providerOrderStatusLabels }) {
   return <StatusBadge label={providerOrderStatusLabels[status]} />;
 }
 
-export function ProviderOrdersContent({ state, onReload }: {
+export function ProviderOrdersContent({ state, onReload, filters = defaultProviderQuoteFilters, onFiltersChange = () => {} }: {
   state: ProviderOrdersState;
   onReload: () => void;
+  filters?: ProviderQuoteFilters;
+  onFiltersChange?: (filters: ProviderQuoteFilters) => void;
 }) {
   const response = state.status === "ready" ? state.response : null;
   const summary = response ? summarizeProviderOrders(response.data) : null;
+  const visibleQuotes = response ? filterProviderQuotes(response.data, filters) : [];
+  const hasFilters = filters.status !== "all" || filters.keyword.length > 0;
 
   return (
     <section aria-labelledby="provider-orders-title" className="space-y-6">
@@ -68,7 +76,7 @@ export function ProviderOrdersContent({ state, onReload }: {
 
           <section aria-labelledby="provider-order-counts-title">
             <h2 id="provider-order-counts-title" className={C.sectionTitle}>本次查询的本人报价状态</h2>
-            <p className={C.pageSub}>仅统计本次返回的本人报价；记录按编号排列，不代表提交时间或成交顺序。</p>
+            <p className={C.pageSub}>仅统计本次返回的全部本人报价，不随下方筛选变化；记录按编号排列，不代表提交时间或成交顺序。</p>
             <dl aria-label="本人报价状态数量" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {(["draft", "submitted", "accepted", "rejected"] as const).map((status) => (
                 <div key={status} className={C.card}>
@@ -79,11 +87,38 @@ export function ProviderOrdersContent({ state, onReload }: {
             </dl>
           </section>
 
+          <section aria-labelledby="provider-quote-filters-title" className={`${C.card} space-y-4`}>
+            <h3 id="provider-quote-filters-title" className={C.sectionTitle}>筛选本人报价</h3>
+            <p id="provider-quote-filters-help" className={`!mb-0 ${C.pageSub}`}>状态与编号同时匹配。编号支持部分文字，不区分大小写，忽略输入首尾空格；仅搜索本次读取的报价编号和关联需求编号。刷新保留筛选条件。</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="min-w-0">
+                <label htmlFor="provider-quote-status" className={C.label}>报价状态</label>
+                <select id="provider-quote-status" className={C.input} value={filters.status}
+                  aria-describedby="provider-quote-filters-help"
+                  onChange={event => onFiltersChange({ ...filters, status: event.target.value as ProviderQuoteFilters["status"] })}>
+                  {providerQuoteStatusOptions.map(status => <option key={status} value={status}>{status === "all" ? "全部报价" : providerOrderStatusLabels[status]}</option>)}
+                </select>
+              </div>
+              <div className="min-w-0">
+                <label htmlFor="provider-quote-keyword" className={C.label}>报价或需求编号</label>
+                <input id="provider-quote-keyword" type="search" className={C.input} value={filters.keyword}
+                  aria-describedby="provider-quote-filters-help" autoComplete="off"
+                  onChange={event => onFiltersChange({ ...filters, keyword: event.target.value })} />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p role="status" aria-live="polite" className={`!mb-0 ${C.pageSub}`}>显示 {visibleQuotes.length} / {response.data.length} 条本人报价。</p>
+              <Button variant="secondary" size="sm" disabled={!hasFilters} onClick={() => onFiltersChange(defaultProviderQuoteFilters)}>清除报价筛选</Button>
+            </div>
+          </section>
+
           {response.data.length === 0 ? (
             <Empty title="当前服务方暂无报价记录" hint="本次已验证服务方会话，未查到本人已保存的报价；可前往需求大厅查看公开需求。" />
+          ) : visibleQuotes.length === 0 ? (
+            <Empty title="没有符合筛选条件的报价" hint="本次已读取到本人报价，可调整状态或编号，或清除报价筛选查看全部记录。" />
           ) : (
             <ul aria-label="本人报价列表" className="space-y-4">
-              {response.data.map((quote) => {
+              {visibleQuotes.map((quote) => {
                 const hasPending = quote.pendingItems.length > 0 || quote.items.some((item) => item.unitPriceCents === null || item.amountCents === null);
                 return (
                 <li key={quote.id} className={C.card}>
@@ -91,7 +126,7 @@ export function ProviderOrdersContent({ state, onReload }: {
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                       <QuoteStatus status={quote.status} />
                       <QuoteSource source={quote.source} />
-                      <span className={C.meta}>报价编号：{quote.id}</span>
+                      <span className={`${C.meta} min-w-0 break-all`}>报价编号：{quote.id}</span>
                     </div>
                     <h2 id={`provider-quote-${quote.id}`} className="break-all">关联需求：{quote.demandId}</h2>
                     <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
@@ -134,6 +169,7 @@ export function ProviderOrdersContent({ state, onReload }: {
 export function ProviderOrders() {
   const [state, setState] = useState<ProviderOrdersState>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
+  const [filters, setFilters] = useState<ProviderQuoteFilters>(defaultProviderQuoteFilters);
 
   useEffect(() => {
     let active = true;
@@ -149,5 +185,5 @@ export function ProviderOrders() {
     setReloadKey((previous) => previous + 1);
   }
 
-  return <ProviderOrdersContent state={state} onReload={reload} />;
+  return <ProviderOrdersContent state={state} onReload={reload} filters={filters} onFiltersChange={setFilters} />;
 }
