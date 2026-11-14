@@ -25,13 +25,24 @@ test("首次未请求或首次对话失败时，无结果也提供手动入口�
   assert.doesNotMatch(html, /草稿来源：|需求已创建|打开需求详情/);
 });
 
-test("对话成功但未提供草稿时仍有手动入口，保留缺失字段说明", () => {
+test("模拟追问不将固定示例当作用户缺失信息，并提供手动填写入口", () => {
   const result = ChatResult.parse({ reply: "测试追问", ready: false, draft: null, missingFields: ["city"] });
   const html = render(result, "mock");
   assert.match(html, /手动填写需求单/);
+  assert.match(html, /模拟追问示例/);
+  assert.match(html, /不代表您没有提供这些信息/);
+  assert.match(html, /不会自动整理需求/);
+  assert.match(html, /城市/);
+  assert.doesNotMatch(html, /还缺这|需求已创建/);
+});
+
+test("真实追问保留接口返回的缺失信息，不误标模拟模式", () => {
+  const result = ChatResult.parse({ reply: "请补充城市", ready: false, draft: null, missingFields: ["city"] });
+  const html = render(result, "live");
   assert.match(html, /还缺这 1 项信息/);
   assert.match(html, /城市/);
-  assert.doesNotMatch(html, /需求已创建/);
+  assert.match(html, /手动填写需求单/);
+  assert.doesNotMatch(html, /模拟追问示例|不会自动整理需求|需求已创建/);
 });
 
 test("有契约草稿时直接展示可核对字段和来源，不重复提供手动入口", () => {
