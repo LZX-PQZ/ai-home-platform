@@ -2,6 +2,7 @@ import * as React from "react";
 import Link from "next/link";
 import { QuoteTable } from "@/components/QuoteTable";
 import { formatQuoteMoney } from "@/features/b/format-quote";
+import { QuoteItemGapWarnings } from "@/features/b/QuoteItemGapWarnings";
 import type { loadQuoteComparison } from "@/features/b/load-quotes";
 
 export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof loadQuoteComparison>> }) {
@@ -36,6 +37,7 @@ export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof load
           <p>{providerWarning}</p>
           <p className="mb-0">服务方资料未取得，来源未知；以下按报价中的服务方编号展示。</p>
         </div>}
+        <QuoteItemGapWarnings demandId={demand.id} quotes={response.data} />
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="mb-0" id="quote-list">报价明细对比 · {response.data.length} 份</h2>
           <span className="text-sm text-slate-500">展示顺序不代表价格或质量排名</span>
