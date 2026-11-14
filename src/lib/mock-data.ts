@@ -12,9 +12,9 @@ export const providers = Provider.array().parse([
  { id:"provider-f", name:"邻城施工队（模拟）", city:"广州", kind:"construction", tags:["局部改造"], rating:4.7 },
 ]);
 export const quotes = Quote.array().parse([
- { id:"quote-a", demandId:"demo-demand", providerId:"provider-a", estimatedDays:25, status:"submitted",
+ { id:"quote-a", demandId:"demo-demand", providerId:"provider-a", estimatedDays:25, status:"submitted", source:"mock",
  items:[{code:"bathroom",name:"浴室改造套餐",unit:"job",quantity:1,unitPriceCents:1200000,amountCents:1200000,note:"模拟，实际范围需现场确认"},{code:"haul",name:"垃圾清运",unit:"job",quantity:1,unitPriceCents:null,amountCents:null,note:"待商家补充"}],knownTotalCents:1200000,pendingItems:["垃圾清运"] },
- { id:"quote-b", demandId:"demo-demand", providerId:"provider-b", estimatedDays:28, status:"submitted",
+ { id:"quote-b", demandId:"demo-demand", providerId:"provider-b", estimatedDays:28, status:"submitted", source:"mock",
  items:[{code:"bathroom",name:"浴室改造套餐",unit:"job",quantity:1,unitPriceCents:1250000,amountCents:1250000,note:"模拟，实际范围需现场确认"},{code:"haul",name:"垃圾清运",unit:"job",quantity:1,unitPriceCents:50000,amountCents:50000,note:"含清运"}],knownTotalCents:1300000,pendingItems:[] },
 ]);
 export const schedule = Schedule.parse({demandId:"demo-demand",version:1,tasks:[

@@ -65,6 +65,8 @@ export const QuoteItem = z.object({
 });
 export const Quote = z.object({
   id: Id, demandId: Id, providerId: Id, items: z.array(QuoteItem),
+  // 旧 DTO 可缺省；数据库输出必须显式读取持久化来源，缺省不能解释为 live。
+  source: Source.optional(),
   knownTotalCents: Money, pendingItems: z.array(z.string()), estimatedDays: z.number().int().positive(),
   status: z.enum(["draft", "submitted", "accepted", "rejected"]),
 });

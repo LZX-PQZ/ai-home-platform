@@ -31,3 +31,11 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [ ] 需求 POST 与查询隔离：POST 当前固定归属 demo-owner；后续改用当前业主，并确认列表/详情的角色访问范围，避免读取或创建跨用户数据。
 
 本轮只交付业主会话读取及报价读取授权，上述需求写入鉴权尚未修复。具体接口与验收见 `docs/requests/D-owner-quote-read-auth.md`。
+
+## 报价来源基础设施（2026-11-14）
+
+- [x] Quote.source 非空、默认 mock；公共 Quote 可选 source；固定演示报价显式标 mock。
+- [x] 持久化来源严格校验、混合/空列表来源汇总；真实旧表升级、回执关联保留和重复同步测试。
+- [ ] B 交接：创建、重放、GET 输出持久化来源并调用汇总工具；这是 PR #79 合入前的必要接入，D 未改写 B 的私有内核。
+
+本次来源基础设施不补齐业主登录入口，也不改变上述需求修改、删除鉴权待办。实现及数据库同步见 `docs/requests/D-quote-source.md`。
