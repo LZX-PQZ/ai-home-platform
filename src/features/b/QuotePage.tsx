@@ -6,6 +6,7 @@ import { Badge, Button, Card } from "@/components/ui";
 import { QuoteComparison } from "@/features/b/QuoteComparison";
 import { loadQuoteComparison, quoteLoadErrorMessage, QuoteDemandNotFound } from "@/features/b/load-quotes";
 import { quoteReadFeedback } from "@/features/b/quote-feedback";
+import { subscribeQuotePageRefresh } from "@/features/b/quote-page-refresh";
 
 type QuotePageState =
   | { status: "loading" }
@@ -23,6 +24,7 @@ export function QuotePageContent({ state, retry }: { state: QuotePageState; retr
             本次读取完成时间（本机时间）：<time dateTime={new Date(state.readAt).toISOString()}>{new Date(state.readAt).toLocaleString("zh-CN", { hour12: false })}</time>
             ；不代表报价的提交时间。
           </p>
+          <p className="mb-0 mt-1 text-xs text-ink-3">返回此页面时会重新读取，也可点击“刷新报价”。</p>
         </div>
         <Button variant="secondary" onClick={retry}>刷新报价</Button>
       </div>
@@ -49,6 +51,7 @@ export function QuotePageContent({ state, retry }: { state: QuotePageState; retr
 export function QuotePage({ demandId }: { demandId: string }) {
   const [attempt, retry] = React.useReducer((value: number) => value + 1, 0);
   const [result, setResult] = React.useState<{ id: string; attempt: number; state: QuotePageState } | null>(null);
+  React.useEffect(() => subscribeQuotePageRefresh(retry, window, document), [retry]);
   React.useEffect(() => {
     let active = true;
     void loadQuoteComparison(demandId).then(
