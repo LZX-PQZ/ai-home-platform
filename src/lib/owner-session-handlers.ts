@@ -52,19 +52,23 @@ async function readInput(request: Request) {
   return OwnerLoginInput.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
 }
 
-/** Counts successful and failed attempts alike; no IP/identity claims are trusted. */
-async function reserveAttempt(db: PrismaClient, login: string, now: Date) {
+function failureKey(login: string) {
+  // Legacy buckets included successes; do not inherit their lockouts after upgrading.
+  return `failure:${createHash("sha256").update(login).digest("hex")}`;
+}
+async function loginRetryAfter(db: Pick<PrismaClient, "ownerLoginAttempt">, key: string, now: Date) {
+  const previous = await db.ownerLoginAttempt.findUnique({ where: { key } });
+  return previous && previous.count >= 5 && previous.resetsAt > now
+    ? Math.max(1, Math.ceil((previous.resetsAt.getTime() - now.getTime()) / 1000)) : null;
+}
+/** Only rejected credentials consume this account's budget, never another account's. */
+async function recordFailure(db: PrismaClient, key: string, now: Date) {
   return db.$transaction(async tx => {
     await tx.ownerLoginAttempt.deleteMany({ where: { resetsAt: { lte: now } } });
-    for (const rule of [
-      { key: "global", limit: 60, window: 5 * 60_000 },
-      { key: createHash("sha256").update(login).digest("hex"), limit: 5, window: 15 * 60_000 },
-    ]) {
-      const previous = await tx.ownerLoginAttempt.findUnique({ where: { key: rule.key } });
-      if (previous && previous.count >= rule.limit) return Math.max(1, Math.ceil((previous.resetsAt.getTime() - now.getTime()) / 1000));
-      await tx.ownerLoginAttempt.upsert({ where: { key: rule.key },
-        create: { key: rule.key, count: 1, resetsAt: new Date(now.getTime() + rule.window) }, update: { count: { increment: 1 } } });
-    }
+    const retryAfter = await loginRetryAfter(tx, key, now);
+    if (retryAfter) return retryAfter;
+    await tx.ownerLoginAttempt.upsert({ where: { key },
+      create: { key, count: 1, resetsAt: new Date(now.getTime() + 15 * 60_000) }, update: { count: { increment: 1 } } });
     return null;
   }, { isolationLevel: "Serializable" });
 }
@@ -85,13 +89,16 @@ export function createOwnerSessionHandlers(db: PrismaClient = prisma, clock = ()
       if (!secureOrigin(request) || !isSameOrigin(request)) return failure("FORBIDDEN");
       let input;
       try { input = await readInput(request); } catch { return failure("VALIDATION_ERROR"); }
+      const key = failureKey(input.login);
       try {
-        const retryAfter = await reserveAttempt(db, input.login, clock());
+        const retryAfter = await loginRetryAfter(db, key, clock());
         if (retryAfter) return failure("RATE_LIMITED", retryAfter);
         const credential = await db.ownerCredential.findUnique({ where: { login: input.login } });
         const verified = await verifyOwnerPassword(input.password, credential?.passwordHash ?? null);
-        if (!verified || !credential) return failure("INVALID_CREDENTIALS");
+        if (!verified || !credential) throw new InvalidCredentials();
         const result = await db.$transaction(async tx => {
+          const retryAfter = await loginRetryAfter(tx, key, clock());
+          if (retryAfter) return { retryAfter };
           const current = await tx.ownerCredential.findUnique({ where: { login: input.login }, include: { user: true } });
           if (!current || current.userId !== credential.userId || current.passwordHash !== credential.passwordHash || current.user.role !== "owner") {
             throw new InvalidCredentials();
@@ -99,14 +106,21 @@ export function createOwnerSessionHandlers(db: PrismaClient = prisma, clock = ()
           const identity = { userId: current.userId, role: "owner" as const, providerId: null };
           await revokeOwnerSession(request, tx, clock());
           const issued = await issueOwnerSession(identity, tx, clock());
+          await tx.ownerLoginAttempt.deleteMany({ where: { key } });
           const data = OwnerSessionState.parse({ status: "signed_in", identity, expiresAt: issued.expiresAt.toISOString() });
           return { data, cookie: issued.cookie };
         }, { isolationLevel: "Serializable" });
+        if ("retryAfter" in result) return failure("RATE_LIMITED", result.retryAfter);
         const response = success(result.data);
         response.headers.set("Set-Cookie", result.cookie);
         return response;
       } catch (error) {
-        if (error instanceof InvalidCredentials) return failure("INVALID_CREDENTIALS");
+        if (error instanceof InvalidCredentials) {
+          try {
+            const retryAfter = await recordFailure(db, key, clock());
+            return retryAfter ? failure("RATE_LIMITED", retryAfter) : failure("INVALID_CREDENTIALS");
+          } catch { return failure("SESSION_UNAVAILABLE"); }
+        }
         if (error instanceof PasswordCapacityError) return failure("RATE_LIMITED", 1);
         return failure("SESSION_UNAVAILABLE");
       }

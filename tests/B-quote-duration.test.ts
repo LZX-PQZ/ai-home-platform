@@ -75,7 +75,7 @@ test("报价页逐份展示工期差异，保留原顺序、模拟来源和待�
   assert.ok(html.includes("比需求期望短 5 天"));
   assert.ok(html.includes("比需求期望短 2 天"));
   assert.ok(html.indexOf("报价编号：quote-a") < html.indexOf("报价编号：quote-b"));
-  assert.ok(html.includes("模拟数据 · 非真实市场报价"));
+  assert.ok(html.includes("mock · 模拟报价，不代表真实市场报价"));
   assert.ok(html.includes("垃圾清运"));
   assert.ok(html.includes("待确认项目 · 1 项"));
   assert.ok(html.includes("¥12,000.00"));

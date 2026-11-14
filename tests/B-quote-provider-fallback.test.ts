@@ -27,7 +27,7 @@ test("服务方故障保留已校验报价及自身来源，名称按编号待�
   for (const source of ["mock", "live"] as const) {
     for (const reply of failures) {
       t.mock.method(globalThis, "fetch", async (url: string) => url === "/api/provider" ? reply()
-        : url === "/api/quote" ? success(quotes, source) : success({ ...demoDemand, source: "live" }));
+        : url.startsWith("/api/quote?demandId=") ? success(quotes.map(quote => ({ ...quote, source })), source) : success({ ...demoDemand, source: "live" }));
       const data = await loadQuoteComparison(demoDemand.id);
       assert.equal(data.quoteSource, source);
       assert.equal(data.response.meta.source, source);
@@ -55,7 +55,7 @@ test("服务方 HTTP 501 即使携带合法数据或坏 JSON 仍显示未开放�
     () => new Response("bad json", { status: 501 }),
   ]) {
     t.mock.method(globalThis, "fetch", async (url: string) => url === "/api/provider" ? reply()
-      : url === "/api/quote" ? success(quotes, "mock") : success(demoDemand, "mock"));
+      : url.startsWith("/api/quote?demandId=") ? success(quotes, "mock") : success(demoDemand, "mock"));
     const data = await loadQuoteComparison(demoDemand.id);
     assert.match(data.providerWarning ?? "", /接口尚未开放/);
     assert.equal(data.providerSource, null);
@@ -68,7 +68,7 @@ test("服务方 HTTP 501 即使携带合法数据或坏 JSON 仍显示未开放�
 test("刷新按本次结果恢复或清除名称与警告，不复用上次成功的资料", async t => {
   let available = false;
   t.mock.method(globalThis, "fetch", async (url: string) => url === "/api/provider" ? available ? success(providers, "mock") : failure(503)
-    : url === "/api/quote" ? success(quotes) : success({ ...demoDemand, source: "live" }));
+    : url.startsWith("/api/quote?demandId=") ? success(quotes) : success({ ...demoDemand, source: "live" }));
   const failed = await loadQuoteComparison(demoDemand.id);
   assert.ok(failed.providerWarning);
   available = true;
@@ -90,7 +90,7 @@ test("报价为空不请求服务方；有效空资料没有故障警告，但�
   let providerCalls = 0;
   t.mock.method(globalThis, "fetch", async (url: string) => {
     if (url === "/api/provider") { providerCalls++; return success([], "mock"); }
-    return url === "/api/quote" ? success(rows, "mock") : success(demoDemand, "mock");
+    return url.startsWith("/api/quote?demandId=") ? success(rows, "mock") : success(demoDemand, "mock");
   });
   const unnamed = await loadQuoteComparison(demoDemand.id);
   assert.equal(unnamed.providerWarning, undefined);
@@ -101,7 +101,7 @@ test("报价为空不请求服务方；有效空资料没有故障警告，但�
   assert.equal(providerCalls, 1);
   assert.equal(empty.providerWarning, undefined);
   assert.equal(empty.providerSource, null);
-  assert.ok(render(empty).includes("暂无属于这份需求的模拟报价"));
+  assert.ok(render(empty).includes("暂无可对比的报价"));
 });
 
 test("需求或报价失败、坏明细和累计溢出仍拒绝整次读取，服务方补充逻辑不能兜底", async t => {
@@ -116,7 +116,7 @@ test("需求或报价失败、坏明细和累计溢出仍拒绝整次读取，�
     let providerCalls = 0;
     t.mock.method(globalThis, "fetch", async (url: string) => {
       if (url === "/api/provider") { providerCalls++; return success(providers); }
-      return url === "/api/quote" ? badQuotes() : success(demoDemand);
+      return url.startsWith("/api/quote?demandId=") ? badQuotes() : success(demoDemand);
     });
     await assert.rejects(loadQuoteComparison(demoDemand.id));
     assert.equal(providerCalls, 0);
