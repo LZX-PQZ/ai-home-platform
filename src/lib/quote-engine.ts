@@ -1,14 +1,8 @@
 import { Money, Quote, type DemandDTO, type QuoteDTO } from "@/contracts";
 
-/** 明细以项目编号区分；旧契约里额外声明的费用只有名称，单独保留。 */
+/** 按原始明细行保留待确认项；历史输出允许重复编号，不能按 code 覆盖费用。 */
 export function getPendingQuoteItems(quote: QuoteDTO) {
-  const byCode = new Map<string, QuoteDTO["items"][number]>();
-  for (const item of quote.items) {
-    if (item.amountCents === null || item.unitPriceCents === null) {
-      byCode.set(item.code, item);
-    }
-  }
-  const items = [...byCode.values()];
+  const items = quote.items.filter((item) => item.amountCents === null || item.unitPriceCents === null);
   const itemNames = new Set(items.map((item) => item.name));
   // prepareQuotes 会将明细名称写回 pendingItems；再次汇总时不能重复计数。
   const extraNames = [...new Set(quote.pendingItems)].filter((name) => !itemNames.has(name));
@@ -26,7 +20,7 @@ export function summarizeQuote(quote: QuoteDTO): Pick<QuoteDTO, "knownTotalCents
     }
   }
   const { items, extraNames } = getPendingQuoteItems(quote);
-  // 公共契约仍为名称数组；同名但不同编号的明细保留多个名称条目。
+  // 公共契约仍为名称数组；每一条待确认明细都保留名称，包括同名或同编号行。
   return { knownTotalCents, pendingItems: [...extraNames, ...items.map((item) => item.name)] };
 }
 

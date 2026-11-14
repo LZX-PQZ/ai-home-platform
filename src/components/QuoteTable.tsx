@@ -62,7 +62,7 @@ export function QuoteTable({ quotes, providers = [], demand }: { quotes: QuoteDT
                 <h4 className="text-sm font-semibold">待确认项目 · {summary.pendingItems.length} 项</h4>
                 <ul className="mt-2 list-inside list-disc break-words text-sm leading-6">
                   {pending.extraNames.map((name) => <li key={`extra:${name}`}>{name}</li>)}
-                  {pending.items.map((item) => <li key={`item:${item.code}`}>{item.name}<span className="break-all">（项目编号：{item.code}）</span></li>)}
+                  {pending.items.map((item, index) => <li key={`item:${item.code}:${index}`}>{item.name}<span className="break-all">（项目编号：{item.code}）</span></li>)}
                 </ul>
                 <p className="mb-0 mt-2 text-xs">未知金额未计入小计；已列明金额的项目仍可能需要确认单价。小计不是最终总价。</p>
               </div> : <p className="mb-0 text-sm text-slate-600">{quote.items.length ? "当前明细金额均已列明，服务范围仍需双方确认。" : "没有明细不代表免费，也不能据此判断最终总价。"}</p>}
