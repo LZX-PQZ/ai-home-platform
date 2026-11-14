@@ -27,13 +27,14 @@ import { canReviseSchedule } from "./schedule-editor";
 import { OrderProgressPanel } from "./OrderProgressPanel";
 import { useOwnerOrder } from "./useOwnerOrder";
 import type { OwnerOrderState } from "./owner-order";
+import { OrderProgressHistory } from "./OrderProgressHistoryPanel";
 
 /**
  * 业主端「施工进度」页。
  *
  * 三件事必须在第一屏看清楚：现在做到哪一步（甘特图 + 进度）、下一步什么时候轮到什么工序
  * （可开工任务）、计划本身有没有自相矛盾（排期自检）。
- * 数据只有 /api/schedule 一处来源，接口没给的字段（真实日期、责任人姓名、验收单）一律不编。
+ * 排期、接单与履约记录分别读取公共接口；接口未给出的字段不自行推断。
  */
 export function SchedulePanel({ id }: { id: string }) {
   return <DemandSchedulePanel key={id} id={id} />;
@@ -43,9 +44,11 @@ function DemandSchedulePanel({ id }: { id: string }) {
   const [version, setVersion] = useState<number | undefined>();
   const { reload, ...state } = useSchedule(id, version);
   const orderState = useOwnerOrder(id);
+  const [historyRevision, setHistoryRevision] = useState(0);
   const reloadAll = () => {
     reload();
     orderState.reload();
+    setHistoryRevision(current => current + 1);
   };
   return <>
     <ScheduleVersionControls version={version} onSelect={next => {
@@ -53,6 +56,7 @@ function DemandSchedulePanel({ id }: { id: string }) {
       else setVersion(next);
     }} />
     <ScheduleContent key={version ?? "latest"} id={id} version={version} state={state} reload={reloadAll} orderState={orderState} reloadOrder={orderState.reload} />
+    {version === undefined && id !== "demo-demand" ? <OrderProgressHistory demandId={id} revision={historyRevision} /> : null}
   </>;
 }
 

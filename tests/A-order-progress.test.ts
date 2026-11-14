@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { OrderProgressInput, type OrderSummaryDTO, type ScheduleDTO } from "../src/contracts";
-import { ScheduleContent } from "../src/features/a/SchedulePanel";
+import { ScheduleContent, SchedulePanel } from "../src/features/a/SchedulePanel";
 import type { ScheduleState } from "../src/features/a/useSchedule";
 import { OrderProgressPanel } from "../src/features/a/OrderProgressPanel";
 import {
@@ -11,6 +11,8 @@ import {
   buildOrderProgressInput,
   orderProgressErrorMessage,
 } from "../src/features/a/order-progress";
+import { loadOrderProgressHistory } from "../src/features/a/order-progress-history";
+import { OrderProgressHistoryPanel } from "../src/features/a/OrderProgressHistoryPanel";
 import { ApiClientError } from "../src/lib/api-client";
 
 Object.defineProperty(globalThis, "React", { configurable: true, value: React });
@@ -90,4 +92,115 @@ test("演示排期显示演示只读，不出现接单读取失败", () => {
   }));
   assert.match(html, /演示只读/);
   assert.doesNotMatch(html, /接单读取失败|请先登录业主账号/);
+});
+
+test("履约记录按公共契约读取并按动作显示中文说明与来源", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url: string | URL | Request, init?: RequestInit) => {
+    assert.equal(url, "/api/order/progress?demandId=demand%2F1%3F%26");
+    assert.equal(init, undefined);
+    return Response.json({
+    ok: true,
+    data: [{
+      id: "event-1", orderId: "order-1", action: "start_task", fromStatus: "in_progress",
+      toStatus: "in_progress", taskId: "task-0", scheduleVersion: 2,
+      createdAt: "2026-11-15T09:30:00+08:00", source: "live",
+    }],
+    meta: { source: "live" },
+  }); });
+  const state = await loadOrderProgressHistory("demand/1?&");
+  assert.equal(state.phase, "ready");
+  if (state.phase === "ready") {
+    assert.equal(state.events[0]?.action, "start_task");
+    const html = renderToStaticMarkup(createElement(OrderProgressHistoryPanel, {
+      state,
+      onReload() {},
+    }));
+    assert.match(html, /履约记录/);
+    assert.match(html, /开始工序/);
+    assert.match(html, /工序编号：task-0/);
+    assert.match(html, /关联排期：v2/);
+    assert.match(html, /2026-11-15 09:30:00\+08:00/);
+    assert.match(html, /实际记录/);
+    assert.match(html, /施工中/);
+    assert.doesNotMatch(html, /start_task|in_progress/);
+  }
+  t.mock.restoreAll();
+});
+
+test("履约记录 401 提示登录与重试，不显示空记录", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => Response.json({ ok: false, error: { code: "UNAUTHENTICATED", message: "请登录" } }, { status: 401 }));
+  const state = await loadOrderProgressHistory("demand-1");
+  assert.deepEqual(state, { phase: "failed", error: "请先登录业主账号，才能读取履约记录。" });
+  const html = renderToStaticMarkup(createElement(OrderProgressHistoryPanel, { state, onReload() {} }));
+  assert.match(html, /请先登录业主账号/);
+  assert.match(html, /重新加载记录/);
+  assert.doesNotMatch(html, /暂无履约记录/);
+  t.mock.restoreAll();
+});
+
+test("履约记录只在成功空响应时显示暂无，可重新查询恢复", async (t) => {
+  let unavailable = true;
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => unavailable
+    ? Response.json({ ok: true, data: [], meta: { source: "live" } }, { status: 503 })
+    : Response.json({ ok: true, data: [], meta: { source: "live" } }));
+  assert.equal((await loadOrderProgressHistory("")).phase, "failed");
+  assert.equal(fetchMock.mock.callCount(), 0);
+  assert.equal((await loadOrderProgressHistory("demand-1")).phase, "failed");
+  unavailable = false;
+  const state = await loadOrderProgressHistory("demand-1");
+  assert.equal(state.phase, "ready");
+  const html = renderToStaticMarkup(createElement(OrderProgressHistoryPanel, { state, onReload() {} }));
+  assert.match(html, /暂无履约记录/);
+  assert.match(html, /刷新记录/);
+  const loading = renderToStaticMarkup(createElement(OrderProgressHistoryPanel, { state: { phase: "loading" }, onReload() {} }));
+  assert.match(loading, /模拟/);
+  assert.doesNotMatch(loading, /暂无履约记录/);
+});
+
+test("履约记录拒绝非成功状态、错误格式和网络失败", async (t) => {
+  for (const status of [403, 404, 501, 503]) {
+    t.mock.method(globalThis, "fetch", async () => Response.json({ ok: true, data: [], meta: { source: "live" } }, { status }));
+    assert.equal((await loadOrderProgressHistory("demand-1")).phase, "failed", `HTTP ${status}`);
+    t.mock.restoreAll();
+  }
+  for (const payload of [
+    { ok: true, data: [], meta: { source: "unknown" } },
+    { ok: true, data: [{ action: "start" }], meta: { source: "live" } },
+  ]) {
+    t.mock.method(globalThis, "fetch", async () => Response.json(payload));
+    assert.equal((await loadOrderProgressHistory("demand-1")).phase, "failed");
+    t.mock.restoreAll();
+  }
+  t.mock.method(globalThis, "fetch", async () => new Response("not JSON"));
+  assert.equal((await loadOrderProgressHistory("demand-1")).phase, "failed");
+  t.mock.restoreAll();
+  t.mock.method(globalThis, "fetch", async () => { throw new TypeError("network"); });
+  assert.equal((await loadOrderProgressHistory("demand-1")).phase, "failed");
+});
+
+test("履约记录保持返回顺序、逐条来源与排期版本，不猜测工序名称", async (t) => {
+  const base = { orderId: "order-1", createdAt: "2026-11-15T01:30:00.123Z" };
+  t.mock.method(globalThis, "fetch", async () => Response.json({ ok: true, meta: { source: "mock" }, data: [
+    { ...base, id: "e4", action: "start", fromStatus: "contracted", toStatus: "in_progress", taskId: null, scheduleVersion: null, source: "mock" },
+    { ...base, id: "e3", action: "start_task", fromStatus: "in_progress", toStatus: "in_progress", taskId: "old-task", scheduleVersion: 2, source: "live" },
+    { ...base, id: "e2", action: "complete_task", fromStatus: "in_progress", toStatus: "in_progress", taskId: "old-task", scheduleVersion: 3, source: "mock" },
+    { ...base, id: "e1", action: "complete", fromStatus: "in_progress", toStatus: "completed", taskId: null, scheduleVersion: 4, source: "live" },
+  ] }));
+  const state = await loadOrderProgressHistory("demand-1");
+  assert.equal(state.phase, "ready");
+  const html = renderToStaticMarkup(createElement(OrderProgressHistoryPanel, { state, onReload() {} }));
+  const actions = ["确认开工", "开始工序", "确认工序完成", "确认完工"];
+  for (let i = 1; i < actions.length; i++) assert.ok(html.indexOf(actions[i - 1]) < html.indexOf(actions[i]));
+  assert.match(html, /来源：模拟数据/);
+  assert.match(html, /来源：实际记录/);
+  assert.match(html, /01:30:00.123Z/);
+  assert.match(html, /工序编号：old-task/);
+  assert.doesNotMatch(html, /工序1|关联排期：vnull/);
+});
+
+test("最新真实需求在排期加载时独立展示履约记录，演示需求不读取私人历史", () => {
+  const html = renderToStaticMarkup(createElement(SchedulePanel, { id: "demand-1" }));
+  assert.match(html, /履约记录/);
+  const demo = renderToStaticMarkup(createElement(SchedulePanel, { id: "demo-demand" }));
+  assert.doesNotMatch(demo, /履约记录/);
 });
