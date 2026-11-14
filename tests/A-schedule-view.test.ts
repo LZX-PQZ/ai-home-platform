@@ -20,8 +20,8 @@ const schedule = Schedule.parse({
   tasks: [{ id: "test-task", name: "测试工序", startDay: 2, durationDays: 3, dependsOn: [], responsibleProviderId: null, status: "done" }],
 });
 const ready = (source: "mock" | "live" = "mock"): ScheduleState => ({ phase: "ready", data: schedule, source, error: null });
-const render = (state: ScheduleState, id = schedule.demandId, version?: number) => renderToStaticMarkup(
-  createElement(ScheduleContent, { id, version, state, reload() {} }),
+const render = (state: ScheduleState, id = schedule.demandId, version?: number, orderState?: React.ComponentProps<typeof ScheduleContent>["orderState"]) => renderToStaticMarkup(
+  createElement(ScheduleContent, { id, version, state, reload() {}, orderState }),
 );
 
 test("版本选择器标明查询模式并允许返回最新，不编造可用版本列表", () => {
@@ -134,4 +134,19 @@ test("最新排期和空工序版本都展示接口版本，并提供刷新入�
   assert.match(empty, /排期版本 v7/);
   assert.match(empty, /重新加载/);
   assert.doesNotMatch(empty, /固定演示数据|还没有排期|模拟数据/);
+});
+
+test("订单进入施工中后隐藏排期修订表单", () => {
+  const editable = {
+    ...schedule,
+    tasks: schedule.tasks.map(task => ({ ...task, status: "pending" as const, responsibleProviderId: null })),
+  };
+  const html = render(
+    { phase: "ready", data: editable, source: "live", error: null },
+    schedule.demandId,
+    undefined,
+    { phase: "ready", order: { id: "order-1", demandId: schedule.demandId, providerId: "provider-a", acceptedQuoteId: "quote-1", status: "in_progress", source: "live" }, source: "live" },
+  );
+  assert.doesNotMatch(html, /修订未开工排期|确认并保存排期/);
+  assert.match(html, /已进入施工中，排期修订入口已关闭/);
 });
