@@ -38,8 +38,8 @@ D 已提供兼容 B 回调的 `authorizeOwnerQuoteRead(request, demandId, tx)`�
 
 ## 返回、来源与缓存
 
-- 成功仍使用 `200 envelope(Quote[])`；保留整数分、null、零元和额外待确认费用。不得更改公共 Quote 字段。
-- 来源沿用 D 的需求来源：演示需求数据库记录为 mock，真实需求为 live；授权不得因需求为 mock 而跳过。显式查询 demo-demand 仍要求其真实验证的当前业主身份。
+- 成功仍使用 `200 envelope(Quote[])`；保留整数分、null、零元和额外待确认费用。后续由 D 在公共 Quote 增加兼容的来源字段，B 不自行声明替代 DTO。
+- 来源规则由 `D-quote-source.md` 修订：每条报价保留写入时持久化来源，只有需求和全部返回报价都为 live，整体才标 live；混合或未知来源保守标 mock。存在且无可比报价时沿用需求来源。当前 schema/内核还未实现此修订，不能直接用现有仅按需求标记的内核开放数据库 GET。授权不得因来源为 mock 而跳过，显式查询 demo-demand 仍要求其真实验证的当前业主身份。
 - 显式查询的所有成功及失败响应使用 `Cache-Control: private, no-store` 和 `Vary: Cookie`，路由必须动态执行；浏览器与框架也不得共享缓存鉴权查询。
 - `GET /api/provider` 仍为 mock。报价列表和服务方名称分别标识来源；名称缺失显示未知或 ID，不能因为报价为 live 就宣称服务方资料为 live。真实服务方资料接口单独交付。
 
