@@ -41,6 +41,20 @@ export const ProviderIdentity = z.object({
   role: z.literal("provider"),
   providerId: Id,
 }).strict();
+export const DEMO_PROVIDER_USER_ID = "demo-provider-account" as const;
+export const DEMO_PROVIDER_ID = "provider-a" as const;
+export const DemoProviderLoginInput = z.object({ action: z.literal("login_demo") }).strict();
+export const DemoProviderSession = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("disabled"), demo: z.literal(true) }).strict(),
+  z.object({ status: z.literal("signed_out"), demo: z.literal(true) }).strict(),
+  z.object({
+    status: z.literal("signed_in"), demo: z.literal(true),
+    identity: ProviderIdentity.extend({ userId: z.literal(DEMO_PROVIDER_USER_ID), providerId: z.literal(DEMO_PROVIDER_ID) }),
+    expiresAt: z.string().datetime(),
+  }).strict(),
+]);
+export type DemoProviderLoginInputDTO = z.infer<typeof DemoProviderLoginInput>;
+export type DemoProviderSessionDTO = z.infer<typeof DemoProviderSession>;
 export const Match = z.object({ provider: Provider, score: z.number().min(0).max(100), reasons: z.array(z.string()) });
 export const QuoteItem = z.object({
   code: Id, name: z.string(), unit: z.enum(["m2", "piece", "job"]),

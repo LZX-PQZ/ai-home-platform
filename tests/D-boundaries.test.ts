@@ -17,7 +17,18 @@ test("报价服务端 API 和引擎可以读取服务端身份基础设施", () 
   }
 });
 
-const quoteInfrastructure = ["src/lib/idempotency.ts", "src/lib/quote-policy.ts"];
+const quoteInfrastructure = ["src/lib/idempotency.ts", "src/lib/quote-policy.ts", "src/lib/server-auth.ts"];
+
+test("演示会话内部实现只由 D 服务端读取，报价通过 server-auth 使用适配器", () => {
+  for (const target of ["src/lib/demo-provider-session.ts", "src/lib/demo-session-handlers.ts"]) {
+    assert.equal(canReadAcrossOwner("src/lib/server-auth.ts", target), true);
+    assert.equal(canReadAcrossOwner("src/app/api/auth/demo-provider/route.ts", target), true);
+    assert.equal(canReadAcrossOwner("src/lib/server-auth.ts", target, true), false);
+    for (const file of ["src/components/ui/DemoProviderLogin.tsx", "src/features/c/quote-submit.ts", "src/lib/quote-engine/transaction.ts"]) {
+      assert.equal(canReadAcrossOwner(file, target), false);
+    }
+  }
+});
 
 test("报价服务端可导入幂等与授权工具，其他业务和共享 UI 不获得同样权限", () => {
   for (const target of quoteInfrastructure) {

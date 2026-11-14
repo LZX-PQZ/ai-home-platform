@@ -12,6 +12,16 @@ model User {
   providerId String? @unique
   provider ServiceProvider? @relation("ProviderAccount", fields: [providerId], references: [id])
   demands DemandOrder[]
+  demoSessions DemoProviderSession[]
+}
+model DemoProviderSession {
+  tokenHash String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerId String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  @@index([expiresAt])
 }
 model DemandOrder {
   id String @id @default(cuid())

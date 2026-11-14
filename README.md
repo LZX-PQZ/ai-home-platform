@@ -33,6 +33,12 @@ macOS / Linux：使用 npm 而非 npm.cmd，使用 cp .env.example .env。
 访问 http://localhost:3000 。无 API key 也能启动。不要覆盖已有 .env。
 数据库仅本机使用，默认 prisma/dev.db，不提交、不跨成员同步。
 
+## 演示服务方登录
+
+在已有 `.env` 中设置 `DEMO_AUTH_ENABLED="true"`，运行 `npm.cmd run db:setup` 同步会话表与演示账号，再重启应用。点击导航下方的“演示服务方登录”，即可使用固定的 `provider-a` 演示身份；无需填写或提交真实账号密码。默认关闭，界面和接口均明确标记模拟来源。
+
+会话有效期 30 分钟，刷新后可读取，点击“退出演示登录”会撤销会话。上方角色切换只切换导航。此功能尚不提供生产认证；报价 POST 处理器已连接事务内核，但默认显式使用空会话读取器，因此带有效演示 cookie 的公开请求仍返回 401。B 还需接入预检与事务会话读取器，并为演示身份的回执标注 mock；不能把演示登录成功描述为报价提交成功。接口和接入步骤见 [演示会话交接](docs/requests/D-demo-provider-session.md)。
+
 ## 开工与验收
 ```bash
 git switch main
