@@ -92,7 +92,7 @@ OwnerSession 的服务端签发/撤销函数仅由 D 内部认证代码使用，
 
 POST/DELETE 强制同源 Origin，缺失/跨源或 cross-site 返回 403/FORBIDDEN；所有三种方法仅支持 HTTPS 或 localhost/127.0.0.1/[::1] 的本地 HTTP。不会因 forwarded 头降低检查。成功 `envelope(OwnerSessionState)` 标 live：`{status:"signed_out"}` 或 `{status:"signed_in",identity:OwnerIdentity,expiresAt:"ISO 8601"}`；cookie/密码/摘要不进入 JSON。所有响应 `Cache-Control: private, no-store` 和 `Vary: Cookie`。
 
-密码使用随机盐的 scrypt 摘要，未知账号执行同等密码计算。错误密码、未知账号、当前角色不符及验证期间凭证变化均返回相同 401/INVALID_CREDENTIALS。登录尝试通过数据库限频，每账号 15 分钟最多 5 次、全局 5 分钟最多 60 次，成功也计数；未知账号执行相同规则，重启不清零。超限或进程密码计算繁忙为 429/RATE_LIMITED，带 Retry-After。存储或摘要错误为 503/SESSION_UNAVAILABLE，不暴露内部异常，不声称已登录或退出。
+密码使用随机盐的 scrypt 摘要，未知账号执行同等密码计算。错误密码、未知账号、当前角色不符及验证期间凭证变化均返回相同 401/INVALID_CREDENTIALS。每账号只统计认证失败，15 分钟最多 5 次失败，第六次起限流；成功不计数且原子清空该账号失败历史，未知账号规则相同，重启不清零。已移除全局 60 次锁定，一个账号不会耗尽其他账号的登录额度；新版 failure: 键不继承旧版包含成功次数的锁定。超限或进程密码计算繁忙为 429/RATE_LIMITED，带 Retry-After，繁忙只需短暂重试且不计失败。存储或摘要错误为 503/SESSION_UNAVAILABLE，不暴露内部异常，不声称已登录或退出。详见 `docs/requests/D-owner-login-throttle.md`。
 
 POST 在事务外计算密码，再在写事务重读凭证和角色，撤销此浏览器的旧业主会话并签发新凭证；签发失败回滚撤销。GET 读取当前账户，不续期；无效/重复/过期/撤销凭证或账户不再是 owner 时显示 signed_out。DELETE 可幂等退出，存储撤销成功后才清 cookie；服务方演示会话独立保留。浏览器已使用临时合成账号验收错误密码、登录、刷新、本人需求编辑、退出后编辑被拒绝；这不是实名认证，也不代表其余业务访问控制已补齐。
 

@@ -188,21 +188,49 @@ test("业主登录：隔离 SQLite 合成账号，实际密码校验/会话/限�
     assert.equal((await api.POST(loopback)).status, 200);
   });
 
-  await t.test("每账号限频含成功和未知账号，重连保留；全局限频及到期恢复", async () => {
-    for (let i = 0; i < 5; i++) await login();
+  const failureKey = (login: string) => `failure:${createHash("sha256").update(login).digest("hex")}`;
+  const wrong = { ...input, password: "Incorrect password 42!" };
+  await t.test("连续成功超过 5 次不锁定；成功清空失败，旧版全局/成功计数不影响登录", async () => {
+    await db.ownerLoginAttempt.createMany({ data: [
+      { key: "global", count: 60, resetsAt: new Date(now.getTime() + 300000) },
+      { key: createHash("sha256").update(input.login).digest("hex"), count: 5, resetsAt: new Date(now.getTime() + 900000) },
+    ] });
+    for (let i = 0; i < 6; i++) await login();
+    assert.equal(await db.ownerLoginAttempt.findUnique({ where: { key: failureKey(input.login) } }), null);
+    await denied(await api.POST(request("POST", "", wrong)), 401, "INVALID_CREDENTIALS");
+    assert.equal((await db.ownerLoginAttempt.findUniqueOrThrow({ where: { key: failureKey(input.login) } })).count, 1);
+    await login();
+    assert.equal(await db.ownerLoginAttempt.findUnique({ where: { key: failureKey(input.login) } }), null);
+  });
+
+  await t.test("仅 5 次认证失败触发账号限频，重连保留；不锁其他账号，到期恢复", async () => {
+    for (let i = 0; i < 5; i++) await denied(await api.POST(request("POST", "", wrong)), 401, "INVALID_CREDENTIALS");
     await db.$disconnect();
     const limited = await api.POST(request("POST", "", input));
     assert.equal(limited.headers.get("retry-after"), "900");
     await denied(limited, 429, "RATE_LIMITED");
-    // Unknown-account buckets are identical; fixture skips expensive failed guesses already covered above.
-    await db.ownerLoginAttempt.create({ data: { key: createHash("sha256").update("unknown-owner").digest("hex"), count: 5, resetsAt: new Date(now.getTime() + 900000) } });
+    await login("", { ...input, login: other.login });
+    for (let i = 0; i < 5; i++) await denied(await api.POST(request("POST", "", { ...wrong, login: "unknown-owner" })), 401, "INVALID_CREDENTIALS");
     await denied(await api.POST(request("POST", "", { ...input, login: "unknown-owner" })), 429, "RATE_LIMITED");
-    await db.ownerLoginAttempt.update({ where: { key: "global" }, data: { count: 60 } });
-    const global = await api.POST(request("POST", "", { ...input, login: "owner-two" }));
-    assert.equal(global.headers.get("retry-after"), "300");
-    await denied(global, 429, "RATE_LIMITED");
+    assert.equal((await db.ownerLoginAttempt.findUniqueOrThrow({ where: { key: failureKey("unknown-owner") } })).count, 5);
+    await login("", { ...input, login: other.login });
     now = new Date(now.getTime() + 900001);
     await login();
+  });
+
+  await t.test("并发失败不丢计数；密码验证期间达到上限不能用旧结果清空锁定", async () => {
+    const results = await Promise.all([api.POST(request("POST", "", wrong)), api.POST(request("POST", "", wrong))]);
+    for (const result of results) await denied(result, 401, "INVALID_CREDENTIALS");
+    assert.equal((await db.ownerLoginAttempt.findUniqueOrThrow({ where: { key: failureKey(input.login) } })).count, 2);
+    const observed = db.$extends({ query: { ownerCredential: { async findUnique({ args, query }) {
+      const found = await query(args);
+      if (!args.include) await db.ownerLoginAttempt.update({ where: { key: failureKey(input.login) }, data: { count: 5 } });
+      return found;
+    } } } });
+    const before = await db.ownerSession.count();
+    await denied(await createOwnerSessionHandlers(observed as unknown as PrismaClient, () => now).POST(request("POST", "", input)), 429, "RATE_LIMITED");
+    assert.equal(await db.ownerSession.count(), before);
+    assert.equal((await db.ownerLoginAttempt.findUniqueOrThrow({ where: { key: failureKey(input.login) } })).count, 5);
   });
 
   await t.test("重新登录原子轮换旧会话，换账号不沿用旧身份；退出幂等撤销并清 cookie", async () => {
@@ -241,10 +269,12 @@ test("业主登录：隔离 SQLite 合成账号，实际密码校验/会话/限�
 
   await t.test("签发失败回滚旧会话撤销；GET/退出存储故障不伪装成功或泄露异常", async () => {
     const previous = await login();
+    await denied(await api.POST(request("POST", "", wrong)), 401, "INVALID_CREDENTIALS");
     const fail = async () => { throw new Error("private database passwordHash"); };
     const broken = createOwnerSessionHandlers(db.$extends({ query: { ownerSession: { create: fail } } }) as unknown as PrismaClient);
     const before = await db.ownerSession.count();
     await denied(await broken.POST(request("POST", previous.cookie, input)), 503, "SESSION_UNAVAILABLE");
+    assert.equal((await db.ownerLoginAttempt.findUniqueOrThrow({ where: { key: failureKey(input.login) } })).count, 1);
     assert.equal(await db.ownerSession.count(), before);
     assert.deepEqual(await read(previous.cookie), previous.body.data);
     const storage = createOwnerSessionHandlers(db.$extends({ query: { ownerSession: { findUnique: fail, updateMany: fail } } }) as unknown as PrismaClient);
