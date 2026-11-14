@@ -31,7 +31,7 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] 需求 POST 当前业主归属：同源及会话预检、事务内重验后以当前 userId 创建 published 需求；禁止客户端身份字段，移除固定 demo-owner 入口。公开接口验收登录、创建、修改及本人报价读取，另一业主拒绝。见 `docs/requests/D-demand-create-auth.md`。
 - [x] 需求列表/详情隔离：同一事务核验当前身份及 SQL 范围；无业主 cookie 时公开列表仅 published，有效业主列表仅本人所有状态。published 详情公开，非公开仅所属业主可读，其余与不存在统一 404。失效业主 cookie 仍 401，不回退匿名。见 `docs/requests/D-demand-read-auth.md`。
 - [x] 排期读取隔离及固定演示例外：无参数或精确 DEMO_DEMAND_ID 可公开读取固定种子排期并标 mock，缺版本 404；带失效业主 cookie 即使演示入口也 401。其他需求在同一事务验证实际业主会话与归属，再读取最新/指定版本，匿名 401，仅服务方 403，他人与不存在统一 404；数据库故障不回退 mock。接入及验证见 `docs/requests/D-schedule-read-auth.md`。
-- [ ] 排期、工单、照片检查与评价的 POST 写入仍为 501；需逐个小功能冻结契约、实现并验收，不能将占位响应视为成功。
+- [ ] 照片检查与评价的 POST 写入仍为 501；排期首版创建、工单创建已实现，后续状态流转仍需独立定义和验收，不能将占位响应视为成功。
 - [ ] `match` 等其他读取接口继续审计访问范围；B 的匹配业务仍由 B 维护，需要变更时先提交具体交接请求。
 
 业主会话与报价读取授权见 `docs/requests/D-owner-quote-read-auth.md`。需求 POST 和两个需求 GET 已分别随 #95、#101 合入；本轮补齐显式排期读取，不能宣称整个平台已隔离。服务方履约关系、生产服务方认证与管理员专属范围仍未实现。
@@ -58,5 +58,7 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 
 - [x] POST /api/schedule 创建首版手工计划：真实业主为本人 published/contracted 且无排期的需求创建 v1；同源、事务内身份/归属重验、依赖图与工期校验、重复/并发保护、输出失败回滚。持久化结果 live，初始工序均 pending，无责任服务方；不是 AI 排期或施工承诺。见 `docs/requests/D-schedule-create.md`。
 - [ ] A 接入初始计划创建表单；排期变更申请/审批、追加版本、状态推进与阶段验收另行定义契约，不能把旧按钮直接当作创建动作。
-- [ ] 后续独立交付工单、照片检查、评价的 501 写入接口，以及按归属审计 match 等读取接口。
+- [x] 工单 POST 创建 + GET 按本人需求读取：实际业主、同源、事务重验、open/null 初始值、跨业主隔离与失败回滚；固定演示入口仍 mock。见 `docs/requests/D-ticket-create.md`。live 仅表示报告保存，不表示责任认定或售后完成。
+- [ ] 工单创建表单、管理员/服务方访问、派单/解决状态流转、通知未实现；本次不修改 A/C 页面。重复提交不去重，失败后需先读取核实。
+- [ ] 后续独立交付照片检查、评价的 501 写入接口，以及按归属审计 match 等读取接口。
 - [x] #108 已合入；本次接口变化同步修改 scripts/smoke.mjs，交付时确认 CI 的 Production HTTP smoke 成功。

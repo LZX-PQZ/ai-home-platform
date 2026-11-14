@@ -188,6 +188,11 @@ export const Ticket = z.object({
   category: z.enum(["quality", "schedule", "payment", "attitude"]),
   responsibleProviderId: Id.nullable(), status: z.enum(["open", "assigned", "resolved"]),
 });
+export const TicketQuery = z.object({ demandId: Id.refine(value => value.trim().length > 0) }).strict();
+export const TicketCreateInput = TicketQuery.extend({
+  description: z.string().trim().min(1).max(4000),
+  category: Ticket.shape.category,
+}).strict();
 export const PHOTO_INSPECTION_DISCLAIMER = "照片只能辅助提示疑点，不能替代现场检测或证明施工合格。";
 export const PhotoInspectionImageRef = z.string().trim().min(1).max(2048);
 export const PhotoInspectionInput = z.object({
@@ -241,6 +246,9 @@ export type ScheduleQueryDTO = z.infer<typeof ScheduleQuery>;
 export type ScheduleCreateInputDTO = z.infer<typeof ScheduleCreateInput>;
 export type PaymentDTO = z.infer<typeof Payment>;
 export type PaymentActionInputDTO = z.infer<typeof PaymentActionInput>;
+export type TicketDTO = z.infer<typeof Ticket>;
+export type TicketQueryDTO = z.infer<typeof TicketQuery>;
+export type TicketCreateInputDTO = z.infer<typeof TicketCreateInput>;
 export type PhotoInspectionInputDTO = z.infer<typeof PhotoInspectionInput>;
 export type PhotoInspectionFindingDTO = z.infer<typeof PhotoInspectionFinding>;
 export type PhotoInspectionResultDTO = z.infer<typeof PhotoInspectionResult>;
