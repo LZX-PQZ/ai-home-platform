@@ -24,6 +24,9 @@ import { PhotoInspectionPanel } from "./PhotoInspectionPanel";
 import { ScheduleVersionControls } from "./ScheduleVersionControls";
 import { ScheduleEditorPanel } from "./ScheduleEditorPanel";
 import { canReviseSchedule } from "./schedule-editor";
+import { OrderProgressPanel } from "./OrderProgressPanel";
+import { useOwnerOrder } from "./useOwnerOrder";
+import type { OwnerOrderState } from "./owner-order";
 
 /**
  * 业主端「施工进度」页。
@@ -39,20 +42,27 @@ export function SchedulePanel({ id }: { id: string }) {
 function DemandSchedulePanel({ id }: { id: string }) {
   const [version, setVersion] = useState<number | undefined>();
   const { reload, ...state } = useSchedule(id, version);
+  const orderState = useOwnerOrder(id);
+  const reloadAll = () => {
+    reload();
+    orderState.reload();
+  };
   return <>
     <ScheduleVersionControls version={version} onSelect={next => {
-      if (next === version) reload();
+      if (next === version) reloadAll();
       else setVersion(next);
     }} />
-    <ScheduleContent key={version ?? "latest"} id={id} version={version} state={state} reload={reload} />
+    <ScheduleContent key={version ?? "latest"} id={id} version={version} state={state} reload={reloadAll} orderState={orderState} reloadOrder={orderState.reload} />
   </>;
 }
 
-export function ScheduleContent({ id, version, state, reload }: {
+export function ScheduleContent({ id, version, state, reload, orderState = { phase: "loading" }, reloadOrder = () => {} }: {
   id: string;
   version?: number;
   state: ScheduleState;
   reload: () => void;
+  orderState?: OwnerOrderState;
+  reloadOrder?: () => void;
 }) {
   const { phase, data, source, error } = state;
 
@@ -308,7 +318,22 @@ export function ScheduleContent({ id, version, state, reload }: {
         </div>
       </div>
 
-      {version === undefined ? <PhotoInspectionPanel demandId={id} /> : null}
+      {version === undefined ? (
+        <>
+          <OrderProgressPanel
+            demandId={id}
+            order={orderState.phase === "ready" ? orderState.order : null}
+            orderPhase={orderState.phase}
+            orderError={orderState.phase === "failed" ? orderState.error : null}
+            orderSource={orderState.phase === "ready" ? orderState.source : null}
+            schedule={data}
+            source={source}
+            reload={reload}
+            reloadOrder={reloadOrder}
+          />
+          <PhotoInspectionPanel demandId={id} />
+        </>
+      ) : null}
     </div>
   );
 }
