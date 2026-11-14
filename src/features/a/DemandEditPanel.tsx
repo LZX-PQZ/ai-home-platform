@@ -106,7 +106,12 @@ export function DemandEditPanel({ demand, onChanged }: { demand: DemandDTO; onCh
             </Field>
           </div>
           {outcome?.kind === "rejected" ? <Note tone="warn" title="请先修正表单">{outcome.messages.map((message) => <p key={message}>{message}</p>)}</Note> : null}
-          {outcome?.kind === "failed" ? <Note tone="danger" title="操作失败"><p>{outcome.message}</p></Note> : null}
+          {outcome?.kind === "failed" ? (
+            <Note tone={outcome.status === 401 ? "warn" : "danger"} title={outcome.status === 401 ? "请先完成业主登录" : "操作失败"}>
+              <p>{outcome.message}</p>
+              {outcome.status === 401 ? <p>业主登录入口尚未开放，暂时无法保存修改。角色切换和演示服务方登录不能完成业主认证；本次填写的内容仍保留在表单中。</p> : null}
+            </Note>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void save()} disabled={busy}>{busy ? "保存中…" : "保存修改"}</Button>
             <Button variant="secondary" onClick={() => { setEditing(false); setOutcome(null); }} disabled={busy}>取消</Button>
