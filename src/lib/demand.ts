@@ -1,6 +1,7 @@
 import type { DemandOrder } from "@prisma/client";
 import { Demand, type DemandDTO, type SourceDTO } from "@/contracts";
 import { prisma } from "@/lib/prisma";
+import { demoCompletedDemands } from "@/lib/mock-data";
 
 export type DemandDatabase = {
   demandOrder: Pick<
@@ -11,9 +12,10 @@ export type DemandDatabase = {
 
 export const DEMO_DEMAND_ID = "demo-demand";
 export const EDITABLE_DEMAND_STATUSES = ["draft", "published"] as const;
+const mockDemandIds = new Set([DEMO_DEMAND_ID, ...demoCompletedDemands.map(demand => demand.id)]);
 
 export function demandItemSource(id: string): SourceDTO {
-  return id === DEMO_DEMAND_ID ? "mock" : "live";
+  return mockDemandIds.has(id) ? "mock" : "live";
 }
 
 export function isEditableDemandStatus(status: string): status is (typeof EDITABLE_DEMAND_STATUSES)[number] {
@@ -41,7 +43,7 @@ export function toDemandDTO(row: Pick<
 
 export function demandSource(rows: Array<{ id: string }>): SourceDTO {
   // 列表响应只有一个 meta.source；混入演示需求时整体保持 mock，避免把 demo-demand 宣称为实时数据。
-  return rows.length > 0 && rows.every((row) => row.id !== DEMO_DEMAND_ID) ? "live" : "mock";
+  return rows.length > 0 && rows.every((row) => demandItemSource(row.id) === "live") ? "live" : "mock";
 }
 
 export async function listDemands(db: DemandDatabase = prisma) {

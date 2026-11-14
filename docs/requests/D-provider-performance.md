@@ -23,7 +23,7 @@
 
 隔离 SQLite 覆盖 0/1/多条、四舍五入、mock/live 混合、旧/未完成排除、错绑/坏来源失败、重复/快照/只读与隐私。生产 HTTP 在既有实际登录→接单→完工→评价流程中验证汇总和重放，并确认默认 live 不回退 mock。执行 check/build/D scope 与远端 Production HTTP smoke。
 
-后续：固定 mock 档期；B 接同源、全组有效的排序和来源展示；调整演示报价种子以展示单位/缺项提醒；README 演示步骤与最终演示版本。无依赖、schema 或 .env 变更。
+后续进展：固定 mock 档期、报价单位/列项提醒和合成 completed 接单/评价样本已由 `D-provider-availability.md` 交付，README 提供固定样例验收步骤。仍待 B 接同源、全组有效的排序和来源展示，以及最终演示版本集成。无依赖、schema 或 .env 变更。
 
 ## 实际验证（2026-11-14）
 

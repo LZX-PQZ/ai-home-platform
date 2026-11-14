@@ -24,6 +24,42 @@ export const Demand = z.object({
   status: z.enum(["draft", "published", "contracted", "in_progress", "completed"]),
   source: Source.optional(),
 });
+const CalendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}, { message: "日期必须是有效的 YYYY-MM-DD" });
+const AvailabilityWindow = z.object({ startDate: CalendarDate, endDate: CalendarDate }).strict();
+const dayNumber = (value: string) => Date.parse(`${value}T00:00:00Z`);
+/** 固定或经核实的连续可用日期窗口，不代表预约、锁定或施工承诺。 */
+export const ProviderAvailability = z.object({
+  windows: AvailabilityWindow.array(),
+  coverageStartDate: CalendarDate,
+  coverageEndDate: CalendarDate,
+  updatedAt: z.string().datetime({ offset: true }),
+  validUntil: z.string().datetime({ offset: true }),
+  source: Source,
+}).strict().superRefine((value, context) => {
+  const coverageStart = dayNumber(value.coverageStartDate);
+  const coverageEnd = dayNumber(value.coverageEndDate);
+  if (coverageStart > coverageEnd) context.addIssue({ code: z.ZodIssueCode.custom, path: ["coverageStartDate"], message: "覆盖区间起止顺序无效" });
+  if (Date.parse(value.updatedAt) > Date.parse(value.validUntil)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["updatedAt"], message: "更新时间不能晚于有效截止" });
+  }
+  let previousEnd = -Infinity;
+  for (const [index, window] of value.windows.entries()) {
+    const start = dayNumber(window.startDate);
+    const end = dayNumber(window.endDate);
+    if (start > end) context.addIssue({ code: z.ZodIssueCode.custom, path: ["windows", index, "startDate"], message: "窗口起止顺序无效" });
+    if (start < coverageStart || end > coverageEnd) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["windows", index], message: "窗口必须位于覆盖区间内" });
+    }
+    if (start <= previousEnd) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["windows", index], message: "窗口必须按顺序排列且不能重叠" });
+    }
+    previousEnd = Math.max(previousEnd, end);
+  }
+});
 /** 已完成接单的评价均分，不代表准时率、质量鉴定或信用评分。 */
 export const ProviderPerformance = z.object({
   basis: z.literal("completed_order_review_average"),
@@ -39,6 +75,7 @@ export const Provider = z.object({
   kind: z.enum(["construction", "materials", "design", "supervision"]),
   tags: z.array(z.string()), rating: z.number().min(0).max(5),
   source: Source.optional(),
+  availability: ProviderAvailability.nullable().optional(),
   performance: ProviderPerformance.nullable().optional(),
 });
 export const UserRole = z.enum(["owner", "provider", "admin"]);
@@ -308,6 +345,7 @@ export type DemandDTO = z.infer<typeof Demand>;
 export type DemandInputDTO = z.infer<typeof DemandInput>;
 export type DemandStatus = DemandDTO["status"];
 export type ProviderDTO = z.infer<typeof Provider>;
+export type ProviderAvailabilityDTO = z.infer<typeof ProviderAvailability>;
 export type ProviderPerformanceDTO = z.infer<typeof ProviderPerformance>;
 export type ProviderQueryDTO = z.infer<typeof ProviderQuery>;
 export type UserRoleDTO = z.infer<typeof UserRole>;
