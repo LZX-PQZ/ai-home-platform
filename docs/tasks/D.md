@@ -32,7 +32,8 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] 需求列表/详情隔离：同一事务核验当前身份及 SQL 范围；无业主 cookie 时公开列表仅 published，有效业主列表仅本人所有状态。published 详情公开，非公开仅所属业主可读，其余与不存在统一 404。失效业主 cookie 仍 401，不回退匿名。见 `docs/requests/D-demand-read-auth.md`。
 - [x] 排期读取隔离及固定演示例外：无参数或精确 DEMO_DEMAND_ID 可公开读取固定种子排期并标 mock，缺版本 404；带失效业主 cookie 即使演示入口也 401。其他需求在同一事务验证实际业主会话与归属，再读取最新/指定版本，匿名 401，仅服务方 403，他人与不存在统一 404；数据库故障不回退 mock。接入及验证见 `docs/requests/D-schedule-read-auth.md`。
 - [ ] 照片检查的真实分析仍为 501；评价 POST/GET 已交付本人已完成接单的保存与读取，见下方评价记录。排期首版创建、工单创建已实现，后续状态流转仍需独立定义和验收，不能将占位响应视为成功。
-- [ ] `match` 等其他读取接口继续审计访问范围；B 的匹配业务仍由 B 维护，需要变更时先提交具体交接请求。
+- [x] `match` 读取审计：发现按 ID 直接读取未公开需求的缺口，已交付 `readMatchingDemand` 及隔离数据库测试；published 公开，其余仅所属业主，同一事务核验会话与读取范围。见 `docs/requests/D-match-read-access.md`。
+- [ ] B 将上述读取器接入匹配 API/加载器后，D 补生产 HTTP 权限冒烟与最终联验；当前 `/api/match` 仍有缺口，其他读取接口仍需逐项审计。
 
 业主会话与报价读取授权见 `docs/requests/D-owner-quote-read-auth.md`。需求 POST 和两个需求 GET 已分别随 #95、#101 合入；本轮补齐显式排期读取，不能宣称整个平台已隔离。服务方履约关系、生产服务方认证与管理员专属范围仍未实现。
 
@@ -106,4 +107,6 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] Provider 可选 source/performance、ProviderPerformance 与 ProviderQuery，以及 GET /api/provider 的评价汇总已交付：公开目录范围不扩大，完成接单的一次评价、均分/样本数、mock/live 分开、无样本 null/0、坏数据 503。共享只读适配器供 B 后续接线，见 `docs/requests/D-provider-performance.md`。
 - [x] 固定 mock 档期样例：冻结 `Provider.availability` 公共契约并在六个固定演示服务方中提供明确 mock/未知样例；见 `docs/requests/D-provider-availability.md`。
 - [x] 演示报价已能展示单位/列项差异和待确认提示；新增四组合成 completed 接单/评价，mock 查询 provider-a 4.67/3、provider-b 4/1，默认 live 不回退。需求读取保留合成来源；重复 seed 不覆盖已有记录；README 补充样例验收步骤。
-- [ ] B 档期/评价排序和展示接线、最终演示版本待集成；任一坏评价或关联造成整目录 503 的限制保留，见档期交接。
+- [x] B 档期/评价排序 #153、C 档期展示 #152 已合入；演示档期截至 2026-12-31，答辩更晚须提前更新样例并联验，不能自动延长。
+- [x] 已读取 A-ai-live.md，本轮暂不启用真实供应商，README 已明确“AI 澄清默认是 mock”；现有 live 网关尚未完成真实供应商验收。
+- [ ] 最终演示联验、真实需求澄清供应商配置与验收仍待完成；受控响应测试不代表外部模型接通，任一坏评价/关联导致整个目录 503 的限制保留。

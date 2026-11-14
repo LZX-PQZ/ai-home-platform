@@ -34,7 +34,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | POST /api/order/progress | OrderProgressInput → OrderProgressResult | D | 业主确认开工/工序/整单完成；需求、接单、排期版本及事件同事务保存，200，来源沿用接单 |
 | GET /api/order/progress?demandId=… | OrderQuery → OrderProgressEvent[] | D | 所属业主读取已保存履约动作，隐藏操作者身份；来源沿用接单，无记录不补造 |
 | GET /api/provider/orders | OrderSummary[] | D | 同一事务验证服务方并只查本人接单关系；无参数，当前演示身份整体 mock |
-| GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
+| GET /api/match[?demandId=<id>] | Match[] | B | 无参数固定演示；显式 ID 读库，未知 404，空/重复参数 400；未公开需求权限仍待 B 接入 D 读取器 |
 | GET /api/quote | Quote[] | B | 固定 mock |
 | POST /api/quote | QuoteSubmissionInput → Quote | B | 已接演示会话；合法首次提交 201/mock，同键同摘要重放 200/mock；无有效会话 401 |
 | GET /api/schedule[?demandId=<id>&version=<n>] | Schedule | D | 无参数或固定 demo-demand 为公开种子排期 mock；其他需求验证业主会话及归属后读取最新/指定版本 |
@@ -56,7 +56,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 服务端 `readProviderDirectory({ performanceSource: 'live' | 'mock' })` 在 Serializable 事务内生成同一快照时间并返回公共信封，默认参数为 live；HTTP 与 B 后续 `/api/match` 可复用，抛错为 `ProviderDirectoryError`。浏览器使用 `apiGet('/api/provider?performanceSource=mock', Provider.array())`，不要导入服务端适配器。所有 HTTP 响应 no-store，不依赖 cookie、不写库或更新服务方 rating。`availability` 的窗口按 Asia/Shanghai 自然日解释，固定样例 source=mock；缺省/null 是未知，空窗口只表示覆盖区间内无窗口，过期后不参与排序。当前任一查询范围内的坏评价或坏关联会让整个目录返回 503：C 的需求页和 B 的匹配页会无法完成目录加载；B 的报价对比页会保留报价，但服务方名称与来源提示待确认。此指标是业主评价均分，不是准时率、质量认证或信用分；少于 3 个样本由调用方显示样本少。
 
-B 排序/来源展示和 `/api/match` 新数据接线仍由 B 后续完成。固定 mock 档期、报价单位/列项差异样例与四组合成 completed 接单/评价已提供；运行 db:seed 补齐固定记录。仅种子样本时 mock 汇总为 provider-a 4.67/3、provider-b 4/1；默认 live 不回退这些样本。样例验收步骤见 README，最终演示版本待集成。详见 `docs/requests/D-provider-performance.md` 和 `docs/requests/D-provider-availability.md`。
+B 排序/来源展示与 `/api/match` 目录接线已随 #153 合入，C 档期展示 #152 已合入；匹配需求权限接线仍待 B 完成。固定 mock 档期、报价单位/列项差异样例与四组合成 completed 接单/评价已提供；运行 db:seed 补齐固定记录。仅种子样本时 mock 汇总为 provider-a 4.67/3、provider-b 4/1；默认 live 不回退这些样本。样例验收步骤见 README，最终演示版本待集成。详见 `docs/requests/D-provider-performance.md` 和 `docs/requests/D-provider-availability.md`。
 
 ## 接受报价与本人接单
 
@@ -274,9 +274,11 @@ B 已从 `@/lib/server-auth` 导入 `readDemoVerifiedSession`，作为处理器�
 ## GET /api/match 查询参数
 
 - `demandId` 是可选的单值查询参数。省略时保留 `demo-demand` 的演示入口，返回 `Match[]`，`meta.source` 为 `mock`。
-- 显式传入 `demandId=demo-demand` 时行为相同；传入未知 ID 返回 `404 DEMAND_NOT_FOUND`，不会回退到默认需求。
+- 显式 ID（包括 `demo-demand`）读取数据库；不存在返回 `404 DEMAND_NOT_FOUND`，不会回退到默认需求。
 - 参数为空、纯空白或重复传入返回 `400 VALIDATION_ERROR`。错误响应仍使用统一失败信封。
-- 当前匹配结果和服务方资料仍是模拟数据；D 提供需求详情查询后，B 可继续把真实需求接入匹配数据入口。鉴权和数据隔离尚未实现。
+- 当前按保存需求与公开目录计算匹配，目录含固定 mock 资料，所以整体仍为 mock。当前路由直接按 ID 读库，没有限制未公开需求的访问，也未拒绝未知参数；不能宣称已隔离。
+
+D 已提供服务端 `readMatchingDemand(request)`：复用公共 `DemandIdParams`/`Demand`，严格拒绝未知/重复/空参数；published 可公开读取，其他状态仅所属业主；显式业主凭证必须有效，不回退匿名。会话、当前角色、按范围过滤的查询及输出验证在同一 Serializable 事务中完成。无参数固定 mock；显式 demo 也必须存在且满足发布/归属规则。非公开他人需求与不存在统一 404，凭证失效 401、角色变化 403、坏数据/存储失败 503；成功与失败要求 private, no-store、Vary: Cookie。B 须先接入该读取器再加载目录/匹配，详细导入及错误映射见 `docs/requests/D-match-read-access.md`。**此处为待接线协议，现有 HTTP 路由尚未执行这些权限规则。**
 
 ## ID 与状态
 固定演示需求 demo-demand，服务方 provider-a 到 provider-f。
@@ -293,6 +295,9 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 `Quote.source` 已增加为输出中的可选字段，沿用公共 Source；缺省兼容旧 DTO，不能解释为 live。数据库 `Quote.source` 非空且默认 mock，普通 schema 同步会把无来源的历史记录回填 mock，固定 mock 报价也显式输出 source。`QuoteSubmissionInput` 仍拒绝 source/meta，客户端不能指定来源。B 服务端从 `@/lib/quote-policy` 导入 `parseStoredQuoteSource` 严格校验库值，再用 `summarizeQuoteSources(demand.source, returnedQuotes)` 汇总：全 live 才 live，混合/缺省 mock，空列表沿用需求来源。非法持久化值须报错，不能降级为 mock。B 的首次/重放/GET 映射仍待接入，详见 `docs/requests/D-quote-source.md` 的调用与旧库同步步骤。
 
 ## AI 接入
+
+AI 澄清默认是 mock。对 A-ai-live.md 的本轮决定为暂不启用真实供应商；已有 live 网关代码，真实供应商配置与外部调用验收尚未完成。受控供应商响应测试只证明协议处理，不能证明已接通真实模型。
+
 默认 `AI_MODE=mock`，会返回固定追问并标记 `meta.source: "mock"`。设为 `live` 后，服务端读取 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`，调用 OpenAI 兼容的 `/chat/completions` JSON 接口；响应必须通过 `ChatResult` 校验后才标记 `meta.source: "live"`。
 网关默认超时 5 秒、最多 2 次重试，可由服务端 `LLM_TIMEOUT_MS` 和 `LLM_MAX_RETRIES` 调整。缺少配置、超时、重试耗尽、非 JSON 或不符合契约的模型输出均返回 503 `AI_UNAVAILABLE`，不会伪装成成功或 mock。
 模型可生成文字解释和候选方案；费用合计、排期依赖和状态合法性由代码复核。
