@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
 import {
@@ -61,7 +62,17 @@ export function ProviderServiceOrdersContent({ state, onReload }: {
                     </div>
                     <h2 className={`${C.sectionTitle} break-all`}>接单关系编号：{order.id}</h2>
                     <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
-                      <div className="min-w-0"><dt className="text-ink-2">关联需求编号</dt><dd className="mt-1 break-all">{order.demandId}</dd></div>
+                      <div className="min-w-0">
+                        <dt className="text-ink-2">关联需求编号</dt>
+                        <dd className="mt-1 break-all">
+                          <Link
+                            href={`/provider/demand/${encodeURIComponent(order.demandId)}`}
+                            prefetch={false}
+                            aria-label={`查看关联需求 ${order.demandId}`}
+                            className="rounded underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                          >{order.demandId}</Link>
+                        </dd>
+                      </div>
                       <div className="min-w-0"><dt className="text-ink-2">已接受报价编号</dt><dd className="mt-1 break-all">{order.acceptedQuoteId}</dd></div>
                       <div className="min-w-0"><dt className="text-ink-2">接单服务方编号</dt><dd className="mt-1 break-all">{order.providerId}</dd></div>
                     </dl>
@@ -70,7 +81,7 @@ export function ProviderServiceOrdersContent({ state, onReload }: {
               ))}
             </ul>
           )}
-          <p className={`!mb-0 ${C.pageSub}`}>可按已接受报价编号核对下方本人报价。接单摘要不含费用或工期；报价中待确认费用仍需核实。已签约需求详情的服务方读取权限尚未开放。</p>
+          <p className={`!mb-0 ${C.pageSub}`}>可按已接受报价编号核对下方本人报价。接单摘要不含费用或工期；报价中待确认费用仍需核实。</p>
         </>
       )}
     </section>
