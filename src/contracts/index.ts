@@ -83,6 +83,16 @@ export const Quote = z.object({
   knownTotalCents: Money, pendingItems: z.array(z.string()), estimatedDays: z.number().int().positive(),
   status: z.enum(["draft", "submitted", "accepted", "rejected"]),
 });
+/** 接受报价只建立平台接单关系，不代表付款、开工或费用全部确认。 */
+export const OrderAcceptInput = z.object({
+  demandId: Id.refine(value => value.trim().length > 0),
+  quoteId: Id.refine(value => value.trim().length > 0),
+  confirmed: z.literal(true),
+}).strict();
+export const OrderSummary = z.object({
+  id: Id, demandId: Id, providerId: Id, acceptedQuoteId: Id,
+  status: z.enum(["contracted", "in_progress", "completed"]), source: Source,
+}).strict();
 const QUOTE_SUBMISSION_MAX_ITEMS = 20;
 const QUOTE_SUBMISSION_MAX_NAME_LENGTH = 100;
 const QUOTE_SUBMISSION_MAX_NOTE_LENGTH = 1000;
@@ -245,6 +255,8 @@ export type UserRoleDTO = z.infer<typeof UserRole>;
 export type VerifiedSessionDTO = z.infer<typeof VerifiedSession>;
 export type ProviderIdentityDTO = z.infer<typeof ProviderIdentity>;
 export type QuoteDTO = z.infer<typeof Quote>;
+export type OrderAcceptInputDTO = z.infer<typeof OrderAcceptInput>;
+export type OrderSummaryDTO = z.infer<typeof OrderSummary>;
 export type QuoteSubmissionItemInputDTO = z.infer<typeof QuoteSubmissionItemInput>;
 export type QuoteSubmissionInputDTO = z.infer<typeof QuoteSubmissionInput>;
 export type ScheduleDTO = z.infer<typeof Schedule>;

@@ -69,3 +69,9 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [ ] 工单创建表单、管理员/服务方访问、派单/解决状态流转、通知未实现；本次不修改 A/C 页面。重复提交不去重，失败后需先读取核实。
 - [ ] 后续独立交付照片检查、评价的 501 写入接口，以及按归属审计 match 等读取接口。
 - [x] #108 已合入；本次接口变化同步修改 scripts/smoke.mjs，交付时确认 CI 的 Production HTTP smoke 成功。
+
+## 接受报价与接单关系（2026-11-14）
+
+- [x] POST /api/order：真实业主同源确认本人 published 需求的 submitted 报价，在事务内重验身份/归属/原始数据并原子签约、接受、建立 ServiceOrder。每需求单一关系，重复同报价返回原关系，竞争报价最多一个成功；保留来源、null 费用和原提交回执。见 `docs/requests/D-quote-acceptance.md`。
+- [x] GET /api/provider/orders：当前已验证服务方仅读取本人实际接单；历史 accepted 报价不自动补单。当前演示身份整体仍 mock，逐条保留来源，异常/坏数据不回退成功空态。
+- [ ] B 接受按钮与 C 接单页面待各角色接入；生产服务方认证、改选/取消、多服务方拆单、履约推进/支付未实现。照片检查和评价仍为后续独立任务。

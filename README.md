@@ -35,6 +35,10 @@ macOS / Linux：使用 npm 而非 npm.cmd，使用 cp .env.example .env。
 
 已有项目拉取包含 PR #81 的 main 后，也需要运行一次 `npm run db:setup`（PowerShell 使用 `npm.cmd run db:setup`），再重启应用。该变更新增 `Quote.source`；同步会保留已有记录，将历史报价来源保守回填为 `mock`，重复 seed 不覆盖现有记录。未同步的旧库查询报价可能因缺少该列而失败。使用现有 `.env` 即可，无需重新复制或重置数据库。
 
+## 接单数据同步
+
+接受报价与接单后端已提供 `POST /api/order` 和 `GET /api/provider/orders`，部署本功能前运行 `npm.cmd run db:setup` 同步新增的 ServiceOrder 表，然后重启应用；不要重置数据库。既有需求、报价及提交回执保留，历史 accepted 报价不自动补成接单。B 的接受按钮和 C 的接单界面仍待接入；当前 `/provider/orders` 页面仍是“本人报价”。本版一需求只能接受一份报价，含待定费用的报价不会被宣称已确认最终总价。演示报价建立的关系仍标 mock，不代表生产服务方认证、付款或履约完成。协议见 [接受报价交接](docs/requests/D-quote-acceptance.md)。
+
 ## 演示服务方登录
 
 在已有 `.env` 中设置 `DEMO_AUTH_ENABLED="true"`，运行 `npm.cmd run db:setup` 同步会话表与演示账号，再重启应用。点击导航下方的“演示服务方登录”，即可使用固定的 `provider-a` 演示身份；无需填写或提交真实账号密码。默认关闭，界面和接口均明确标记模拟来源。

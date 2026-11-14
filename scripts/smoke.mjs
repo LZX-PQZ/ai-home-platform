@@ -90,7 +90,7 @@ for (const [path, cookie, status, code] of [
  assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
 }
 // Implemented owner-only writes: anonymous smoke must never create fixtures.
-for (const path of ['/api/schedule', '/api/ticket']) {
+for (const path of ['/api/schedule', '/api/ticket', '/api/order']) {
 for (const [headers, status, code] of [
  [{}, 403, 'FORBIDDEN'],
  [{ Origin: new URL(base).origin }, 401, 'UNAUTHENTICATED'],
@@ -103,6 +103,20 @@ for (const [headers, status, code] of [
  const body = await response.json();
  assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
 }
+}
+// Orders are never inferred from public demo quotes; the provider list requires a verified session.
+for (const [query, cookie, status, code] of [
+ ['', '', 401, 'UNAUTHENTICATED'],
+ ['', 'ai_home_demo_session=invalid', 401, 'UNAUTHENTICATED'],
+ ['?providerId=provider-b', '', 400, 'VALIDATION_ERROR'],
+ ['?demandId=demo-demand', '', 400, 'VALIDATION_ERROR'],
+]) {
+ const response = await fetch(base + '/api/provider/orders' + query, { headers: { Cookie: cookie } });
+ assert.equal(response.status, status, 'provider order isolation');
+ assert.equal(response.headers.get('cache-control'), 'private, no-store');
+ assert.ok((response.headers.get('vary') ?? '').split(',').some(value => value.trim().toLowerCase() === 'cookie'));
+ const body = await response.json();
+ assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
 }
 const chat = await fetch(base + '/api/demand/chat', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({messages:[{role:'user',content:'我想翻新浴室'}]}) });
 assert.equal(chat.status, 200);
@@ -149,4 +163,4 @@ const forbidden = await withoutOrigin.json();
 assert.equal(forbidden.ok, false);
 assert.equal(forbidden.error.code, 'FORBIDDEN');
 assert.equal('data' in forbidden, false);
-console.log('13 个页面、26 个 GET 场景和 10 个 POST 场景通过（固定演示公开、真实排期/工单隔离、匿名与失效凭证写入拒绝）。');
+console.log('13 个页面、30 个 GET 场景和 13 个 POST 场景通过（固定演示公开、真实排期/工单/接单隔离、匿名与失效凭证写入拒绝）。');

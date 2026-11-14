@@ -29,6 +29,8 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | POST /api/demand/chat | ChatResult | D | 读取 ChatInput；`AI_MODE=mock` 返回 mock，`AI_MODE=live` 调用服务端 LLM 网关并返回 live |
 | GET /api/provider | Provider[] | D | 固定 mock |
 | GET /api/provider/quotes | Quote[] | D | 同一事务验证服务方会话并只查本人报价；当前演示身份整体标 mock，不代表接单 |
+| POST /api/order | OrderAcceptInput → OrderSummary | D | 所属业主接受已提交报价，原子建立单一接单关系；首次 201，同报价重放 200，保留报价来源 |
+| GET /api/provider/orders | OrderSummary[] | D | 同一事务验证服务方并只查本人接单关系；无参数，当前演示身份整体 mock |
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
 | GET /api/quote | Quote[] | B | 固定 mock |
 | POST /api/quote | QuoteSubmissionInput → Quote | B | 已接演示会话；合法首次提交 201/mock，同键同摘要重放 200/mock；无有效会话 401 |
@@ -38,6 +40,20 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/payment | Payment[] | D | 模拟节点列表；simulated 必须 true |
 | GET /api/ticket[?demandId=<id>] | Ticket[] | D | 无参数/精确 demo-demand 返回固定 mock；其他需求仅所属业主可读 |
 | POST /api/ticket | TicketCreateInput → Ticket | D | 当前业主为本人已发布及后续状态需求创建 open 工单，责任方 null；201/live |
+
+## 接受报价与本人接单
+
+`POST /api/order` 接收公共 `OrderAcceptInput`：`{ demandId, quoteId, confirmed: true }`。ID 非空且非纯空白，原样精确匹配；拒绝其他字段、查询参数及超过 4096 字节的正文。真实业主同源确认后，只能首次接受本人非演示 published 需求的 submitted 报价；同一 Serializable 事务重新验证身份、当前角色、归属和原始报价，原子执行需求 contracted、报价 accepted、ServiceOrder 创建。每需求最多一条关系，关联报价唯一；失败或坏输出全部回滚，其他报价和原提交幂等回执保留。
+
+首次 201 `envelope(OrderSummary)`，相同需求和报价的当前授权重放 200 返回原关系，不重复写入；另一报价 409/ORDER_ALREADY_EXISTS。无接单关系时，非 published 需求为 409/INVALID_STATE；published 需求已有旧 accepted 报价为 409/ACCEPTED_QUOTE_CONFLICT，不自动补单。仅支持单需求单服务方；接单关系保存不表示签署法律合同、付款、开工或完成施工。未确定费用/null 原样保留，不能当作零或已确认最终总价。签约后原报价 POST 及原提交回执重放仍受 published 限制。
+
+`OrderSummary` 必含 id、demandId、providerId、acceptedQuoteId、status（contracted/in_progress/completed）及 source。当前只创建 contracted，不提供后续状态推进；一致的后续状态记录可重放读取。来源沿用被接受报价的持久化来源，POST 整体与逐条一致；mock 不因业主点击或落库升级为 live。
+
+`GET /api/provider/orders` 无参数，服务端在同一事务验证当前服务方会话及绑定，再按 providerId 查询实际关系并校验关联需求/accepted 报价；按 ID 升序，不表示时间排序。历史报价不会凭 accepted 状态进入接单列表，只有授权且实际无关系才返回成功空数组。当前固定演示服务方身份让列表整体（含空列表）为 mock，每条保留 source；它不等于生产服务方认证。有效服务方 cookie 优先，与 `/api/provider/quotes` 一致；只有业主会话 403，无/失效/重复/关闭演示或绑定失效为 401，不能靠身份参数或角色头选用户。
+
+写入无效业主会话或仅服务方 cookie 为 401；角色变化/跨源 403；非本人和不存在需求统一 404/DEMAND_NOT_FOUND，确认本人归属后其他需求的报价与不存在报价统一 404/QUOTE_NOT_FOUND。本人演示需求 409/DEMO_DEMAND_READ_ONLY，非法状态 409/INVALID_STATE。读写存储、事务、坏来源/DTO/关联不一致均 503/ORDER_UNAVAILABLE，提示结果暂时无法确认，可对同一报价重试核实。所有成功/失败 private, no-store、Vary: Cookie，不回退 mock 或空成功。
+
+B 接入 `apiPost('/api/order', input, OrderSummary)` 并在明确确认前展示报价、待定费用和来源，成功后刷新报价/需求；C 接入 `apiGet('/api/provider/orders', OrderSummary.array())`，区分本人报价和接单，展示来源及错误。此次未修改两方页面，按钮/接单 UI、生产服务方认证、改选/取消、多服务方拆单及履约推进未实现。数据库须先运行 `npm run db:setup` 同步新表，seed 不补造关系。详见 `docs/requests/D-quote-acceptance.md`。
 
 ## 工单创建与读取
 
@@ -106,7 +122,7 @@ PR #74 已将 `handleQuoteSubmission` 的默认预检及事务会话 reader 接�
 完整决策见 `docs/requests/D-quote-idempotency.md`、`docs/requests/D-demo-provider-session.md`。已用真实演示 cookie 和隔离 SQLite 验证公开 POST；本次未做浏览器手工验收，业主公开 GET/页面读取仍未接通。
 
 ## 已预留、当前返回 501
-- POST /api/inspect、/api/review：由 D 完成。ReviewInput 已预留；写入契约先补齐再让页面提交。POST /api/schedule 已实现首版计划创建，POST /api/ticket 已实现业主创建工单，见上节；排期变更与验收、工单派单与解决仍未实现。
+- POST /api/inspect、/api/review：由 D 完成。ReviewInput 已预留；写入契约先补齐再让页面提交。POST /api/schedule 已实现首版计划创建，PUT /api/schedule 已实现未开工计划确认修订，POST /api/ticket 已实现业主创建工单，见上节；施工中变更与验收、工单派单与解决仍未实现。
 - POST /api/payment：已实现最小模拟确认动作，不做身份校验，任何调用方都可触发演示状态转换。输入为 `PaymentActionInput`，只允许 `pending → confirmed_demo` 一次转换；状态只保存在服务进程内，进程重启后恢复初始演示状态。成功返回 `Payment`，`meta.source` 为 `mock` 且 `simulated` 为 `true`；这不是支付接口，不代表真实付款、资金托管或数据库持久化。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
 
