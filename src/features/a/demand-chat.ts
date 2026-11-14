@@ -92,7 +92,7 @@ export function describeFailure(status: number, payload: unknown): ApiError {
   }
   return {
     code: `HTTP_${status}`,
-    message: `接口返回了无法识别的响应（HTTP ${status}）。`,
+    message: "服务暂时无法完成保存，请稍后重试。",
     notImplemented: status === 501,
   };
 }
@@ -230,7 +230,7 @@ export function interpretDemandSubmit(status: number, payload: unknown): SubmitO
   if (error.code === "VALIDATION_ERROR") {
     return { kind: "rejected", messages: [error.message] };
   }
-  return { kind: "failed", message: "保存需求时遇到问题，请先到需求列表核实，再决定是否重试。" };
+  return { kind: "failed", message: error.message };
 }
 
 export function demandPath(id: string): string {
