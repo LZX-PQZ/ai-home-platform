@@ -111,6 +111,7 @@ test("删除校验返回的 ID、deleted 和来源，并保留业务错误", asy
   const request = t.mock.method(globalThis, "fetch", async (path: string, init?: RequestInit) => {
     assert.equal(path, "/api/demand/d-1");
     assert.equal(init?.method, "DELETE");
+    assert.equal(init?.body, undefined);
     return Response.json(ok({ id: "d-1", deleted: true }, "live"));
   });
   assert.deepEqual(await deleteDemand("d-1"), { kind: "deleted", result: { id: "d-1", deleted: true }, source: "live" });
@@ -125,4 +126,83 @@ test("删除校验返回的 ID、deleted 和来源，并保留业务错误", asy
   assert.equal(result.kind, "failed");
   if (result.kind === "failed") assert.match(result.message, /不允许修改/);
   assert.equal(conflict.mock.callCount(), 1);
+});
+
+test("两种操作均编码特殊需求 ID，保留 mock/live 信封来源", async (t) => {
+  const id = "需求/a?x=1&#";
+  for (const source of ["mock", "live"] as const) {
+    const updated = { ...demand, id, source };
+    const deleted = { id, deleted: true };
+    const request = t.mock.method(globalThis, "fetch", async (path: string, init?: RequestInit) => {
+      assert.equal(path, `/api/demand/${encodeURIComponent(id)}`);
+      return Response.json(ok(init?.method === "PUT" ? updated : deleted, source));
+    });
+    assert.deepEqual(await updateDemand(id, form), { kind: "updated", demand: updated, source });
+    assert.deepEqual(await deleteDemand(id), { kind: "deleted", result: deleted, source });
+    assert.equal(request.mock.callCount(), 2);
+    t.mock.restoreAll();
+  }
+});
+
+test("更新和删除保留 HTTP 状态、业务错误码与对应提示，不自动重试", async (t) => {
+  for (const [status, code, message] of [
+    [400, "VALIDATION_ERROR", /HTTP 400/],
+    [401, "UNAUTHENTICATED", /请先登录/],
+    [403, "FORBIDDEN", /没有权限/],
+    [404, "DEMAND_NOT_FOUND", /HTTP 404/],
+    [409, "DEMAND_HAS_RELATED_RECORDS", /不允许修改/],
+    [501, "NOT_IMPLEMENTED", /尚未开放/],
+    [503, "SERVICE_UNAVAILABLE", /暂时不可用/],
+  ] as const) {
+    const request = t.mock.method(globalThis, "fetch", async () => Response.json(
+      { ok: false, error: { code, message: "测试错误" } }, { status },
+    ));
+    for (const result of [await updateDemand("d-1", form), await deleteDemand("d-1")]) {
+      assert.equal(result.kind, "failed");
+      if (result.kind === "failed") {
+        assert.equal(result.status, status);
+        assert.equal(result.code, code);
+        assert.match(result.message, message);
+      }
+    }
+    assert.equal(request.mock.callCount(), 2);
+    t.mock.restoreAll();
+  }
+});
+
+test("删除错位 ID、deleted=false、缺少来源及 200 错误信封均被拒绝", async (t) => {
+  for (const payload of [
+    ok({ id: "other", deleted: true }), ok({ id: "d-1", deleted: false }),
+    { ok: true, data: { id: "d-1", deleted: true } },
+    { ok: false, error: { code: "TEST_ERROR", message: "测试失败" } },
+  ]) {
+    t.mock.method(globalThis, "fetch", async () => Response.json(payload));
+    const result = await deleteDemand("d-1");
+    assert.equal(result.kind, "failed");
+    if (result.kind === "failed") {
+      assert.equal(result.code, "INVALID_RESPONSE");
+      assert.equal(result.status, 200);
+    }
+    t.mock.restoreAll();
+  }
+});
+
+test("两种操作的网络异常、非 JSON 与 501 非 JSON 均明确失败", async (t) => {
+  for (const status of [0, 200, 501]) {
+    const request = t.mock.method(globalThis, "fetch", async () => {
+      if (status === 0) throw new Error("test offline");
+      return new Response("not json", { status });
+    });
+    for (const result of [await updateDemand("d-1", form), await deleteDemand("d-1")]) {
+      assert.equal(result.kind, "failed");
+      if (result.kind === "failed") {
+        assert.equal(result.status, status);
+        assert.equal(result.code, status === 0 ? "NETWORK_ERROR" : "INVALID_RESPONSE");
+        if (status === 0) assert.match(result.message, /网络请求失败/);
+        if (status === 501) assert.match(result.message, /尚未开放/);
+      }
+    }
+    assert.equal(request.mock.callCount(), 2);
+    t.mock.restoreAll();
+  }
 });

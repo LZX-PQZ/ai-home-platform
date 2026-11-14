@@ -2,7 +2,7 @@
 
 发起人：D · 日期：2026-11-14 · 关联：`docs/requests/B-quote-idempotency.md`
 
-本文件冻结报价幂等、事务身份与写入授权协议。PR #67 已把公开 `POST /api/quote` 处理器接上事务内核，但处理器的预检及事务会话参数仍默认使用空 reader；包括带有效演示 cookie 的实际请求在内，目前均先返回 `401 UNAUTHENTICATED`。成功路径及错误语义如下，尚不能宣称浏览器提交闭环完成。
+本文件冻结报价幂等、事务身份与写入授权协议。PR #74 已将公开 `POST /api/quote` 的预检及事务会话 reader 接入演示认证；同源有效演示 cookie 的合法首次提交返回 201/mock，同键同摘要且当前授权有效时返回 200/mock 和原报价，不重复写入。无有效会话仍返回 `401 UNAUTHENTICATED`。生产认证与公开业主读取未开放；持久化报价来源的后续决策见 `D-quote-source.md`。
 
 ## 幂等键与回执
 
