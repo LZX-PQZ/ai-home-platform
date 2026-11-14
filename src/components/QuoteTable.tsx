@@ -29,6 +29,9 @@ export function QuoteTable({ quotes, providers = [], demand }: { quotes: QuoteDT
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{statuses[quote.status]}</span>
               </div>
               <h3 className="text-lg font-semibold">{providerName}</h3>
+              <p className="mt-2 text-sm text-ink-3">本份报价来源：{quote.source === "mock"
+                ? "mock · 模拟报价，不代表真实市场报价"
+                : quote.source === "live" ? "live · 非模拟报价数据" : "未知（接口未提供逐条来源），不能视为真实报价"}</p>
               <p className="mb-0 mt-2 text-sm text-slate-600">预计施工 {quote.estimatedDays} 天 · 档期待确认</p>
             </header>
 

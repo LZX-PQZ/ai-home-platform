@@ -13,7 +13,7 @@ export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof load
         <Link className="text-sm" href={`/owner/matches/${id}`}>← 返回服务方匹配</Link>
         <div className="mb-3 mt-6 flex flex-wrap items-center gap-3">
           <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-semibold text-teal-800">透明报价</span>
-          <span className="badge">{quoteSource === "mock" ? "模拟数据 · 非真实市场报价" : demandSource === undefined && providerSource !== "mock" ? "需求来源未知" : response.meta.source === "mock" ? "整体响应含模拟数据" : "报价数据"}</span>
+          <span className="badge">报价来源逐份标注</span>
         </div>
         <h1>先看清每一项，再比较报价</h1>
         <p className="max-w-2xl text-slate-600">已知费用从列明金额逐项汇总，待确认项目单独保留。套餐名称相同，也需要核对实际施工范围。</p>
@@ -31,7 +31,7 @@ export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof load
       </section>
 
       <section aria-labelledby="quote-list">
-        <p className="text-sm text-ink-3">报价来源：{quoteSource === "mock" ? "模拟报价" : "报价接口数据"}{providerSource !== null && <> · 服务方来源：{providerSource === "mock" ? "模拟资料" : "服务方接口数据"}</>}</p>
+        <p className="text-sm text-ink-3">报价查询整体来源：{quoteSource === "mock" ? "mock（需求或报价含模拟／未知来源）" : "live"}；每份报价来源见下方标注。{providerSource !== null && <> 服务方来源：{providerSource === "mock" ? "模拟资料" : "服务方接口数据"}</>}</p>
         {providerWarning && <div className="mb-4 rounded-control border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" role="alert">
           <p>{providerWarning}</p>
           <p className="mb-0">服务方资料未取得，来源未知；以下按报价中的服务方编号展示。</p>
@@ -40,12 +40,7 @@ export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof load
           <h2 className="mb-0" id="quote-list">报价明细对比 · {response.data.length} 份</h2>
           <span className="text-sm text-slate-500">展示顺序不代表价格或质量排名</span>
         </div>
-        {quoteSource === "mock" && response.data.length === 0 ? (
-          <div className="rounded-control border border-dashed border-line bg-white p-6 text-center" role="status">
-            <h3 className="font-semibold text-ink">暂无属于这份需求的模拟报价</h3>
-            <p className="mb-0 mt-2 text-sm text-ink-2">当前报价接口仅提供演示数据，不能据此判断是否存在真实报价。真实报价查询与提交仍待接通。</p>
-          </div>
-        ) : <QuoteTable quotes={response.data} providers={providers} demand={demand} />}
+        <QuoteTable quotes={response.data} providers={providers} demand={demand} />
       </section>
 
       <aside className="rounded-2xl border border-amber-200 bg-amber-50 p-6" aria-labelledby="quote-notes">
