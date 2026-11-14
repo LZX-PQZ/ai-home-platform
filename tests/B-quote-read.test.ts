@@ -159,8 +159,8 @@ test("报价读取内核使用隔离 SQLite，授权适配器为测试夹具而�
     await clear();
   });
 
-  await t.test("公开 GET 尚未接入读取内核，继续使用已开放的 mock 契约", async () => {
-    const response = GET();
+  await t.test("公开 GET 无参数仍使用已开放的 mock 契约", async () => {
+    const response = await GET(new Request("http://localhost/api/quote"));
     assert.equal(response.status, 200);
     const body = envelope(Quote.array()).parse(await response.json());
     assert.equal(body.meta.source, "mock");

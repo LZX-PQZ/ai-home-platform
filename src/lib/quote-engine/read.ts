@@ -14,7 +14,7 @@ export class QuoteReadDenied extends Error {
   }
 }
 
-/** 尚未接入公开 GET。必须显式提供服务端授权；公共查询及错误映射待 D 冻结。 */
+/** 供公开 GET 使用；授权与数据读取在同一事务内，HTTP 错误由 read-request 映射。 */
 export async function readStoredQuoteComparison(
   request: Request,
   demandId: string,

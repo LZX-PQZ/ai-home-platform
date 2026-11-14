@@ -106,7 +106,7 @@ test("报价数据入口不会将未知需求替换成演示需求", () => {
 });
 
 test("报价 GET 保持公共契约和 mock 来源，默认未登录的 POST 明确失败", async () => {
-  const response = GET();
+  const response = await GET(new Request("http://localhost/api/quote"));
   assert.equal(response.status, 200);
   const body = envelope(Quote.array()).parse(await response.json());
   assert.equal(body.meta.source, "mock");
