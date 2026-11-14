@@ -96,6 +96,26 @@ test("400 保留拒绝原因；501 即使响应伪装成功也只显示未开放
   }
 });
 
+test("401 明确引导业主登录并保留表单，403 明确提示权限问题", () => {
+  const auth = interpretDemandSubmit(401, {
+    ok: false, error: { code: "UNAUTHENTICATED", message: "请先完成业主登录后发布需求。" },
+  });
+  assert.equal(auth.kind, "auth_required");
+  if (auth.kind === "auth_required") {
+    assert.match(auth.message, /业主登录/);
+    assert.match(auth.message, /内容仍保留/);
+  }
+
+  const forbidden = interpretDemandSubmit(403, {
+    ok: false, error: { code: "FORBIDDEN", message: "当前请求没有需求创建权限。" },
+  });
+  assert.equal(forbidden.kind, "forbidden");
+  if (forbidden.kind === "forbidden") {
+    assert.match(forbidden.message, /权限/);
+    assert.match(forbidden.message, /内容仍保留/);
+  }
+});
+
 test("错误 JSON、缺失来源、错误信封与 503 均不能生成成功态", async (t) => {
   const responses = [
     new Response("invalid", { status: 201 }),

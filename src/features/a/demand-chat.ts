@@ -190,6 +190,8 @@ export function formToInput(form: DemandForm): FormCheck {
 export type SubmitOutcome =
   | { kind: "created"; demand: DemandDTO; source: EnvelopeSource }
   | { kind: "not_implemented"; message: string }
+  | { kind: "auth_required"; message: string }
+  | { kind: "forbidden"; message: string }
   | { kind: "rejected"; messages: string[] }
   | { kind: "failed"; message: string };
 
@@ -204,6 +206,18 @@ export function interpretDemandSubmit(status: number, payload: unknown): SubmitO
     return {
       kind: "not_implemented",
       message: `需求保存尚未开放（${error.code}）：${error.message}`,
+    };
+  }
+  if (status === 401 || error.code === "UNAUTHENTICATED") {
+    return {
+      kind: "auth_required",
+      message: "请点击页面顶部的“业主登录”，完成登录后再保存本人需求；本次填写的内容仍保留在表单中。",
+    };
+  }
+  if (status === 403 || error.code === "FORBIDDEN") {
+    return {
+      kind: "forbidden",
+      message: "当前请求没有需求创建权限，请确认使用当前站点并完成业主登录；本次填写的内容仍保留在表单中。",
     };
   }
   if (error.code === "VALIDATION_ERROR") {
