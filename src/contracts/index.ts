@@ -38,6 +38,19 @@ export const VerifiedSession = z.object({
 }).strict();
 export const OwnerIdentity = VerifiedSession.extend({ role: z.literal("owner"), providerId: z.null() });
 export type OwnerIdentityDTO = z.infer<typeof OwnerIdentity>;
+export const OwnerLoginInput = z.object({
+  login: z.string().trim().toLowerCase().min(3).max(64).regex(/^[a-z0-9._-]+$/),
+  password: z.string().min(15).max(128),
+}).strict();
+/** 仅本地维护者开通命令使用，不能作为公开注册接口。 */
+export const OwnerAccountProvisionInput = OwnerLoginInput.extend({ name: z.string().trim().min(1).max(80) });
+export const OwnerSessionState = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("signed_out") }).strict(),
+  z.object({ status: z.literal("signed_in"), identity: OwnerIdentity, expiresAt: z.string().datetime() }).strict(),
+]);
+export type OwnerLoginInputDTO = z.infer<typeof OwnerLoginInput>;
+export type OwnerSessionStateDTO = z.infer<typeof OwnerSessionState>;
+export type OwnerAccountProvisionInputDTO = z.infer<typeof OwnerAccountProvisionInput>;
 export const ProviderIdentity = z.object({
   userId: Id,
   role: z.literal("provider"),

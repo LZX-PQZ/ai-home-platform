@@ -12,7 +12,7 @@ export type DemandMutationOutcome =
 function failureMessage(status: number, code: string, message: string) {
   if (status === 501) return `需求修改接口尚未开放（${code}）：${message}`;
   if (status === 409) return `当前需求状态不允许修改（${code}）：${message}`;
-  if (status === 401) return `请先登录后再修改需求（${code}）。`;
+  if (status === 401) return `请先完成业主登录后再修改需求（${code}）。`;
   if (status === 403) return `没有权限修改这条需求（${code}）。`;
   if (status >= 500) return `需求服务暂时不可用（${code}）：${message}`;
   return `${message}（${code}，HTTP ${status}）`;

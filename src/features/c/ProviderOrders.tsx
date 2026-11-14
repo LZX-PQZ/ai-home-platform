@@ -5,6 +5,7 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
 import { formatBudget } from "./demand-hall";
+import { QuoteSource } from "./QuoteSource";
 import {
   loadProviderOrders,
   providerOrderStatusLabels,
@@ -56,9 +57,12 @@ export function ProviderOrdersContent({ state, onReload }: {
             <StatusBadge label={response.meta.source === "mock" ? "报价列表来源：模拟标识（mock）" : "报价列表来源：实时接口（live）"} />
             <p className={`mt-2 !mb-0 ${C.pageSub}`}>
               {response.meta.source === "mock"
-                ? "本次报价列表含模拟数据，仅供演示参考；来源标识不代表真实服务方身份或业主已收到报价。"
-                : "本次报价列表由实时接口返回，来源标识不代表已完成服务方身份鉴权。"}
+                ? response.data.length === 0
+                  ? "本次为空列表，接口来源标记为 mock；没有可展示的报价。"
+                  : "本次列表标记为 mock，可能包含模拟或来源未确认的数据；不代表每条报价都未保存。"
+                : "本次报价列表由实时接口返回，列表标识不能代替每条报价的来源。"}
             </p>
+            <p className={`mt-2 !mb-0 ${C.pageSub}`}>每条报价以自己的来源字段为准，未提供时显示未知；来源标识不代表真实业务身份、业主已收到报价或已履约。</p>
           </div>
 
           <section aria-labelledby="provider-order-counts-title">
@@ -85,6 +89,7 @@ export function ProviderOrdersContent({ state, onReload }: {
                   <article aria-labelledby={`provider-quote-${quote.id}`}>
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                       <QuoteStatus status={quote.status} />
+                      <QuoteSource source={quote.source} />
                       <span className={C.meta}>报价编号：{quote.id}</span>
                     </div>
                     <h2 id={`provider-quote-${quote.id}`} className="break-all">关联需求：{quote.demandId}</h2>

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
-import { DemandIdParams, OwnerIdentity, QuoteQuery, type ApiFailure, type OwnerIdentityDTO, type QuoteQueryDTO } from "@/contracts";
+import { DemandIdParams, OwnerIdentity, OwnerSessionState, QuoteQuery, type ApiFailure, type OwnerIdentityDTO, type QuoteQueryDTO } from "@/contracts";
 import { readDemoVerifiedSession } from "@/lib/demo-provider-session";
 
 export const OWNER_SESSION_COOKIE = "__Host-ai_home_owner_session";
@@ -60,14 +60,21 @@ function databaseError(error: unknown): never {
 export async function readOwnerVerifiedSession(
   request: Request, tx: SessionDatabase, now = new Date(),
 ): Promise<OwnerIdentityDTO | null> {
+  const state = await readOwnerSessionState(request, tx, now);
+  return state.status === "signed_in" ? state.identity : null;
+}
+
+/** Same credential/account checks as business authorization, without renewing expiry. */
+export async function readOwnerSessionState(request: Request, tx: SessionDatabase, now = new Date()) {
   const { hash } = credential(request);
-  if (!hash) return null;
+  if (!hash) return OwnerSessionState.parse({ status: "signed_out" });
   try {
     const session = await tx.ownerSession.findUnique({ where: { tokenHash: hash } });
-    if (!session || session.revokedAt !== null || session.expiresAt.getTime() <= now.getTime()) return null;
+    if (!session || session.revokedAt !== null || session.expiresAt.getTime() <= now.getTime()) return OwnerSessionState.parse({ status: "signed_out" });
     const account = await tx.user.findUnique({ where: { id: session.userId }, select: { id: true, role: true } });
     if (!account || account.role !== "owner") throw new OwnerAccessError("FORBIDDEN");
-    return OwnerIdentity.parse({ userId: account.id, role: "owner", providerId: null });
+    return OwnerSessionState.parse({ status: "signed_in",
+      identity: OwnerIdentity.parse({ userId: account.id, role: "owner", providerId: null }), expiresAt: session.expiresAt.toISOString() });
   } catch (error) { return databaseError(error); }
 }
 
@@ -94,7 +101,7 @@ export async function authorizeOwnerQuoteRead(request: Request, demandId: string
 
 /**
  * D-only credential creation AFTER an upstream authenticator has verified this identity.
- * There is deliberately no public issuer route. A userId or owner role is not proof of identity.
+ * The public login handler must verify the password first; userId/role alone never prove identity.
  * Return the cookie only via Set-Cookie over HTTPS, never JSON, URLs, logs or client storage.
  */
 export async function issueOwnerSession(verifiedIdentity: OwnerIdentityDTO, tx: SessionDatabase, now = new Date()) {

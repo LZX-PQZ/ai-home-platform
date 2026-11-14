@@ -21,6 +21,7 @@ import {
 } from "./schedule";
 import { useSchedule, type ScheduleState } from "./useSchedule";
 import { PhotoInspectionPanel } from "./PhotoInspectionPanel";
+import { ScheduleVersionControls } from "./ScheduleVersionControls";
 
 /**
  * 业主端「施工进度」页。
@@ -30,12 +31,24 @@ import { PhotoInspectionPanel } from "./PhotoInspectionPanel";
  * 数据只有 /api/schedule 一处来源，接口没给的字段（真实日期、责任人姓名、验收单）一律不编。
  */
 export function SchedulePanel({ id }: { id: string }) {
-  const { reload, ...state } = useSchedule(id);
-  return <ScheduleContent id={id} state={state} reload={reload} />;
+  return <DemandSchedulePanel key={id} id={id} />;
 }
 
-export function ScheduleContent({ id, state, reload }: {
+function DemandSchedulePanel({ id }: { id: string }) {
+  const [version, setVersion] = useState<number | undefined>();
+  const { reload, ...state } = useSchedule(id, version);
+  return <>
+    <ScheduleVersionControls version={version} onSelect={next => {
+      if (next === version) reload();
+      else setVersion(next);
+    }} />
+    <ScheduleContent key={version ?? "latest"} id={id} version={version} state={state} reload={reload} />
+  </>;
+}
+
+export function ScheduleContent({ id, version, state, reload }: {
   id: string;
+  version?: number;
   state: ScheduleState;
   reload: () => void;
 }) {
@@ -45,7 +58,7 @@ export function ScheduleContent({ id, state, reload }: {
   if (phase === "loading") {
     return (
       <div>
-        <PageHeader title="施工进度" subtitle={`正在读取需求 ${id} 的排期…`} />
+        <PageHeader title="施工进度" subtitle={`正在读取需求 ${id} 的${version === undefined ? "最新排期" : `排期版本 v${version}`}…`} />
         <p className={C.meta} role="status">本页数据可能包含模拟数据，加载完成后显示具体来源。</p>
         <Card className="animate-pulse">
           <div className="mb-4 h-4 w-1/3 rounded bg-[#EDF2F3]" />
@@ -91,13 +104,20 @@ export function ScheduleContent({ id, state, reload }: {
     );
   }
 
+  if (data && version !== undefined && data.version !== version) {
+    return <Note tone="danger" title="排期版本不一致">
+      <p>接口返回的排期不是指定版本 v{version}，已停止展示。</p>
+      <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
+    </Note>;
+  }
+
   if (phase === "missing") {
     return (
       <div>
-        <PageHeader title="施工进度" subtitle={`需求 ${id} 暂无排期`} />
+        <PageHeader title="施工进度" subtitle={version === undefined ? `需求 ${id} 暂无排期` : `需求 ${id} 未找到排期版本 v${version}`} />
         <Empty
-          title="尚未找到这条需求的排期"
-          hint="当前没有可读取的排期版本，请在负责人安排后重新加载。"
+          title={version === undefined ? "尚未找到这条需求的排期" : `未找到指定版本 v${version}`}
+          hint={version === undefined ? "当前没有可读取的排期版本，请在负责人安排后重新加载。" : "这不代表该需求没有其他排期，请查询其他版本或返回最新排期。"}
           action={<LinkButton href={demandHref(id)} size="sm" variant="secondary">返回需求详情</LinkButton>}
         />
         <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
@@ -146,7 +166,7 @@ export function ScheduleContent({ id, state, reload }: {
         aside={
           <div className="flex items-center gap-2">
             <Badge tone={status.tone}>{status.label}</Badge>
-            <Button variant="secondary" size="sm" onClick={reload}>刷新最新排期</Button>
+            <Button variant="secondary" size="sm" onClick={reload}>{version === undefined ? "刷新最新排期" : "刷新指定版本"}</Button>
           </div>
         }
       />
@@ -155,6 +175,7 @@ export function ScheduleContent({ id, state, reload }: {
         {source === "mock" ? "本排期为模拟数据（mock），仅供演示。" : `排期来源：${source ?? "未确认"}。`}
         日期仅为计划中的相对天数，不能据此判断今天进度或是否延期。
       </p>
+      {version !== undefined ? <Note tone="info">正在查看指定版本 v{version}，仅用于查阅；工序状态与统计属于该版本，不代表当前现场进度。</Note> : null}
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
@@ -273,7 +294,7 @@ export function ScheduleContent({ id, state, reload }: {
             )}
           </Card>
 
-          <Card>
+          {version === undefined ? <Card>
             <SectionHead title="变更与验收" />
             <p className={`!mb-3 ${C.meta}`}>
               排期变更、阶段验收都需要写回后端（POST /api/schedule），该接口目前返回 501。
@@ -303,11 +324,11 @@ export function ScheduleContent({ id, state, reload }: {
                 <Note tone="info">{actionNote}</Note>
               </div>
             ) : null}
-          </Card>
+          </Card> : null}
         </div>
       </div>
 
-      <PhotoInspectionPanel demandId={id} />
+      {version === undefined ? <PhotoInspectionPanel demandId={id} /> : null}
     </div>
   );
 }
