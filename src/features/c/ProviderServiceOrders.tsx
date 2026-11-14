@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
+import { ProviderOrderQuote } from "./ProviderOrderQuote";
 import {
   filterServiceOrders, loadProviderServiceOrders, providerServiceOrdersErrorMessage,
   serviceOrderFilterLabels, serviceOrderFilterOptions, serviceOrderStatusLabels, summarizeServiceOrders,
@@ -104,12 +105,13 @@ export function ProviderServiceOrdersContent({ state, onReload, statusFilter, on
                       <div className="min-w-0"><dt className="text-ink-2">已接受报价编号</dt><dd className="mt-1 break-all">{order.acceptedQuoteId}</dd></div>
                       <div className="min-w-0"><dt className="text-ink-2">接单服务方编号</dt><dd className="mt-1 break-all">{order.providerId}</dd></div>
                     </dl>
+                    <ProviderOrderQuote order={order} />
                   </article>
                 </li>
               ))}
             </ul>
           )}
-          <p className={`!mb-0 ${C.pageSub}`}>可按已接受报价编号核对下方本人报价。接单摘要不含费用或工期；报价中待确认费用仍需核实。</p>
+          <p className={`!mb-0 ${C.pageSub}`}>可在接单内查看已接受报价，也可按编号核对下方本人报价。接单摘要不含费用或工期；报价中待确认费用仍需核实。</p>
         </>
       )}
     </section>
