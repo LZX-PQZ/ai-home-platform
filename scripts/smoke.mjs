@@ -34,6 +34,21 @@ for (const route of ['/api/demand', '/api/demand/demo-demand']) {
 }
 const missingDetail = await fetch(base + '/api/demand/missing-demand');
 assert.equal(missingDetail.status, 404);
+for (const [path, status, code] of [
+ ['/api/schedule?demandId=demo-demand', 401, 'UNAUTHENTICATED'],
+ ['/api/schedule?unknown=', 400, 'VALIDATION_ERROR'],
+]) {
+ const response = await fetch(base + path);
+ assert.equal(response.status, status, path);
+ assert.equal(response.headers.get('cache-control'), 'private, no-store');
+ assert.ok((response.headers.get('vary') ?? '').split(',').some(value => value.trim().toLowerCase() === 'cookie'));
+ const body = await response.json();
+ assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
+}
+const scheduleWrite = await fetch(base + '/api/schedule', { method: 'POST' });
+assert.equal(scheduleWrite.status, 501);
+const scheduleWriteBody = await scheduleWrite.json();
+assert.equal(scheduleWriteBody.ok, false); assert.equal(scheduleWriteBody.error.code, 'NOT_IMPLEMENTED');
 const chat = await fetch(base + '/api/demand/chat', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({messages:[{role:'user',content:'我想翻新浴室'}]}) });
 assert.equal(chat.status, 200);
 assert.equal((await chat.json()).data.ready, false);
@@ -65,4 +80,4 @@ const forbidden = await withoutOrigin.json();
 assert.equal(forbidden.ok, false);
 assert.equal(forbidden.error.code, 'FORBIDDEN');
 assert.equal('data' in forbidden, false);
-console.log('13 个页面、12 个 GET 场景和 4 个 POST 场景通过（公开读取、失效凭证与匿名写入检查通过）。');
+console.log('13 个页面、14 个 GET 场景和 5 个 POST 场景通过（公开需求、受保护排期与未实现写入检查通过）。');
