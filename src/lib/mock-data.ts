@@ -5,9 +5,9 @@ export const demoDemand = Demand.parse({
 });
 export const providers = Provider.array().parse([
  { id:"provider-a", name:"安心施工工作室（模拟）", city:"深圳", kind:"construction", tags:["适老化","局部改造"], rating:4.8,
-   availability:{coverageStartDate:"2026-11-15",coverageEndDate:"2026-12-31",windows:[{startDate:"2026-11-20",endDate:"2026-12-20"}],updatedAt:"2026-11-14T00:00:00.000Z",validUntil:"2026-12-31T23:59:59.000Z",source:"mock"} },
- { id:"provider-b", name:"宜家改造工作室（模拟）", city:"深圳", kind:"construction", tags:["适老化","维修"], rating:4.6,
    availability:{coverageStartDate:"2026-11-15",coverageEndDate:"2026-12-31",windows:[{startDate:"2026-11-18",endDate:"2026-11-30"},{startDate:"2026-12-05",endDate:"2026-12-20"}],updatedAt:"2026-11-14T00:00:00.000Z",validUntil:"2026-12-31T23:59:59.000Z",source:"mock"} },
+ { id:"provider-b", name:"宜家改造工作室（模拟）", city:"深圳", kind:"construction", tags:["适老化","维修"], rating:4.8,
+   availability:{coverageStartDate:"2026-11-15",coverageEndDate:"2026-12-31",windows:[{startDate:"2026-11-20",endDate:"2026-12-20"}],updatedAt:"2026-11-14T00:00:00.000Z",validUntil:"2026-12-31T23:59:59.000Z",source:"mock"} },
  { id:"provider-c", name:"明材供应商（模拟）", city:"深圳", kind:"materials", tags:["地砖","防滑"], rating:4.7,
    availability:{coverageStartDate:"2026-11-15",coverageEndDate:"2026-12-31",windows:[{startDate:"2026-11-22",endDate:"2026-12-01"}],updatedAt:"2026-11-14T00:00:00.000Z",validUntil:"2026-12-31T23:59:59.000Z",source:"mock"} },
  { id:"provider-d", name:"简居设计工作室（模拟）", city:"深圳", kind:"design", tags:["适老化"], rating:4.5,

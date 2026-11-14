@@ -21,7 +21,7 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - 运行 npm run scope -- --role D --base origin/main。
 
 ## 本机演练记录
-历史已通过记录见各 `docs/requests/D-*.md` 的实际验证；2026-11-15 本轮验收集中记录于 `docs/requests/D-demo-integration.md`，避免把历史通过数当成本轮结果。
+历史已通过记录见各 `docs/requests/D-*.md` 的实际验证；2026-11-15 本轮浏览器及交付检查集中记录于 `docs/requests/D-demo-browser-validation.md`，避免把历史通过数当成本轮结果。
 
 ## 鉴权待办（2026-11-14，高优先级）
 
@@ -113,13 +113,13 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] 固定 mock 档期样例：冻结 `Provider.availability` 公共契约并在六个固定演示服务方中提供明确 mock/未知样例；见 `docs/requests/D-provider-availability.md`。
 - [x] 演示报价已能展示单位/列项差异和待确认提示；新增四组合成 completed 接单/评价，mock 查询 provider-a 4.67/3、provider-b 4/1，默认 live 不回退。需求读取保留合成来源；重复 seed 不覆盖已有记录；README 补充样例验收步骤。
 - [x] B 档期/评价排序 #153、C 档期展示 #152 已合入；演示档期截至 2026-12-31，答辩更晚须提前更新样例并联验，不能自动延长。
-- [x] 已读取 A-ai-live.md，本轮暂不启用真实供应商，README 已明确“AI 澄清默认是 mock”；现有 live 网关尚未完成真实供应商验收。
-- [ ] 最终演示联验、真实需求澄清供应商配置与验收仍待完成；受控响应测试不代表外部模型接通，任一坏评价/关联导致整个目录 503 的限制保留。
+- [x] 已读取 A-ai-live.md，保留“AI 澄清默认是 mock”的仓库说明；本轮演示通过进程环境明确使用 mock，不覆盖本机供应商配置。
+- [ ] 真实需求澄清完整业务验收仍待完成；本机配置、单次连通或受控响应测试不能替代业务验收，任一坏评价/关联导致整个目录 503 的限制保留。
 
 ## 演示集成（2026-11-15）
 
 - [x] #160 已合入；新增 `docs/DEMO.md` 操作脚本，README 汇总已知限制，并核对本清单的已接入表单和后端状态。
-- [x] 已评估 `B-ranking-demo-data.md`：采纳同分/交换窗口的设计；受控时点验证了 live b→a、mock a→b，但临时数据使 3 条 B 旧断言失败。运行样例已恢复，精确交接见 `docs/requests/D-demo-integration.md`。
-- [ ] B 固定其读取协议测试的候选与时间、保留排序/来源断言后，D 再替换运行样例、同步 D 测试并实际验收切换；当前仍 98/97，不能展示为排序翻转已完成。
+- [x] 先前评估 `B-ranking-demo-data.md` 时，临时数据使 3 条 B 旧断言失败，曾恢复样例等待 B 固定夹具；历史交接见 `docs/requests/D-demo-integration.md`。
+- [x] #165 已固定 B 读取协议测试的候选与时间；D 将 a/b 改为同 98 分并交换窗口，补充实际样例和上海 11-22 边界回归。2026-11-15 浏览器实际 live→mock→live 为 b→a、a→b、b→a；11-22 起剩余不足不再保证翻转，见 `docs/requests/D-demo-browser-validation.md`。
 - [x] 同步 B #161 后，D 在共享生产冒烟加入“实际存在的非公开需求，匿名匹配返回 404”，并核对其他业主/服务方 404、本人可读及退出凭证拒绝；状态通过正常 HTTP 接受报价产生。
-- [ ] 最终浏览器完整演示联验尚未完成；自动 HTTP 冒烟与实际浏览器操作分别记录，不互相替代。
+- [x] 隔离库合成账号的浏览器完整链路已完成，覆盖发布至履约、评价、工单及退出拒绝。发现并获用户授权修复 A 确认按钮，独立 PR #168 已合入；完整流程先在包含该修复的本地组合验证，再同步 main 6b708df 检查。自动 HTTP 冒烟与浏览器结果分别记录，见 `docs/requests/D-demo-browser-validation.md`。

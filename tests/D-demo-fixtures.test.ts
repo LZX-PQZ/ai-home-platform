@@ -8,11 +8,12 @@ import { PrismaClient } from "@prisma/client";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Demand, Provider, Quote, envelope } from "../src/contracts";
-import { demoCompletedDemands, demoCompletedQuotes, quotes } from "../src/lib/mock-data";
+import { demoCompletedDemands, demoCompletedQuotes, demoDemand, quotes } from "../src/lib/mock-data";
 import { demandItemSource } from "../src/lib/demand";
 import { handleDemandDetail, handleDemandList } from "../src/lib/demand-read";
 import { issueOwnerSession } from "../src/lib/owner-auth";
 import { handleProviderDirectory } from "../src/lib/provider-directory";
+import { matchProviders } from "../src/lib/match";
 import { loadQuoteData } from "../src/lib/quote-engine/data";
 import { QuoteComparison } from "../src/features/b/QuoteComparison";
 
@@ -76,10 +77,21 @@ test("实际重复 seed 产生可查询的 mock 档期/评价样本，保持来�
   assert.equal(b.performance!.reviewCount, 1);
   assert.ok(mock.data.every(provider => provider.performance!.source === "mock"));
   assert.equal(a.availability!.source, "mock");
-  assert.equal(a.availability!.windows[0].endDate, "2026-12-20");
+  assert.deepEqual(a.availability!.windows, [
+    { startDate: "2026-11-18", endDate: "2026-11-30" },
+    { startDate: "2026-12-05", endDate: "2026-12-20" },
+  ]);
+  assert.equal(b.availability!.source, "mock");
+  assert.deepEqual(b.availability!.windows, [{ startDate: "2026-11-20", endDate: "2026-12-20" }]);
+  const now = Date.parse("2026-11-15T04:00:00Z");
+  assert.deepEqual(matchProviders(demoDemand, mock.data, now).map(row => [row.provider.id, row.score]),
+    [["provider-a", 98], ["provider-b", 98]]);
   for (const query of ["", "?performanceSource=live"]) {
-    assert.ok((await read(query)).data.every(provider => provider.performance!.source === "live"
+    const live = await read(query);
+    assert.ok(live.data.every(provider => provider.performance!.source === "live"
       && provider.performance!.averageRating === null && provider.performance!.reviewCount === 0));
+    assert.deepEqual(matchProviders(demoDemand, live.data, now).map(row => [row.provider.id, row.score]),
+      [["provider-b", 98], ["provider-a", 98]]);
   }
   // Use a trusted session fixture only to exercise authorized demand DTO/envelope reads.
   const cookie = (await db.$transaction(tx => issueOwnerSession({ userId: "demo-owner", role: "owner", providerId: null }, tx))).cookie.split(";")[0];
