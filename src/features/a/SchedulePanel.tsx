@@ -22,7 +22,11 @@ import {
 import { useSchedule, type ScheduleState } from "./useSchedule";
 import { PhotoInspectionPanel } from "./PhotoInspectionPanel";
 import { ScheduleVersionControls } from "./ScheduleVersionControls";
+import { ScheduleEditorPanel } from "./ScheduleEditorPanel";
+import { canReviseSchedule } from "./schedule-editor";
 import { OrderProgressPanel } from "./OrderProgressPanel";
+import { useOwnerOrder } from "./useOwnerOrder";
+import type { OwnerOrderState } from "./owner-order";
 
 /**
  * 业主端「施工进度」页。
@@ -38,23 +42,29 @@ export function SchedulePanel({ id }: { id: string }) {
 function DemandSchedulePanel({ id }: { id: string }) {
   const [version, setVersion] = useState<number | undefined>();
   const { reload, ...state } = useSchedule(id, version);
+  const orderState = useOwnerOrder(id);
+  const reloadAll = () => {
+    reload();
+    orderState.reload();
+  };
   return <>
     <ScheduleVersionControls version={version} onSelect={next => {
-      if (next === version) reload();
+      if (next === version) reloadAll();
       else setVersion(next);
     }} />
-    <ScheduleContent key={version ?? "latest"} id={id} version={version} state={state} reload={reload} />
+    <ScheduleContent key={version ?? "latest"} id={id} version={version} state={state} reload={reloadAll} orderState={orderState} reloadOrder={orderState.reload} />
   </>;
 }
 
-export function ScheduleContent({ id, version, state, reload }: {
+export function ScheduleContent({ id, version, state, reload, orderState = { phase: "loading" }, reloadOrder = () => {} }: {
   id: string;
   version?: number;
   state: ScheduleState;
   reload: () => void;
+  orderState?: OwnerOrderState;
+  reloadOrder?: () => void;
 }) {
   const { phase, data, source, error } = state;
-  const [actionNote, setActionNote] = useState<string | null>(null);
 
   if (phase === "loading") {
     return (
@@ -122,6 +132,7 @@ export function ScheduleContent({ id, version, state, reload }: {
           action={<LinkButton href={demandHref(id)} size="sm" variant="secondary">返回需求详情</LinkButton>}
         />
         <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
+        {version === undefined ? <div className="mt-4"><ScheduleEditorPanel demandId={id} mode="create" onSaved={reload} /></div> : null}
       </div>
     );
   }
@@ -295,43 +306,31 @@ export function ScheduleContent({ id, version, state, reload }: {
             )}
           </Card>
 
-          {version === undefined ? <Card>
+          {version === undefined && source === "live" && canReviseSchedule(data) ? <ScheduleEditorPanel demandId={id} mode="revision" schedule={data} onSaved={reload} /> : null}
+          {version === undefined && source === "live" && !canReviseSchedule(data) ? <Card>
             <SectionHead title="变更与验收" />
-            <p className={`!mb-3 ${C.meta}`}>
-              排期变更、阶段验收都需要写回后端（POST /api/schedule），该接口目前返回 501。
-            </p>
-            <div className="grid gap-2">
-              <Button
-                variant="secondary"
-                className="w-full"
-                onClick={() =>
-                  setActionNote("申请变更需要 POST /api/schedule，该接口尚未实现（501）。已写进 docs/requests/A-schedule-payment.md，等 D 补齐。")
-                }
-              >
-                申请排期变更
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full"
-                onClick={() =>
-                  setActionNote("验收确认需要 POST /api/schedule 与验收单字段，接口尚未实现。当前页面只读，不会伪造「已验收」状态。")
-                }
-              >
-                确认阶段验收
-              </Button>
-            </div>
-            {actionNote ? (
-              <div className="mt-3">
-                <Note tone="info">{actionNote}</Note>
-              </div>
-            ) : null}
+            <Note tone="info"><p>排期仅能在全部工序尚未开工且未分配责任方时修订；当前版本请联系施工负责人处理。</p></Note>
+          </Card> : null}
+          {version === undefined && source === "mock" ? <Card>
+            <SectionHead title="变更与验收" />
+            <Note tone="info"><p>本排期为模拟数据，只读展示；演示需求不能创建或修订排期。</p></Note>
           </Card> : null}
         </div>
       </div>
 
       {version === undefined ? (
         <>
-          <OrderProgressPanel demandId={id} order={null} schedule={data} source={source} reload={reload} />
+          <OrderProgressPanel
+            demandId={id}
+            order={orderState.phase === "ready" ? orderState.order : null}
+            orderPhase={orderState.phase}
+            orderError={orderState.phase === "failed" ? orderState.error : null}
+            orderSource={orderState.phase === "ready" ? orderState.source : null}
+            schedule={data}
+            source={source}
+            reload={reload}
+            reloadOrder={reloadOrder}
+          />
           <PhotoInspectionPanel demandId={id} />
         </>
       ) : null}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { DEMO_PROVIDER_ID, OrderProgressResult, Review, envelope } from "../src/contracts";
+import { DEMO_PROVIDER_ID, OrderProgressResult, OwnerOrderResult, Review, envelope } from "../src/contracts";
 import { createOwnerAccount } from "../src/lib/owner-account";
 
 /** Real HTTP login, fulfillment and reviews; only the live-source quote is a synthetic storage fixture. */
@@ -43,6 +43,15 @@ export async function smokeReviews(base: string) {
         budgetMinCents: 0, budgetMaxCents: 10000, renovationType: "repair", desiredDays: 10 });
       assert.equal(demand.response.status, 201); const demandId = demand.payload.data.id as string; lastDemandId = demandId;
       const target = `/api/review?demandId=${encodeURIComponent(demandId)}`;
+      const orderPath = `/api/order?demandId=${encodeURIComponent(demandId)}`;
+      const readOrder = async () => {
+        const result = await http(orderPath, "GET", cookie); assert.equal(result.response.status, 200);
+        assert.equal(result.response.headers.get("cache-control"), "private, no-store"); assert.match(result.response.headers.get("vary") ?? "", /Cookie/i);
+        return envelope(OwnerOrderResult).parse(result.payload);
+      };
+      assert.deepEqual(await readOrder(), { ok: true, data: null, meta: { source: "live" } });
+      await denied(await http(orderPath, "GET", otherCookie), 404, "DEMAND_NOT_FOUND");
+      await denied(await http(orderPath, "GET", providerCookie), 401, "UNAUTHENTICATED");
       const input = { demandId, providerId, rating: 4, comment: " Synthetic review " };
       assert.deepEqual((await http(target, "GET", cookie)).payload, { ok: true, data: [], meta: { source: "live" } });
       await denied(await http("/api/review", "POST", cookie, input), 409, "REVIEW_NOT_ALLOWED");
@@ -58,6 +67,8 @@ export async function smokeReviews(base: string) {
       }
       const accepted = await http("/api/order", "POST", cookie, { demandId, quoteId, confirmed: true });
       assert.equal(accepted.response.status, 201); assert.equal(accepted.payload.meta.source, source);
+      const ownerRead = await readOrder(); assert.deepEqual(ownerRead, accepted.payload);
+      const ownerOrder = ownerRead.data!; input.providerId = ownerOrder.providerId;
       await denied(await http("/api/review", "POST", cookie, input), 409, "REVIEW_NOT_ALLOWED");
       let scheduleVersion: number | null = null;
       if (source === "mock") {
@@ -68,13 +79,14 @@ export async function smokeReviews(base: string) {
         assert.equal(created.response.status, 201); scheduleVersion = created.payload.data.version;
       }
       const advance = (action: string, credential = cookie, extra: Record<string, unknown> = {}) => http("/api/order/progress", "POST", credential,
-        { demandId, orderId: accepted.payload.data.id, action, confirmed: true, scheduleVersion, ...extra });
+        { demandId, orderId: ownerOrder.id, action, confirmed: true, scheduleVersion, ...extra });
       await denied(await advance("start", otherCookie), 404, "DEMAND_NOT_FOUND");
       await denied(await advance("start", providerCookie), 401, "UNAUTHENTICATED");
       await denied(await advance("complete"), 409, "ORDER_PROGRESS_NOT_ALLOWED");
       const started = await advance("start"); assert.equal(started.response.status, 200);
       assert.equal(envelope(OrderProgressResult).parse(started.payload).data.order.status, "in_progress");
       assert.equal((await http(`/api/demand/${demandId}`, "GET", cookie)).payload.data.status, "in_progress");
+      assert.equal((await readOrder()).data?.status, "in_progress");
       if (source === "mock") {
         const verifyProvider = async (status: string) => {
           const list = await http("/api/provider/orders", "GET", providerCookie); assert.equal(list.response.status, 200);
@@ -99,6 +111,7 @@ export async function smokeReviews(base: string) {
       }
       const completedAgain = await advance("complete"); assert.equal(completedAgain.response.status, 200);
       const progressed = envelope(OrderProgressResult).parse(completedAgain.payload); assert.equal(progressed.data.order.status, "completed"); assert.equal(progressed.meta.source, source);
+      const completedRead = await readOrder(); assert.equal(completedRead.data?.status, "completed"); assert.equal(completedRead.meta.source, source);
       await denied(await advance("start"), 409, "ORDER_PROGRESS_NOT_ALLOWED");
       assert.equal(await db.orderProgressEvent.count({ where: { orderId: accepted.payload.data.id } }), source === "mock" ? 6 : 2);
       await denied(await http("/api/review", "POST", otherCookie, input), 404, "DEMAND_NOT_FOUND");
@@ -126,8 +139,9 @@ export async function smokeReviews(base: string) {
     await denied(await http(`/api/review?demandId=${encodeURIComponent(lastDemandId)}`, "GET", cookie), 401, "UNAUTHENTICATED");
     await denied(await http("/api/review", "POST", cookie, { demandId: lastDemandId, providerId: syntheticProviderId, rating: 4, comment: "Synthetic review" }), 401, "UNAUTHENTICATED");
     await denied(await http("/api/order/progress", "POST", cookie), 401, "UNAUTHENTICATED");
+    await denied(await http(`/api/order?demandId=${encodeURIComponent(lastDemandId)}`, "GET", cookie), 401, "UNAUTHENTICATED");
     assert.equal((await http("/api/auth/owner", "DELETE", otherCookie)).response.status, 200);
-    console.log("履约→评价生产 HTTP 通过：实际登录/演示报价/接受/开工/依赖工序推进/完工/评价，需求与接单始终一致，历史排期保留；无直接改库伪造完工。mock/live、越权/旧版/跳级/退出拒绝通过。");
+    console.log("履约→评价生产 HTTP 通过：实际登录/演示报价/接受/业主 GET 接单取得编号/开工/依赖工序推进/完工/评价，需求与接单始终一致，历史排期保留；无直接改库伪造完工。mock/live、空接单、越权/旧版/跳级/退出拒绝通过。");
   } finally {
     try {
       if (providerCookie) await http("/api/auth/demo-provider", "DELETE", providerCookie);

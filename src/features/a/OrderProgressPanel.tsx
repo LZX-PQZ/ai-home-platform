@@ -13,28 +13,57 @@ import {
 export function OrderProgressPanel({
   demandId,
   order,
+  orderPhase = order ? "ready" : "loading",
+  orderError = null,
+  orderSource = null,
   schedule,
   source,
   reload,
+  reloadOrder,
 }: {
   demandId: string;
   order: OrderSummaryDTO | null;
+  orderPhase?: "loading" | "ready" | "failed";
+  orderError?: string | null;
+  orderSource?: SourceDTO | null;
   schedule: ScheduleDTO | null;
   source: SourceDTO | null;
   reload: () => void;
+  reloadOrder?: () => void;
 }) {
   const [pending, setPending] = useState<ProgressActionCandidate | null>(null);
   const [phase, setPhase] = useState<"idle" | "submitting" | "success" | "failed">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [responseSource, setResponseSource] = useState<SourceDTO | null>(null);
 
+  if (orderPhase === "loading") {
+    return (
+      <Card className="mt-4">
+        <SectionHead title="履约推进" aside={<Badge tone="neutral">正在读取接单</Badge>} />
+        <Note tone="info">正在读取本人接单信息；确认开工和工序操作会在拿到实际订单编号后开放。</Note>
+      </Card>
+    );
+  }
+
+  if (orderPhase === "failed") {
+    return (
+      <Card className="mt-4">
+        <SectionHead title="履约推进" aside={<Badge tone="danger">接单读取失败</Badge>} />
+        <Note tone="danger" title="无法确认当前接单">
+          <p>{orderError ?? "接单信息加载失败，请重新加载核实。"}</p>
+          {reloadOrder ? <Button variant="secondary" size="sm" onClick={reloadOrder}>重新加载接单</Button> : null}
+        </Note>
+      </Card>
+    );
+  }
+
   if (!order) {
     return (
       <Card className="mt-4">
-        <SectionHead title="履约推进" aside={<Badge tone="neutral">等待接单信息</Badge>} />
+        <SectionHead title="履约推进" aside={<Badge tone="neutral">尚无接单</Badge>} />
         <Note tone="info">
-          <p>确认开工、工序完成和确认完工需要当前订单编号及接单关系。业主端读取接口尚未接入，本页不会把需求编号当成订单编号，也不会发送猜测请求。</p>
-          <p className="mt-2">当前排期来源：{source ?? "未确认"}。请先刷新需求详情，待订单读取接口接入后再操作。</p>
+          <p>当前需求尚未读取到本人接单关系，因此没有可发送的履约动作。接受报价后请重新加载核实。</p>
+          <p className="mt-2">排期来源：{source ?? "未确认"}；接单来源：{orderSource ?? "未确认"}。</p>
         </Note>
       </Card>
     );

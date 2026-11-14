@@ -5,15 +5,20 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
 import {
-  loadProviderServiceOrders, providerServiceOrdersErrorMessage, serviceOrderStatusLabels,
-  type ProviderServiceOrdersState,
+  filterServiceOrders, loadProviderServiceOrders, providerServiceOrdersErrorMessage,
+  serviceOrderFilterLabels, serviceOrderFilterOptions, serviceOrderStatusLabels, summarizeServiceOrders,
+  type ProviderServiceOrdersState, type ServiceOrderStatusFilter,
 } from "./provider-service-orders";
 
-export function ProviderServiceOrdersContent({ state, onReload }: {
+export function ProviderServiceOrdersContent({ state, onReload, statusFilter, onStatusFilterChange }: {
   state: ProviderServiceOrdersState;
   onReload: () => void;
+  statusFilter: ServiceOrderStatusFilter;
+  onStatusFilterChange: (status: ServiceOrderStatusFilter) => void;
 }) {
   const response = state.status === "ready" ? state.response : null;
+  const summary = response ? summarizeServiceOrders(response.data) : null;
+  const visibleOrders = response ? filterServiceOrders(response.data, statusFilter) : [];
 
   return (
     <section aria-labelledby="provider-service-orders-title" className="space-y-5">
@@ -37,7 +42,7 @@ export function ProviderServiceOrdersContent({ state, onReload }: {
           <p className="!mb-0">{state.message}</p>
         </div>
       )}
-      {response && (
+      {response && summary && (
         <>
           <div role="status" aria-live="polite">
             <StatusBadge label={response.meta.source === "mock" ? "接单列表来源：模拟标识（mock）" : "接单列表来源：实时接口（live）"} />
@@ -49,11 +54,34 @@ export function ProviderServiceOrdersContent({ state, onReload }: {
             </p>
             <p className={`mt-2 !mb-0 ${C.meta}`}>本次返回 {response.data.length} 条接单关系，按编号排列，不代表成交时间顺序。</p>
           </div>
+          <section aria-labelledby="provider-order-filters-title" className={`${C.card} space-y-4`}>
+            <h2 id="provider-order-filters-title" className={C.sectionTitle}>按接单状态查看</h2>
+            <p className={`!mb-0 ${C.pageSub}`}>数量统计本次读取的全部本人接单，不随筛选变化。切换筛选不改变接单状态；刷新保留筛选条件，状态以最新读取结果为准。</p>
+            <div role="group" aria-label="按接单状态筛选" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {serviceOrderFilterOptions.map(status => (
+                <button
+                  key={status}
+                  type="button"
+                  aria-pressed={statusFilter === status}
+                  onClick={() => onStatusFilterChange(status)}
+                  className={`${C.btnBase} ${statusFilter === status ? C.btnPrimary : C.btnSecondary} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`}
+                >
+                  {serviceOrderFilterLabels[status]}（{status === "all" ? summary.total : summary.byStatus[status]}）
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className={`!mb-0 ${C.pageSub}`} role="status" aria-live="polite">当前筛选：{serviceOrderFilterLabels[statusFilter]}，显示 {visibleOrders.length} / {summary.total} 条接单。</p>
+              {statusFilter !== "all" && <Button variant="secondary" size="sm" onClick={() => onStatusFilterChange("all")}>清除状态筛选</Button>}
+            </div>
+          </section>
           {response.data.length === 0 ? (
             <Empty title="当前服务方暂无接单关系" hint="本次已验证服务方会话，未查到本人接单关系。仅有已提交或历史已接受报价，不会自动生成接单。" />
+          ) : visibleOrders.length === 0 ? (
+            <Empty title="当前状态下没有接单" hint="本次列表中有其他状态的接单，可切换状态或清除状态筛选查看。" />
           ) : (
             <ul aria-label="本人接单列表" className="space-y-4">
-              {response.data.map(order => (
+              {visibleOrders.map(order => (
                 <li key={order.id}>
                   <article aria-label={`接单 ${order.id}`} className={`${C.card} min-w-0`}>
                     <div className="mb-3 flex flex-wrap gap-2">
@@ -91,6 +119,7 @@ export function ProviderServiceOrdersContent({ state, onReload }: {
 export function ProviderServiceOrders() {
   const [state, setState] = useState<ProviderServiceOrdersState>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<ServiceOrderStatusFilter>("all");
   useEffect(() => {
     let active = true;
     loadProviderServiceOrders().then(
@@ -104,5 +133,5 @@ export function ProviderServiceOrders() {
     setState({ status: "loading" });
     setReloadKey(previous => previous + 1);
   }
-  return <ProviderServiceOrdersContent state={state} onReload={reload} />;
+  return <ProviderServiceOrdersContent state={state} onReload={reload} statusFilter={statusFilter} onStatusFilterChange={setStatusFilter} />;
 }
