@@ -126,7 +126,7 @@ test("显式退出只调用业主 DELETE，重新查询仍保留模拟工单来�
   const html = render({ status: "ready", response: await loadAdminTickets() });
   assert.deepEqual(requests, ["DELETE /api/auth/owner", "GET /api/ticket"]);
   for (const text of ["工单列表来源：含模拟数据（mock）", "不能据此认定真实售后已受理或已解决",
-    "不包含全站或当前业主的真实工单", "平台管理身份认证尚未接入", "合成工单"]) assert.ok(html.includes(text), text);
+    "不包含全站或当前业主的真实工单", "请使用平台运营账号登录", "全量工单查询及处理权限尚未开放", "合成工单"]) assert.ok(html.includes(text), text);
   assert.doesNotMatch(html, /退出业主会话并刷新页面|工单列表来源：实时接口/);
 });
 

@@ -181,8 +181,8 @@ test("管理概览所有视图说明身份可见范围，不把管理导航或�
     adminDemandFailureState(new ApiClientError("", "UNAUTHENTICATED", 401)),
   ] satisfies AdminDemandState[]) {
     const html = render(state);
-    for (const text of ["未登录业主时仅显示已发布的公开需求", "业主登录后仅显示本人的所有状态需求",
-      "管理员专属登录与全量需求查询尚未接入", "切换角色不会扩大可见范围", "登录、退出或身份变化后", "不代表平台全量数据"]) {
+    for (const text of ["请使用平台运营账号登录", "本页目前仅显示已发布的公开需求",
+      "全量需求查询尚未接入", "切换角色不会扩大可见范围", "登录、退出或身份变化后", "不代表平台全量数据"]) {
       assert.ok(html.includes(text), text);
     }
   }

@@ -45,7 +45,7 @@ export function AdminTicketsContent({ state, onReload }: {
       <Explainer summary="模拟工单、只读范围与身份说明">
         <p>当前为平台管理演示入口，可能包含模拟数据，来源以加载后的标识为准。角色导航不代表登录鉴权。</p>
         <p>本页仅供查看，新建工单、派单、状态修改和跟进记录暂未开放。工单数量仅为本次返回的列表范围。</p>
-        <p>当前查询只返回固定模拟工单，不包含全站或当前业主的真实工单。平台管理身份认证尚未接入；登录、退出或身份变化后，请重新加载本页。</p>
+        <p>当前查询只返回固定模拟工单，不包含全站或当前业主的真实工单。请使用平台运营账号登录；全量工单查询及处理权限尚未开放。</p>
       </Explainer>
 
       {state.status === "loading" && <div className={C.card} role="status" aria-live="polite">正在读取售后工单，请稍候…</div>}
