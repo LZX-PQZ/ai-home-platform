@@ -33,6 +33,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/quote | Quote[] | B | 固定 mock |
 | POST /api/quote | QuoteSubmissionInput → Quote | B | 已接演示会话；合法首次提交 201/mock，同键同摘要重放 200/mock；无有效会话 401 |
 | GET /api/schedule[?demandId=<id>&version=<n>] | Schedule | D | 无参数或固定 demo-demand 为公开种子排期 mock；其他需求验证业主会话及归属后读取最新/指定版本 |
+| POST /api/schedule | ScheduleCreateInput → Schedule | D | 当前业主为本人 published/contracted 且无排期的需求创建 v1；201/live，工序均 pending 且责任服务方为空 |
 | GET /api/payment | Payment[] | D | 模拟节点列表；simulated 必须 true |
 | GET /api/ticket | Ticket[] | D | 固定 mock |
 
@@ -44,7 +45,17 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 其他需求在同一 Serializable 事务核验实际业主 cookie、有效期/撤销、当前角色及需求归属，再读取最新或指定版本。缺失/失效业主凭证为 401；当前非业主角色或只有有效演示服务方凭证为 403。有效业主 cookie 优先，失效或重复业主凭证不回退其他身份。本人需求各状态均可读取；真实需求详情公开不代表排期也公开。
 
-他人与不存在的非演示需求统一 404/DEMAND_NOT_FOUND；确认本人需求后，缺少排期或指定版本才返回 404/SCHEDULE_NOT_FOUND。存储、事务、DTO 或返回归属/版本校验失败为 503/SCHEDULE_UNAVAILABLE，不回退演示。所有读取响应 private, no-store、Vary: Cookie。普通数据库排期沿用 live，不代表真实施工或 AI 排期。POST 继续返回 501。A 可沿用 apiGet(..., Schedule)，真实需求在共享业主登录后刷新/重试，演示排期始终显示 mock；接口与验证见 `docs/requests/D-schedule-read-auth.md`。
+他人与不存在的非演示需求统一 404/DEMAND_NOT_FOUND；确认本人需求后，缺少排期或指定版本才返回 404/SCHEDULE_NOT_FOUND。存储、事务、DTO 或返回归属/版本校验失败为 503/SCHEDULE_UNAVAILABLE，不回退演示。所有读取响应 private, no-store、Vary: Cookie。普通数据库排期沿用 live，不代表真实施工或 AI 排期。A 可沿用 apiGet(..., Schedule)，真实需求在共享业主登录后刷新/重试，演示排期始终显示 mock；接口与验证见 `docs/requests/D-schedule-read-auth.md`。首版写入见下节。
+
+## POST /api/schedule：首版手工计划
+
+输入仅为公共 `ScheduleCreateInput`：demandId 和 1–100 项 tasks，每项含 id、name、startDay、durationDays、dependsOn。工序 ID 唯一，依赖不能重复、自引用、缺失或成环，开始日不得早于依赖结束；独立任务可并行。天数为符合数据库整数范围的非负开始日与正工期，结束日不能溢出；ID 精确匹配、名称去首尾空格。正文最多 64 KiB，顶层及工序均拒绝未知字段，客户端不能指定身份、来源、版本、状态、责任服务方或验收结论。
+
+仅同源 POST，无查询参数；真实业主会话预检后在事务外读正文，再在 Serializable 写事务重验当前会话、账户角色和需求归属。只允许本人非演示需求在 published/contracted 且尚无任意版本排期时创建；最终嵌套写入仍限定 ID、ownerId、当前状态及空排期，输出校验失败回滚。成功 201 `envelope(Schedule)` / live，固定 version=1，所有工序 status=pending、responsibleProviderId=null；live 表示实际保存手工计划，不代表真实施工或 AI 生成，需求状态不改变。
+
+无/失效/撤销/重复/过期业主 cookie 为 401，只有演示服务方 cookie 同样 401，当前账户角色不符或同源失败为 403；非本人和不存在需求统一 404/DEMAND_NOT_FOUND。确认归属后，固定演示需求 409/DEMO_DEMAND_READ_ONLY，不可创建状态 409/INVALID_STATE，已有任何版本 409/SCHEDULE_ALREADY_EXISTS。重复请求不覆盖、不追加版本，应通过 GET 核实；事务/数据库冲突或坏输出为中性的 503/SCHEDULE_UNAVAILABLE，不宣称一定未保存。所有响应 private, no-store、Vary: Cookie；坏 JSON 400/INVALID_JSON，非法字段、正文超限或依赖 400/VALIDATION_ERROR。
+
+A 可用 `apiPost('/api/schedule', input, Schedule)` 保存后刷新现有 GET。创建表单、排期变更审批、版本追加、任务状态推进、责任方分配与阶段验收尚未交付；现有变更/验收按钮不能当作创建入口。完整字段及接入说明见 `docs/requests/D-schedule-create.md`。
 
 ## GET /api/provider/quotes
 
@@ -69,7 +80,7 @@ PR #74 已将 `handleQuoteSubmission` 的默认预检及事务会话 reader 接�
 完整决策见 `docs/requests/D-quote-idempotency.md`、`docs/requests/D-demo-provider-session.md`。已用真实演示 cookie 和隔离 SQLite 验证公开 POST；本次未做浏览器手工验收，业主公开 GET/页面读取仍未接通。
 
 ## 已预留、当前返回 501
-- POST /api/schedule、/api/ticket、/api/inspect、/api/review：由 D 完成。ReviewInput 已预留；其他写入契约先补齐再让页面提交。
+- POST /api/ticket、/api/inspect、/api/review：由 D 完成。ReviewInput 已预留；其他写入契约先补齐再让页面提交。POST /api/schedule 已实现首版计划创建，见上节；变更与验收仍未实现。
 - POST /api/payment：已实现最小模拟确认动作，不做身份校验，任何调用方都可触发演示状态转换。输入为 `PaymentActionInput`，只允许 `pending → confirmed_demo` 一次转换；状态只保存在服务进程内，进程重启后恢复初始演示状态。成功返回 `Payment`，`meta.source` 为 `mock` 且 `simulated` 为 `true`；这不是支付接口，不代表真实付款、资金托管或数据库持久化。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
 

@@ -66,10 +66,19 @@ for (const path of ['/api/schedule', '/api/schedule?demandId=demo-demand', '/api
  const body = await response.json();
  assert.equal(body.ok, false); assert.equal(body.error.code, 'UNAUTHENTICATED'); assert.equal('data' in body, false);
 }
-const scheduleWrite = await fetch(base + '/api/schedule', { method: 'POST' });
-assert.equal(scheduleWrite.status, 501);
-const scheduleWriteBody = await scheduleWrite.json();
-assert.equal(scheduleWriteBody.ok, false); assert.equal(scheduleWriteBody.error.code, 'NOT_IMPLEMENTED');
+// Schedule creation is implemented and owner-only; anonymous smoke must never write fixtures.
+for (const [headers, status, code] of [
+ [{}, 403, 'FORBIDDEN'],
+ [{ Origin: new URL(base).origin }, 401, 'UNAUTHENTICATED'],
+ [{ Origin: new URL(base).origin, Cookie: '__Host-ai_home_owner_session=invalid' }, 401, 'UNAUTHENTICATED'],
+]) {
+ const response = await fetch(base + '/api/schedule', { method: 'POST', headers });
+ assert.equal(response.status, status, 'schedule creation authorization');
+ assert.equal(response.headers.get('cache-control'), 'private, no-store');
+ assert.ok((response.headers.get('vary') ?? '').split(',').some(value => value.trim().toLowerCase() === 'cookie'));
+ const body = await response.json();
+ assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
+}
 const chat = await fetch(base + '/api/demand/chat', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({messages:[{role:'user',content:'我想翻新浴室'}]}) });
 assert.equal(chat.status, 200);
 assert.equal((await chat.json()).data.ready, false);
@@ -101,4 +110,4 @@ const forbidden = await withoutOrigin.json();
 assert.equal(forbidden.ok, false);
 assert.equal(forbidden.error.code, 'FORBIDDEN');
 assert.equal('data' in forbidden, false);
-console.log('13 个页面、20 个 GET 场景和 5 个 POST 场景通过（固定演示排期公开、失效凭证拒绝及真实排期隔离检查通过）。');
+console.log('13 个页面、20 个 GET 场景和 7 个 POST 场景通过（固定演示排期公开、真实排期隔离、匿名与失效凭证写入拒绝）。');
