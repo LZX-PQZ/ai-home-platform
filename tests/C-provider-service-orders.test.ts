@@ -17,7 +17,7 @@ function payload(data: OrderSummaryDTO[] = [order], source: SourceDTO = "mock") 
   return { ok: true as const, data, meta: { source } };
 }
 function render(state: ProviderServiceOrdersState) {
-  return renderToStaticMarkup(createElement(ProviderServiceOrdersContent, { state, onReload() {} }));
+  return renderToStaticMarkup(createElement(ProviderServiceOrdersContent, { state, onReload() {}, statusFilter: "all", onStatusFilterChange() {} }));
 }
 
 test("只读取无参数的本人接单接口，保留返回顺序、三状态和逐条来源", async t => {
@@ -132,7 +132,7 @@ test("501 伪成功、坏 JSON 和网络错误不能回退假订单；重试读�
   assert.match(updated, /已完成/);
   assert.match(updated, /接单列表来源：模拟标识（mock）/);
   assert.match(updated, /本条接单来源：实时记录（live）/);
-  assert.doesNotMatch(updated, /已建立接单关系|本条接单来源：模拟/);
+  assert.doesNotMatch(updated, />已建立接单关系<|本条接单来源：模拟/);
   assert.match(render({ status: "ready", response: await loadProviderServiceOrders() }), /暂无接单关系/);
   assert.equal(fetched.mock.callCount(), 7);
 });
