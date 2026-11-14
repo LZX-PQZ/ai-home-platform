@@ -107,6 +107,8 @@ A 用 `apiPost('/api/order/progress', input, OrderProgressResult)` 接线，展�
 
 ## GET /api/order/progress：本人履约操作记录
 
+A #162 已在非演示需求的最新施工排期页接入 OrderProgressHistory；显示动作、状态、记录时间、工序/排期版本与逐条来源，支持手动刷新，履约动作成功后也会刷新。指定旧排期版本时不展示该记录面板。错误不会伪装为空列表，历史记录不表示专业验收或付款。
+
 复用严格的公共 `OrderQuery`，必须恰好一个非空 demandId，保留原值精确匹配；缺失、空白、重复或其他参数为 400/VALIDATION_ERROR。无匿名演示入口。同一 Serializable 事务验证当前业主会话与角色、需求 ownerId、实际接单及 accepted 报价关联，再用 orderId、demandId 和当前 ownerId 过滤事件。
 
 成功 200 `envelope(OrderProgressEvent[])`，每条含 id、orderId、action、fromStatus、toStatus、taskId、scheduleVersion、createdAt 和 source。无工序/排期分别显式 null；工序动作必须有 taskId 和至少为 2 的结果版本。合法动作组合与现有 POST 一致，不允许跳级记录或与当前接单状态矛盾的完成记录。createdAt 是服务端保存动作的 ISO 8601 时间，按时间升序、同时间按 id 升序稳定排序；同毫秒 ID 排序不表示实际执行先后。

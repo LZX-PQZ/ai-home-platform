@@ -73,11 +73,11 @@ npm.cmd run dev
 
 履约后端新增 `POST /api/order/progress`，业主明确确认后，需求与接单在同一事务中“已签约→施工中→已完成”。有排期时按依赖逐项开工/确认完成，保留历史版本，全部完成才允许整单完成；无排期也须显式确认。运行 `npm.cmd run db:setup` 同步操作记录表后重启。生产 HTTP 冒烟已通过正常接口推进到评价，不再直接改库伪造完工。专业验收、返工/阻塞和付款联动未实现。详见 [履约交接](docs/requests/D-order-progress.md)。
 
-履约操作记录已提供 `GET /api/order/progress?demandId=…`，仅登录业主可读取本人需求的已保存动作、状态变化、工序/排期版本和记录时间，隐藏操作者身份。来源沿用接单，mock 不升级；历史接单没有记录时不补造，损坏数据与权限失败也不伪装空列表。A 的履约按钮已随 #144 接线，操作记录展示仍由 A 后续接入。已有操作记录表无需再改 schema 或依赖，详见 [操作记录交接](docs/requests/D-order-progress-history.md)。
+履约操作记录已提供 `GET /api/order/progress?demandId=…`，仅登录业主可读取本人需求的已保存动作、状态变化、工序/排期版本和记录时间，隐藏操作者身份。来源沿用接单，mock 不升级；历史接单没有记录时不补造，损坏数据与权限失败也不伪装空列表。A 的履约按钮已随 #144 接线，操作记录展示已随 #162 接入非演示需求的最新施工排期页，可刷新并核对逐条来源。已有操作记录表无需再改 schema 或依赖，详见 [操作记录交接](docs/requests/D-order-progress-history.md)。
 
 ## 接单数据同步
 
-接受报价与接单后端已提供 `POST /api/order` 和 `GET /api/provider/orders`，部署本功能前运行 `npm.cmd run db:setup` 同步新增的 ServiceOrder 表，然后重启应用；不要重置数据库。既有需求、报价及提交回执保留，历史 accepted 报价不自动补成接单。B 的接受按钮与 C 的实际接单页面已随 #121/#122/#125 合入，A 的履约动作按钮已随 #144 接线；履约操作记录展示仍待后续。本版一需求只能接受一份报价，含待定费用的报价不会被宣称已确认最终总价。演示报价建立的关系仍标 mock，不代表生产服务方认证、付款或履约完成。协议见 [接受报价交接](docs/requests/D-quote-acceptance.md)。
+接受报价与接单后端已提供 `POST /api/order` 和 `GET /api/provider/orders`，部署本功能前运行 `npm.cmd run db:setup` 同步新增的 ServiceOrder 表，然后重启应用；不要重置数据库。既有需求、报价及提交回执保留，历史 accepted 报价不自动补成接单。B 的接受按钮与 C 的实际接单页面已随 #121/#122/#125 合入，A 的履约动作按钮已随 #144 接线；履约操作记录展示已随 #162 接入。本版一需求只能接受一份报价，含待定费用的报价不会被宣称已确认最终总价。演示报价建立的关系仍标 mock，不代表生产服务方认证、付款或履约完成。协议见 [接受报价交接](docs/requests/D-quote-acceptance.md)。
 
 业主接单读取已提供 `GET /api/order?demandId=…`：仅所属业主可取 OrderSummary（含履约用 id、评价用 providerId），无接单返回 null；不再需要重放接受报价来获取编号。来源沿用接单，异常不伪装空态。A 接线见 [业主接单读取](docs/requests/D-owner-order-read.md)。本次无数据库或依赖变更。
 
