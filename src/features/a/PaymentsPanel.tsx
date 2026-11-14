@@ -80,6 +80,30 @@ export function PaymentsPanel({ id }: { id: string }) {
   const mismatch = items.some((item) => item.demandId !== id);
   const allSimulated = items.every((item) => item.simulated);
 
+  // 返回的节点不属于当前需求时，一个数字都不展示 —— 把别人的付款节点换算成
+  // 「计划总额 / 已确认」再配一句警告，业主照样会以为这是自己的账单。
+  if (mismatch) {
+    const foreign = items.find((item) => item.demandId !== id)?.demandId ?? "其他需求";
+    return (
+      <div>
+        <div className="mb-3">
+          <Link href={demandHref(id)} className="text-[13px] font-medium text-[#0F6E56]">
+            ← 返回需求详情
+          </Link>
+        </div>
+        <PageHeader title="节点付款" subtitle={`需求 ${id} · 还没有付款计划`} />
+        <DataDisclosure what="付款节点" />
+        <Empty
+          title="这条需求还没有付款节点"
+          hint={`接口目前只返回需求「${foreign}」的演示付款节点（GET /api/payment 为固定数据），与当前需求不一致。付款计划在签约后按合同生成，本页不会把别的项目的节点算成这一条。`}
+          action={
+            <LinkButton href={demandHref(id)} size="sm" variant="secondary">返回需求详情</LinkButton>
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="mb-3">
@@ -95,17 +119,6 @@ export function PaymentsPanel({ id }: { id: string }) {
       />
 
       <DataDisclosure what="付款节点" />
-
-      {mismatch ? (
-        <div className="mb-4">
-          <Note tone="warn" title="返回数据与当前需求不一致">
-            <p>
-              接口返回的节点里含有不属于需求 <code>{id}</code> 的记录。按需求查询付款计划的接口由 D
-              负责，尚未实现，本页照实展示并提示，不做静默过滤。
-            </p>
-          </Note>
-        </div>
-      ) : null}
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[

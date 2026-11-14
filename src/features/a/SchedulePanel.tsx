@@ -91,6 +91,29 @@ export function SchedulePanel({ id }: { id: string }) {
   const currentDay = running.length > 0 ? Math.min(...running.map((task) => task.startDay)) : null;
   const mismatch = data.demandId !== id;
 
+  // 接口只返回固定演示排期时，若它不属于当前需求，就一条数据都不渲染 ——
+  // 画别人的甘特图再配一句警告，业主仍会误以为这是自己家的进度。
+  if (mismatch) {
+    return (
+      <div>
+        <div className="mb-3">
+          <Link href={demandHref(id)} className="text-[13px] font-medium text-[#0F6E56]">
+            ← 返回需求详情
+          </Link>
+        </div>
+        <PageHeader title="施工进度" subtitle={`需求 ${id} · 还没有排期`} />
+        <DataDisclosure what="排期" />
+        <Empty
+          title="这条需求还没有排期"
+          hint={`接口目前只返回需求「${data.demandId}」的演示排期（GET /api/schedule 为固定数据），与当前需求不一致。排期要等签约后由施工方提交，本页不会把别的项目的排期画成这一条。`}
+          action={
+            <LinkButton href={demandHref(id)} size="sm" variant="secondary">返回需求详情</LinkButton>
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="mb-3">
@@ -110,18 +133,6 @@ export function SchedulePanel({ id }: { id: string }) {
       />
 
       <DataDisclosure what="排期" />
-
-      {mismatch ? (
-        <div className="mb-4">
-          <Note tone="warn" title="这条排期不属于当前需求">
-            <p>
-              你打开的是需求 <code>{id}</code>，但接口只返回了需求{" "}
-              <code>{data.demandId}</code> 的排期。按 ID 查询排期的接口由 D 负责，尚未实现；
-              本页不会把别的项目排期冒充成这一条。
-            </p>
-          </Note>
-        </div>
-      ) : null}
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
