@@ -9,6 +9,7 @@ import { QuoteForm } from "./QuoteForm";
 import { formatBudget, renovationLabels } from "./demand-hall";
 import {
   demandDetailFailureState,
+  demandDetailStatusLabels,
   loadDemandDetail,
   type DemandDetailState,
 } from "./demand-detail";
@@ -54,7 +55,7 @@ export function DemandDetailContent({
         当前为服务方演示入口，模拟数据仅用于演示，数据来源以加载后的标识为准。角色导航不代表登录鉴权。
       </p>
       <p className="text-sm text-slate-600">
-        此页面仅展示已发布需求；需求是否可报价以刷新后的状态为准。
+        此页面展示接口授权可读的已发布或已接单需求；仅已发布需求可填写报价，状态以刷新结果为准。
       </p>
 
       {state.status === "loading" && (
@@ -91,7 +92,7 @@ export function DemandDetailContent({
             <>
               <article className="card min-w-0" aria-labelledby="demand-summary-title">
                 <div className="mb-4 flex flex-wrap gap-2">
-                  <StatusBadge label="已发布" />
+                  <StatusBadge label={demandDetailStatusLabels[demand.status]} />
                   <DemandSource source={demand.source} />
                 </div>
                 <h2 id="demand-summary-title" className="break-words">
@@ -127,7 +128,15 @@ export function DemandDetailContent({
                 </dl>
                 <p className="mb-0 mt-4 text-sm text-slate-600">以上为业主预算，实际报价待服务方确认。</p>
               </article>
-              <QuoteForm key={demand.id} demandId={demand.id} />
+              {demand.status === "published" ? (
+                <QuoteForm key={demand.id} demandId={demand.id} />
+              ) : (
+                <div className="card" role="status">
+                  <h2>当前需求仅供查看</h2>
+                  <p>该需求已建立接单关系，不再提供报价表单。接单关系不代表签署法律合同、付款或施工验收；本页不提供履约状态修改。</p>
+                  <Link href="/provider/orders" prefetch={false} className="rounded underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">返回我的接单</Link>
+                </div>
+              )}
             </>
           ) : (
             <div className="card" role="status" aria-live="polite">

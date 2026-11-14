@@ -1,6 +1,14 @@
-import { Demand, DemandIdParams } from "@/contracts";
+import { Demand, DemandIdParams, type DemandDTO } from "@/contracts";
 import { apiGet, ApiClientError } from "@/lib/api-client";
 import { demandAccessFailure } from "./demand-access-recovery";
+
+export const demandDetailStatusLabels: Record<DemandDTO["status"], string> = {
+  draft: "草稿",
+  published: "已发布",
+  contracted: "已建立接单关系",
+  in_progress: "进行中",
+  completed: "已完成",
+};
 
 export async function loadDemandDetail(demandId: string) {
   const params = DemandIdParams.safeParse({ id: demandId });
@@ -12,8 +20,8 @@ export async function loadDemandDetail(demandId: string) {
   }
   return {
     ...response,
-    // 客户端隐藏不可报价详情，不代表接口已实施鉴权或数据隔离。
-    data: response.data.status === "published" ? response.data : null,
+    // 接口负责访问授权；服务方入口仍隐藏草稿，已接单详情只读展示。
+    data: response.data.status === "draft" ? null : response.data,
   };
 }
 

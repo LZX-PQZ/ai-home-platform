@@ -37,7 +37,12 @@ test("只读取无参数的本人接单接口，保留返回顺序、三状态�
   assert.equal((html.match(/<article\b/g) ?? []).length, 3);
   assert.ok(html.indexOf("接单关系编号：C-2") < html.indexOf("接单关系编号：C-0"));
   assert.equal(fetched.mock.callCount(), 1);
-  assert.doesNotMatch(html, /<form|确认接单|开始施工|¥|天<|href=/);
+  for (const record of data) {
+    assert.ok(html.includes(`href="/provider/demand/${encodeURIComponent(record.demandId)}"`));
+    assert.ok(html.includes(`aria-label="查看关联需求 ${record.demandId}"`));
+  }
+  assert.equal((html.match(/<a\b/g) ?? []).length, 3);
+  assert.doesNotMatch(html, /<form|确认接单|开始施工|¥|天<|读取权限尚未开放/);
 });
 
 test("授权空列表才显示暂无接单，mock 和 live 来源不从记录数量推断", async t => {
@@ -46,7 +51,7 @@ test("授权空列表才显示暂无接单，mock 和 live 来源不从记录数
     const html = render({ status: "ready", response: await loadProviderServiceOrders() });
     for (const text of ["当前服务方暂无接单关系", "本次已验证服务方会话", "本次返回 0 条接单关系", "历史已接受报价，不会自动生成接单"]) assert.ok(html.includes(text), text);
     assert.ok(html.includes(source === "mock" ? "接单列表来源：模拟标识（mock）" : "接单列表来源：实时接口（live）"));
-    assert.doesNotMatch(html, /<article|本条接单来源：/);
+    assert.doesNotMatch(html, /<article|本条接单来源：|href=/);
     fetched.mock.restore();
   }
 });
@@ -55,7 +60,7 @@ test("加载期间禁用刷新，不展示旧列表、来源或空成功；原�
   const loading = render({ status: "loading" });
   assert.match(loading, /正在验证服务方会话并读取本人接单/);
   assert.match(loading, /disabled=""/);
-  assert.doesNotMatch(loading, /本次返回|接单列表来源：|<article|暂无接单关系/);
+  assert.doesNotMatch(loading, /本次返回|接单列表来源：|<article|暂无接单关系|href=/);
   const html = renderToStaticMarkup(createElement(Page));
   assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
   assert.match(html, /我的接单/);
@@ -73,7 +78,7 @@ test("401、403、501、503 保留错误语义，失败不会显示记录或泄�
       assert.equal(error.status, status);
       const html = render({ status: "error", message: providerServiceOrdersErrorMessage(error) });
       for (const text of [expected, "重新加载接单", 'role="alert"']) assert.ok(html.includes(text), text);
-      assert.doesNotMatch(html, /内部数据库|C-order|暂无接单关系|本次返回|接单列表来源：|<article/);
+      assert.doesNotMatch(html, /内部数据库|C-order|暂无接单关系|本次返回|接单列表来源：|<article|href=/);
       return true;
     });
     fetched.mock.restore();
@@ -135,6 +140,7 @@ test("501 伪成功、坏 JSON 和网络错误不能回退假订单；重试读�
 test("长编号换行且按原样转义，不推导金额、日期或补造默认关联", () => {
   const html = render({ status: "ready", response: payload([{ ...order, id: '<script>alert("id")</script>',
     demandId: "需求/a?b#c", acceptedQuoteId: "<img src=x onerror=alert(1)>", providerId: "很长的服务方编号".repeat(30) }]) });
-  for (const text of ["&lt;script&gt;", "&lt;img", "需求/a?b#c", "break-all", "接单摘要不含费用或工期", "读取权限尚未开放"]) assert.ok(html.includes(text), text);
-  assert.doesNotMatch(html, /<script|<img|demo-demand|provider-a|¥|已付款|最终总价/);
+  for (const text of ["&lt;script&gt;", "&lt;img", "需求/a?b#c", "break-all", "接单摘要不含费用或工期"]) assert.ok(html.includes(text), text);
+  assert.ok(html.includes(`href="/provider/demand/${encodeURIComponent("需求/a?b#c")}"`));
+  assert.doesNotMatch(html, /<script|<img|demo-demand|provider-a|¥|已付款|最终总价|读取权限尚未开放/);
 });
