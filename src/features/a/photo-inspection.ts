@@ -1,13 +1,59 @@
-import { apiPost } from "@/lib/api-client";
-import { PhotoInspectionInput, PhotoInspectionResult } from "@/contracts";
-import type { PhotoInspectionResultDTO, SourceDTO } from "@/contracts";
+import { ApiClientError, apiPost } from "@/lib/api-client";
+import { InspectionUploadResult, PhotoInspectionInput, PhotoInspectionResult, envelope } from "@/contracts";
+import type { InspectionUploadResultDTO, PhotoInspectionResultDTO, SourceDTO } from "@/contracts";
 
 export type PhotoInspectionPhase = "idle" | "selected" | "invalid" | "submitting" | "ready" | "unavailable" | "failed";
+
+export type InspectionUploadResponse = {
+  data: InspectionUploadResultDTO;
+  source: SourceDTO;
+};
 
 export type PhotoInspectionResponse = {
   data: PhotoInspectionResultDTO;
   source: SourceDTO;
 };
+
+function failureFromPayload(payload: unknown, status: number): ApiClientError {
+  if (typeof payload === "object" && payload !== null) {
+    const failure = payload as { ok?: unknown; error?: { code?: unknown; message?: unknown } };
+    if (failure.ok === false && typeof failure.error?.code === "string" && typeof failure.error.message === "string") {
+      return new ApiClientError(`${failure.error.message}（HTTP ${status}）。`, failure.error.code, status);
+    }
+  }
+  return new ApiClientError(`接口请求失败（HTTP ${status}）。`, `HTTP_${status}`, status);
+}
+
+/** 上传浏览器选择的原始文件，返回服务端保存的短期引用和真实来源。 */
+export async function uploadInspectionImages(
+  demandId: string,
+  files: readonly File[],
+): Promise<InspectionUploadResponse> {
+  const form = new FormData();
+  form.set("demandId", demandId);
+  files.forEach(file => form.append("images", file, file.name));
+
+  let response: Response;
+  try {
+    response = await fetch("/api/inspect/images", { method: "POST", body: form });
+  } catch {
+    throw new ApiClientError("网络请求失败。", "NETWORK_ERROR", 0);
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new ApiClientError(`接口返回不是有效 JSON（HTTP ${response.status}）。`, "INVALID_RESPONSE", response.status);
+  }
+  if (!response.ok) throw failureFromPayload(payload, response.status);
+
+  const parsed = envelope(InspectionUploadResult).safeParse(payload);
+  if (!parsed.success) {
+    throw new ApiClientError(`接口返回格式不符合契约（HTTP ${response.status}）。`, "INVALID_RESPONSE", response.status);
+  }
+  return { data: parsed.data.data, source: parsed.data.meta.source };
+}
 
 export const PHOTO_INSPECTION_HINTS = [
   "照片是否被遮挡或反光影响判断",
