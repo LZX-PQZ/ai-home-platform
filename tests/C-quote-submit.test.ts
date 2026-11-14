@@ -175,15 +175,15 @@ test("未知状态没有重试回调时仍显示入口但禁用按钮", () => {
   assert.match(html, /disabled/);
 });
 
-test("回执展示服务端金额与来源，mock 说明演示身份报价已保存但不保证业主已收到", async (t) => {
+test("回执展示服务端金额与来源，说明所属业主可查看但不保证已阅读、接受或接单", async (t) => {
   for (const source of ["mock", "live"] as const) {
     const mock = t.mock.method(globalThis, "fetch", async () => Response.json(envelope({ ...quote, id: "<script>test</script>", knownTotalCents: 250 }, source)));
     const html = render({ status: "received", response: await submitQuote(input, key) });
-    for (const text of ["¥2.50", "待确认费用", "完整总价仍未确定", "本页不确认业主已可查看", "已锁定本次表单", "&lt;script&gt;"]) assert.ok(html.includes(text), text);
-    assert.doesNotMatch(html, /<script|本地报价预览|本次未提交成功/);
+    for (const text of ["¥2.50", "待确认费用", "完整总价仍未确定", "需求所属业主登录后可在该需求的报价对比页查看本次报价", "提交不代表业主已阅读、接受或接单", "已锁定本次表单", "&lt;script&gt;"]) assert.ok(html.includes(text), text);
+    assert.doesNotMatch(html, /<script|本地报价预览|本次未提交成功|页面接线仍待完成|本页不确认业主已可查看/);
     if (source === "mock") {
       assert.match(html, /模拟报价回执（mock）/);
-      assert.match(html, /演示身份报价已保存，不代表真实业务身份或业主已收到/);
+      assert.match(html, /演示身份报价已保存，不代表真实业务身份。/);
       assert.doesNotMatch(html, /报价已提交（live）|模拟接口响应|不代表真实保存/);
     } else {
       assert.match(html, /报价已提交（live）/);
