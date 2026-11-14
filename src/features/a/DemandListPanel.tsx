@@ -76,8 +76,8 @@ export function DemandListContent({ state, reload }: { state: DemandListState; r
   return (
     <div>
       <PageHeader
-        title="我的装修"
-        subtitle="一份需求单贯穿澄清、匹配、报价与施工；点开任意一条可以看完整信息。"
+        title="需求列表"
+        subtitle="当前展示平台公开需求；登录后可继续使用本人需求功能，点开任意一条可以看完整信息。"
         aside={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={reload} disabled={phase === "loading"}>

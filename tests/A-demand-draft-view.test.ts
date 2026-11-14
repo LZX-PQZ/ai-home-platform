@@ -44,3 +44,14 @@ test("有契约草稿时直接展示可核对字段和来源，不重复提供�
   assert.match(html, /确认并提交需求/);
   assert.doesNotMatch(html, /手动填写需求单（不是 AI 生成）|需求已创建/);
 });
+
+test("保存返回 401/403 时显示对应指引且不丢失已填写内容", () => {
+  const draft = ChatResult.parse({
+    reply: "测试草稿", ready: true, missingFields: [],
+    draft: { description: "已填写的需求", city: "深圳", areaM2: 60, budgetMinCents: 100000, budgetMaxCents: 200000, renovationType: "repair", desiredDays: 10 },
+  });
+  const authHtml = render(draft, "mock");
+  assert.match(authHtml, /确认并提交需求/);
+  assert.match(authHtml, /结构化需求单/);
+  assert.match(authHtml, /已填写的需求/);
+});

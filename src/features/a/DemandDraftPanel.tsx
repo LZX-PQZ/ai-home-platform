@@ -258,6 +258,24 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
         </div>
       )}
 
+      {outcome?.kind === "auth_required" && (
+        <div className="mt-3">
+          <Note tone="warn" title="请先完成业主登录">
+            <p>{outcome.message}</p>
+            <p className={C.meta}>登录后请回到本页继续提交；表单内容不会被清空。</p>
+          </Note>
+        </div>
+      )}
+
+      {outcome?.kind === "forbidden" && (
+        <div className="mt-3">
+          <Note tone="danger" title="当前没有需求创建权限">
+            <p>{outcome.message}</p>
+            <p className={C.meta}>请检查页面来源和业主登录状态；表单内容仍保留。</p>
+          </Note>
+        </div>
+      )}
+
       {outcome?.kind === "rejected" && (
         <div className="mt-3">
           <Note tone="danger" title="接口拒绝了这份需求">

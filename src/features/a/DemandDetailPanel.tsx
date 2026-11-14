@@ -66,7 +66,7 @@ export function DemandDetailContent({ id, state, reload }: {
           title={`接口未返回需求「${id}」`}
           hint="这条需求不存在或已被删除，请核对需求链接。"
           action={
-            <LinkButton href="/owner" size="sm" variant="secondary">返回我的装修</LinkButton>
+            <LinkButton href="/owner" size="sm" variant="secondary">返回需求列表</LinkButton>
           }
         />
         <div className="mt-3">
@@ -84,7 +84,7 @@ export function DemandDetailContent({ id, state, reload }: {
     <div>
       <div className="mb-3">
         <Link href="/owner" className="text-[13px] font-medium text-[#0F6E56]">
-          ← 返回我的装修
+          ← 返回需求列表
         </Link>
       </div>
 
