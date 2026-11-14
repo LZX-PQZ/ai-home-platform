@@ -18,6 +18,19 @@ export type TicketDTO = ReturnType<typeof Ticket.parse>;
 export type TicketCategoryFilter = "all" | TicketDTO["category"];
 export type TicketStatusFilter = "all" | TicketDTO["status"];
 
+export function summarizeTickets(tickets: readonly TicketDTO[]) {
+  const statusCounts = (): Record<TicketDTO["status"], number> => ({ open: 0, assigned: 0, resolved: 0 });
+  const byCategory: Record<TicketDTO["category"], ReturnType<typeof statusCounts>> = {
+    quality: statusCounts(), schedule: statusCounts(), payment: statusCounts(), attitude: statusCounts(),
+  };
+  const byStatus = statusCounts();
+  for (const ticket of tickets) {
+    byCategory[ticket.category][ticket.status] += 1;
+    byStatus[ticket.status] += 1;
+  }
+  return { total: tickets.length, byCategory, byStatus };
+}
+
 export const ticketCategoryFilterOptions = ["all", ...Ticket.shape.category.options] as const;
 export const ticketStatusFilterOptions = ["all", ...Ticket.shape.status.options] as const;
 export const ticketCategoryFilterLabels: Record<TicketCategoryFilter, string> = {

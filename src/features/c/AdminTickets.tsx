@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
+import { AdminTicketSummary } from "./AdminTicketSummary";
 import {
   adminTicketsErrorMessage, filterTickets, loadAdminTickets, ticketCategoryFilterLabels,
   ticketCategoryFilterOptions, ticketCategoryLabels, ticketStatusFilterLabels, ticketStatusFilterOptions,
@@ -68,6 +69,8 @@ export function AdminTicketsContent({ state, onReload }: {
             </p>
             <p className={`mt-2 !mb-0 ${C.meta}`}>本次返回 {response.data.length} 条工单</p>
           </div>
+
+          <AdminTicketSummary tickets={response.data} source={response.meta.source} />
 
           {response.data.length === 0 ? (
             <Empty title="本次列表暂无工单" hint="接口本次返回空列表，可稍后刷新；这不代表平台没有历史售后问题。" />
