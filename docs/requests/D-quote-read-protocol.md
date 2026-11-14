@@ -2,12 +2,12 @@
 
 日期：2026-11-14 · 基线：main 94f83a0 · 回复：`B-quote-read-protocol.md`（PR #70 已合入）
 
-状态：权限及 HTTP 规则已冻结；本次只提交协议决策。`QuoteQuery`/DTO、事务授权适配器和真实业主认证尚未实现，公开 GET 与页面尚未接入。现有 GET 不解析查询参数，仍返回固定 mock；不能将其作为指定需求的数据库查询。
+状态：权限及 HTTP 规则已冻结；D 已提供 `QuoteQuery`/DTO、持久化业主会话读取及事务授权适配器，见 `D-owner-quote-read-auth.md`。业主身份验证登录入口、公开 GET 与页面仍未接入。现有 GET 不解析查询参数，仍返回固定 mock；不能将其作为指定需求的数据库查询。
 
 ## 参数与兼容入口
 
 - 不带任何查询参数时，保留现有固定演示数据，`200 envelope(Quote[])`、`meta.source: mock`，不返回真实数据库报价；不要求登录。
-- 有查询参数时只能包含一次 `demandId`。目标公共 `QuoteQuery` 为严格对象 `{ demandId: DemandIdParams.shape.id }`，由 D 后续在 `src/contracts` 实现；不另建报价或金额 DTO。
+- 有查询参数时只能包含一次 `demandId`。公共 `QuoteQuery` 已在 `src/contracts` 实现，为严格对象 `{ demandId: DemandIdParams.shape.id }`；不另建报价或金额 DTO。D 的 `parseQuoteQuery` 同时检查 URLSearchParams 的键与出现次数。
 - 空字符串、纯空白、重复 demandId（包括两个相同值）及任何未知参数均为 `400 VALIDATION_ERROR`。必须先检查 URLSearchParams 的键与出现次数，不能用 Object.fromEntries 悄悄覆盖重复值。
 - 非空 ID 保持原值，URL 解码后精确查询；不 trim、不默认替换 demo-demand、不把查询失败回退到无参数入口。只传未知参数也为 400。
 
@@ -34,7 +34,7 @@
 5. 只有授权器明确返回 true，B 内核才读取需求详情与 submitted/accepted 报价。必须使用传入的同一个 tx，不能复用事务外的角色或所有者快照。若内核返回 null，也映射为同一 404。
 6. 存在且无可比报价返回 200 空数组；数据库、JSON、契约、金额溢出或数据范围异常为 `503 DATABASE_UNAVAILABLE`，不返回部分成功、空成功或 mock。
 
-D 后续提供与 B 的 `(request, demandId, tx) => boolean | Promise<boolean>` 兼容的服务端授权器：允许时返回 true，已分类拒绝抛出携带 401/403/404 的 D 错误。B 将意外 false / `QuoteReadDenied` 映射为 403，未知异常映射为 503。真实会话适配器未交付前不得使用固定业主、测试注入或前端选择身份开放该接口。现有 `readDemoVerifiedSession` 只能产生服务方身份，不能充当业主认证。
+D 已提供兼容 B 回调的 `authorizeOwnerQuoteRead(request, demandId, tx)`：允许时返回 true，拒绝抛出携带 status/code 的 `OwnerAccessError`。会话读取 `readOwnerVerifiedSession` 强制传入 tx，检查数据库令牌摘要、到期、撤销及当前账户；不复用预检身份。B 将意外 false / `QuoteReadDenied` 映射为 403，未知异常映射为 503。真实身份验证登录入口仍未交付，不能使用固定业主、测试注入或前端选择身份替代认证。现有 `readDemoVerifiedSession` 只能产生服务方身份，不能充当业主认证。
 
 ## 返回、来源与缓存
 
@@ -45,8 +45,8 @@ D 后续提供与 B 的 `(request, demandId, tx) => boolean | Promise<boolean>` 
 
 ## 后续交付与验收
 
-- D：按本决策实现公共 QuoteQuery/DTO、事务授权器及真实业主会话验证与撤销；增加契约、跨业主隔离、账户变化、会话失效和故障测试。生产认证不能由本次演示服务方登录代替。
-- B：D 的依赖合入后再接公开 GET 和 loadQuoteComparison，保留无参数 mock，按上述错误及缓存规则处理，使用当前事务授权器。不得在依赖尚未提供时自行采用允许所有请求的适配器。
+- D：已实现公共 QuoteQuery/DTO、事务授权器、业主会话摘要验证/撤销及隔离 SQLite 集成测试；后续补齐密码/外部身份验证、登录/注销入口。会话签发只允许在上游身份验证成功后调用，不能将合成测试身份用于生产登录。
+- B：D 的依赖合入后可接公开 GET 和 loadQuoteComparison，保留无参数 mock，按上述错误及缓存规则处理，使用当前事务授权器。登录入口未交付时显式查询无有效业主凭证仍拒绝，不能改用允许所有请求的适配器。
 - 联调：覆盖每个角色、本人/他人/不存在、全部需求状态、空数组、重复及未知参数、会话过期/撤销、角色变化、损坏数据、查询异常，以及真实写入后的相同报价 ID/金额/null。确认他人和不存在返回同一 404，任何失败不变成 mock/空成功。
 
-这份决策不代表公开报价读取已经接通；当前 PR #69 的可验收功能仍是演示服务方会话，以及与最新报价 POST 的拒绝行为一致。
+这份决策及 D 的服务端适配器不代表公开报价读取或业主登录已经接通；公开 GET 仍由 B 接线，真实身份验证入口仍由 D 后续交付。

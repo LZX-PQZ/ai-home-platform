@@ -19,8 +19,8 @@ test("报价服务端 API 和引擎可以读取服务端身份基础设施", () 
 
 const quoteInfrastructure = ["src/lib/idempotency.ts", "src/lib/quote-policy.ts", "src/lib/server-auth.ts"];
 
-test("演示会话内部实现只由 D 服务端读取，报价通过 server-auth 使用适配器", () => {
-  for (const target of ["src/lib/demo-provider-session.ts", "src/lib/demo-session-handlers.ts"]) {
+test("会话内部实现只由 D 服务端读取，报价通过 server-auth 使用适配器", () => {
+  for (const target of ["src/lib/demo-provider-session.ts", "src/lib/demo-session-handlers.ts", "src/lib/owner-auth.ts"]) {
     assert.equal(canReadAcrossOwner("src/lib/server-auth.ts", target), true);
     assert.equal(canReadAcrossOwner("src/app/api/auth/demo-provider/route.ts", target), true);
     assert.equal(canReadAcrossOwner("src/lib/server-auth.ts", target, true), false);
