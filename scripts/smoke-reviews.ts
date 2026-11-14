@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { DEMO_PROVIDER_ID, OrderProgressEvent, OrderProgressResult, OwnerOrderResult, Provider, Review, envelope, type SourceDTO } from "../src/contracts";
+import { DEMO_PROVIDER_ID, Demand, Match, OrderProgressEvent, OrderProgressResult, OwnerOrderResult, Provider, Review, envelope, type SourceDTO } from "../src/contracts";
 import { createOwnerAccount } from "../src/lib/owner-account";
 
 /** Real HTTP login, fulfillment and reviews; only the live-source quote is a synthetic storage fixture. */
@@ -23,6 +23,13 @@ export async function smokeReviews(base: string) {
     assert.equal(result.response.status, status); assert.equal(result.payload.ok, false); assert.equal(result.payload.error.code, code);
     assert.equal("data" in result.payload, false); assert.equal("meta" in result.payload, false);
     assert.equal(result.response.headers.get("cache-control"), "private, no-store"); assert.match(result.response.headers.get("vary") ?? "", /Cookie/i);
+  };
+  const readMatches = async (demandId: string, cookie = "") => {
+    const result = await http(`/api/match?demandId=${encodeURIComponent(demandId)}`, "GET", cookie);
+    assert.equal(result.response.status, 200);
+    assert.equal(result.response.headers.get("cache-control"), "private, no-store");
+    assert.ok(result.response.headers.get("vary")?.split(",").some(token => token.trim().toLowerCase() === "cookie"));
+    assert.equal(envelope(Match.array()).parse(result.payload).meta.source, "mock", "fixed provider directory stays mock");
   };
   const directory = async (source?: SourceDTO) => {
     const result = await http(`/api/provider${source ? `?performanceSource=${source}` : ""}`);
@@ -86,6 +93,7 @@ export async function smokeReviews(base: string) {
       const input = { demandId, providerId, rating: source === "mock" ? 4 : 5, comment: " Synthetic review " };
       assert.deepEqual((await http(target, "GET", cookie)).payload, { ok: true, data: [], meta: { source: "live" } });
       await denied(await http("/api/review", "POST", cookie, input), 409, "REVIEW_NOT_ALLOWED");
+      if (source === "mock") await readMatches(demandId);
       let quoteId: string;
       if (source === "mock") {
         const submitted = await http("/api/quote", "POST", providerCookie, { demandId, estimatedDays: 10,
@@ -100,6 +108,19 @@ export async function smokeReviews(base: string) {
       assert.equal(accepted.response.status, 201); assert.equal(accepted.payload.meta.source, source);
       const ownerRead = await readOrder(); assert.deepEqual(ownerRead, accepted.payload);
       const ownerOrder = ownerRead.data!; input.providerId = ownerOrder.providerId;
+      if (source === "mock") {
+        // The same existing demand became private through real HTTP acceptance, not a missing-ID fixture.
+        const detail = await http(`/api/demand/${encodeURIComponent(demandId)}`, "GET", cookie);
+        assert.equal(detail.response.status, 200);
+        const contracted = envelope(Demand).parse(detail.payload).data;
+        assert.equal(contracted.id, demandId); assert.equal(contracted.status, "contracted");
+        for (const credential of ["", otherCookie, providerCookie]) {
+          const hidden = await http(`/api/match?demandId=${encodeURIComponent(demandId)}`, "GET", credential);
+          await denied(hidden, 404, "DEMAND_NOT_FOUND");
+          assert.ok(hidden.response.headers.get("vary")?.split(",").some(token => token.trim().toLowerCase() === "cookie"));
+        }
+        await readMatches(demandId, cookie);
+      }
       assert.deepEqual(await readHistory(), { ok: true, data: [], meta: { source } });
       await denied(await http("/api/review", "POST", cookie, input), 409, "REVIEW_NOT_ALLOWED");
       let scheduleVersion: number | null = null;
@@ -199,10 +220,12 @@ export async function smokeReviews(base: string) {
     await denied(await http("/api/order/progress", "POST", cookie), 401, "UNAUTHENTICATED");
     await denied(await http(`/api/order?demandId=${encodeURIComponent(lastDemandId)}`, "GET", cookie), 401, "UNAUTHENTICATED");
     await denied(await http(`/api/order/progress?demandId=${encodeURIComponent(lastDemandId)}`, "GET", cookie), 401, "UNAUTHENTICATED");
+    await denied(await http(`/api/match?demandId=${encodeURIComponent(lastDemandId)}`, "GET", cookie), 401, "UNAUTHENTICATED");
     assert.equal((await http("/api/auth/owner", "DELETE", otherCookie)).response.status, 200);
     console.log("履约→评价生产 HTTP 通过：实际登录/演示报价/接受/业主 GET 接单取得编号/开工/依赖工序推进/完工/评价，需求与接单始终一致，历史排期保留；无直接改库伪造完工。mock/live、空接单、越权/旧版/跳级/退出拒绝通过。");
     console.log("服务方评价汇总生产 HTTP 通过：公开目录、均分/样本数、mock/live 分开、默认 live 不回退、重放计一次、坏来源 503；不公开评论和关联 ID，不扩大目录。");
     console.log("履约记录生产 HTTP 通过：正常动作后读取实际记录、空态、稳定顺序、重放不重复、mock/live 保留；跨业主/服务方/退出拒绝，坏事件 503，无操作者身份泄露。");
+    console.log("匹配权限生产 HTTP 通过：同一 published 需求匿名可读，正常接受报价转为 contracted 后匿名/其他业主/接单服务方均 404，本人仍可读；退出凭证 401，错误无 data/meta，来源与私有缓存头保持。");
   } finally {
     try {
       if (providerCookie) await http("/api/auth/demo-provider", "DELETE", providerCookie);
