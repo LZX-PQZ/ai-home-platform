@@ -1,6 +1,6 @@
 # D：固定服务方的演示登录与事务会话
 
-日期：2026-11-14 · 基线：main cb216b0 · 状态：已实现演示登录，待合入后由 B 接线公开报价写入
+日期：2026-11-14 · 同步基线：main 94f83a0 · 状态：已实现演示登录，待合入后由 B 接入报价处理器的会话参数
 
 ## 原因与边界
 
@@ -19,7 +19,9 @@
 
 `requireProviderIdentity(request)` 的默认 reader 接入演示 cookie；未开启或无有效 cookie 仍返回 401。`server-auth.ts` 同时导出 `readDemoVerifiedSession(request, tx)`，可直接作为报价事务的 reader：必须传入当前 tx，重新检查会话存在、过期、账户角色和绑定。换绑、删除、退出后的会话不可重放。
 
-本次不修改 B 的路由/内核。公开报价 POST 即使登录后预检通过仍返回 501；B 后续需接上已有原子幂等内核，并在使用此演示身份时返回 mock 来源。数据库落库不等于真实身份验证，不能将演示登录说成真实账号认证。真实报价读取闭环另行交接。
+PR #67 已将报价 POST 处理器连接到原子幂等内核，但处理器的两个默认会话参数仍显式使用 `noVerifiedSession`。这会覆盖 `requireProviderIdentity` 自身的默认 reader，所以即使演示 cookie 有效，公开 POST 仍返回 `401 UNAUTHENTICATED`，不写入报价或回执。
+
+B 后续需在服务端调用处把 `readDemoVerifiedSession` 同时传给 `QuoteSubmissionAuth.readSession` 与 `readTransactionSession`，后者必须使用内核传入的当前 tx；还需把演示身份的成功回执标为 mock，不能沿用当前处理器固定的 live 来源。本次不修改 B 的路由/内核。数据库落库不等于真实身份验证，不能将演示登录说成真实账号认证。报价读取规则见 `D-quote-read-protocol.md`；业主认证与公开 GET 接线仍未实现。
 
 `server-auth.ts` 及演示会话实现纳入客户端传递导入检查。B 仅通过已有 server-auth 服务端入口使用适配器；UI 只调用公共 HTTP 接口。
 

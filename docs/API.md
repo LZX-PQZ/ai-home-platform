@@ -27,12 +27,26 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/provider | Provider[] | D | 固定 mock |
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
 | GET /api/quote | Quote[] | B | 固定 mock |
+| POST /api/quote | QuoteSubmissionInput → Quote | B | 处理器已连接事务内核；默认会话参数仍为空，带有效演示 cookie 也返回 401 |
 | GET /api/schedule[?demandId=<id>&version=<n>] | Schedule | D | 无参数为演示 mock；带 `demandId` 读取 Prisma 最新/指定版本 |
 | GET /api/payment | Payment[] | D | 模拟节点列表；simulated 必须 true |
 | GET /api/ticket | Ticket[] | D | 固定 mock |
 
+## POST /api/quote
+
+PR #67 已将处理器接上事务内核，移除了固定的未实现响应。但 `handleQuoteSubmission` 的预检和事务会话参数仍显式使用 `noVerifiedSession`，不会自动采用 `requireProviderIdentity` 的默认演示 reader。因此当前匿名请求和带有效演示 cookie 的公开请求均返回 `401 UNAUTHENTICATED`，不写入报价或回执。B 后续必须在服务端调用处接入两个 reader，并为演示身份的成功回执标注 `meta.source: mock`；当前处理器固定的 live 来源不能直接用于演示身份。
+
+接入有效服务端认证后的处理顺序及现有处理器语义：
+
+- 身份预检优先；无会话 401，非服务方或未绑定服务方 403。认证失败不消费请求体、不查询需求。
+- 通过预检后校验 `Idempotency-Key`（16–128 位 ASCII 字母、数字、`-`、`_`），缺失/非法为 `400 VALIDATION_ERROR`；再校验 JSON、公共 `QuoteSubmissionInput` 和整数计价。输入仅为 `demandId`、1–20 行 `items`、`estimatedDays`，禁止客户端指定身份、行合计、总额或状态。
+- 数量按千分之一整数缩放，逐行用整数乘法并四舍五入到分后求和；金额和工期在持久化边界校验 SQLite Int 范围。不得用浮点乘法替代。
+- 同一事务内重新验证会话/绑定 → 检查当前服务方的回执摘要 → 读取需求并验证写入权限 → 原子提交或重放。首次成功 `201 envelope(Quote)`，同键同摘要且当前授权有效时重放原报价 `200 envelope(Quote)`；不同摘要为 `409 IDEMPOTENCY_CONFLICT`。
+- 明确的 P2034/P2002 冲突耗尽重试后为 `503 DATABASE_UNAVAILABLE`；其他无法可靠分类的异常（含提交后确认丢失、坏数据库输出）为 `500 INTERNAL_ERROR`。结果未知时保留原键与原输入，不能自动换键重报，也不能宣称此前一定未保存。
+
+完整决策见 `docs/requests/D-quote-idempotency.md`、`docs/requests/D-demo-provider-session.md`。处理器的隔离数据库测试不等于浏览器登录提交已接通。
+
 ## 已预留、当前返回 501
-- POST /api/quote：由 B 实现。服务端先检查已验证的服务方身份：未登录先返回 `401 UNAUTHENTICATED`，已登录但不是服务方或未绑定服务方返回 `403 FORBIDDEN`；认证失败时不消费请求体，也不查询需求。写入开放后必须携带 `Idempotency-Key` 请求头（16–128 位 ASCII 字母、数字、`-`、`_`）；同服务方同键同摘要重放原报价，同键不同摘要返回 409 `IDEMPOTENCY_CONFLICT`。通过身份检查后，才依次进行 JSON/输入/需求状态检查。输入契约已由 D 冻结为 `QuoteSubmissionInput`（`demandId`、1–20 行 `items`、`estimatedDays`），不能让客户端自定 provider 身份、行金额、合计金额、待确认项或状态。服务端计价必须与 C 预览一致：数量按千分之一整数缩放，逐行用整数乘法并四舍五入到分后求和；禁止用浮点乘法替代。默认适配器现可读取显式开启的演示会话；未开启、未登录或会话失效仍为 401。演示登录通过身份、输入和需求检查后，公开写入尚未接线，仍返回 `501 NOT_IMPLEMENTED`。401、403 和 501 都是失败，不能视为报价提交成功；B 后续接入原子内核时必须返回 `envelope(Quote)`，演示会话对应的回执必须标 `meta.source: mock`。完整决策见 `docs/requests/D-quote-idempotency.md` 和 `docs/requests/D-demo-provider-session.md`。
 - POST /api/schedule、/api/ticket、/api/inspect、/api/review：由 D 完成。ReviewInput 已预留；其他写入契约先补齐再让页面提交。
 - POST /api/payment：已实现最小模拟确认动作，不做身份校验，任何调用方都可触发演示状态转换。输入为 `PaymentActionInput`，只允许 `pending → confirmed_demo` 一次转换；状态只保存在服务进程内，进程重启后恢复初始演示状态。成功返回 `Payment`，`meta.source` 为 `mock` 且 `simulated` 为 `true`；这不是支付接口，不代表真实付款、资金托管或数据库持久化。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
@@ -43,11 +57,23 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 接通真实分析后使用 `envelope(PhotoInspectionResult)`，结果包含 `demandId`、`findings[]`（`imageRef`、`severity`、`message`）、可选服务端 `reviewedAt` 和固定免责声明。当前真实分析尚未接通，合法输入返回 HTTP 501 `NOT_IMPLEMENTED`；坏 JSON/非法字段返回 400。501 不能被页面显示为分析成功或验收通过。
 
-### 报价历史回执的当前限制
+## 报价历史回执的当前限制
 
 幂等重放成功的前提是当前事务中的身份、账号绑定和需求授权均通过。`live`、`published`、非演示需求的同键同摘要重放才可返回原报价；需求进入 `contracted`、`in_progress`、`completed` 或变为 `draft` 后，同摘要重放仍返回 `409 INVALID_STATE`，不返回历史回执、不新建或修改记录。此拒绝不表示上一次未保存，客户端不能自动换键重报。同键不同摘要仍优先返回 `409 IDEMPOTENCY_CONFLICT`；需求不存在为 404，身份失效/权限变化为 401/403。
 
-以上为接通写入时的冻结协议，公开 `POST /api/quote` 当前仍为认证失败或预检通过后的 501；历史回执读取接口未开放，`GET /api/quote` 仍为 mock。完整顺序见 `docs/requests/D-quote-idempotency.md`。
+以上规则已由写入内核执行；公开 `POST /api/quote` 尚未接入会话参数，实际仍返回 401。历史幂等回执读取接口未开放，`GET /api/quote` 仍为固定 mock。业主比较列表的独立读取规则如下，不改变 POST 重放限制。完整顺序见 `docs/requests/D-quote-idempotency.md`。
+
+## GET /api/quote?demandId=：已冻结规则，尚未开放
+
+现有 GET 仍返回固定演示报价，尚不解析或执行 demandId 查询。公共 `QuoteQuery`/DTO、D 的事务授权适配器、真实业主会话，以及 B 的公开 GET/页面接线均待后续实现；调用方目前不能把带参数的响应当作该需求的数据库报价。
+
+冻结的目标协议：无参数保留固定 mock；显式查询仅接受单一非空 demandId，拒绝纯空白、重复和未知参数，非空 ID 原样精确查找。仅当前已验证的业主可读取数据库 `DemandOrder.ownerId === session.userId` 的需求；服务方（含演示 provider-a）和管理员均返回 403，此接口不给跨业主或跨服务方的比较权限。
+
+显式查询按参数 400 → 会话 401 → 当前账户/角色 403 → 归属查询的顺序处理。有效业主查询不存在或不属于自己的需求统一返回 `404 DEMAND_NOT_FOUND`，不区分两者，避免透露资源是否存在。凭证、撤销、账户和归属均须在同一事务核验；请求头或参数中的自报身份不参与授权。
+
+业主可读取本人需求在 draft、published、contracted、in_progress、completed 各状态下的 submitted/accepted 报价；不返回 draft/rejected 报价。存在且无可比报价为 `200 envelope(Quote[])` 空数组，不能把查询失败变成空数组。数据库或数据校验失败为 `503 DATABASE_UNAVAILABLE`，不回退 mock。显式查询所有成功和失败响应均须 `Cache-Control: private, no-store`、`Vary: Cookie`，禁止共享缓存。来源按需求的 mock/live 规则；服务方资料仍须独立标识来源。
+
+参数细节、错误优先级、服务端适配器约束和 D/B 后续交付见 `docs/requests/D-quote-read-protocol.md`。
 
 ## 服务端身份基础设施
 
@@ -66,7 +92,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 Cookie `ai_home_demo_session` 使用 256 位随机凭证；数据库只存摘要、账号和绑定快照，30 分钟绝对过期。HttpOnly、SameSite=Strict、Path=/，HTTPS 时 Secure。POST/DELETE 强制同源 Origin；缺失或跨站为 `403 FORBIDDEN`。POST 未开启为 `403 DEMO_AUTH_DISABLED`，坏 JSON/字段为 400，账号未准备为 `503 DEMO_ACCOUNT_UNAVAILABLE`，数据库错误为 `503 SESSION_UNAVAILABLE`。退出会撤销数据库记录后清除 cookie；关闭演示期间 reader 拒绝所有演示 cookie，同源退出仍可撤销已有会话。
 
-B 的事务内核可从 `@/lib/server-auth` 导入 `readDemoVerifiedSession` 并作为 reader 传入 `createQuoteAtomically`，由内核传入当前 `tx`。每次验证过期、撤销、账户角色及固定绑定，不复用预检快照。演示登录是会话链路的演示能力，不是生产认证；公开报价写入仍为 501，真实报价读取闭环尚未接通。
+B 可从 `@/lib/server-auth` 导入 `readDemoVerifiedSession`，显式传入处理器的 `readSession` 和 `readTransactionSession`；后者由内核传入当前 `tx`。每次验证过期、撤销、账户角色及固定绑定，不复用预检快照。当前公开处理器尚未传入这些参数，所以有效演示 cookie 仍得到 401。演示登录不是生产认证；该服务方身份也不授予业主报价比较读取权限，真实报价读取闭环尚未接通。
 
 ## GET /api/match 查询参数
 

@@ -2,7 +2,7 @@
 
 发起人：D · 日期：2026-11-14 · 关联：`docs/requests/B-quote-idempotency.md`
 
-本文件冻结 B 接通真实报价写入前必须遵守的共享协议。当前公开 `POST /api/quote` 仍按 `docs/API.md` 的认证优先级返回 401/403/501；本次不开放真实写入。
+本文件冻结报价幂等、事务身份与写入授权协议。PR #67 已把公开 `POST /api/quote` 处理器接上事务内核，但处理器的预检及事务会话参数仍默认使用空 reader；包括带有效演示 cookie 的实际请求在内，目前均先返回 `401 UNAUTHENTICATED`。成功路径及错误语义如下，尚不能宣称浏览器提交闭环完成。
 
 ## 幂等键与回执
 
@@ -18,7 +18,7 @@
 
 事务处理顺序：重新认证并验证当前账号绑定 → 按当前服务方与键查询回执并检查摘要（不同摘要为 `409 IDEMPOTENCY_CONFLICT`）→ 重新读取需求（不存在为 `404 DEMAND_NOT_FOUND`）并检查当前报价授权 → 重放原记录或首次写入。身份失效返回 401，换绑/权限失败返回 403；演示或非 live 需求返回 `409 DEMO_DEMAND_READ_ONLY`。持有幂等键不能跳过这些检查。
 
-历史报价读取权限尚未单独开放；将来如允许签约后读取回执，应另行冻结读取授权和接口，不能放宽首次写入的 published 限制。B 当前保守实现符合此决策，公开 POST 仍未接通。
+历史幂等回执的 POST 重放仍受上述限制。业主比较列表的独立读取权限见 `D-quote-read-protocol.md`，允许业主读取本人签约后的已提交/已接受报价；不能据此放宽首次写入或 POST 重放的 published 限制。公开 GET 尚未接入该读取协议。
 
 ## 事务会话与账号绑定
 
@@ -36,10 +36,11 @@
 
 - Prisma SQLite `Int` 是有符号 32 位整数，写库字段的金额和工期必须落在 `[-2_147_483_648, 2_147_483_647]`；金额使用非负子范围。公共 `Money` 继续保留安全整数范围，`DatabaseInt`/`DatabaseMoney` 只在持久化边界校验，避免破坏现有预览和历史报价契约。
 - `knownTotalCents`、每行 `amountCents` 和 `estimatedDays` 在事务写入前都必须通过数据库范围校验；超范围返回 400 `VALIDATION_ERROR`，不得让 Prisma/SQLite 异常决定 API 语义。
-- 事务失败且明确回滚时返回 503；若连接在提交结果未知时中断，客户端必须保留同一 `Idempotency-Key` 供重试，服务端按回执查询结果处理，不能自动换键重发或宣称一定未保存。
+- 已明确识别的 P2034/P2002 数据库冲突在内核重试耗尽后返回 `503 DATABASE_UNAVAILABLE`；只表示本次冲突操作未完成，不证明此前同键提交未保存。其他无法可靠分类的异常（包括提交后连接丢失、数据库坏输出或响应构造失败）保守返回 `500 INTERNAL_ERROR`，不暴露内部异常，不自动重试。
+- 结果未知时，客户端必须保留同一 `Idempotency-Key` 与原输入供核实/重试，服务端按回执查询结果处理，不能自动换键重发或宣称一定未保存。
 
 ## 接入边界
 
-B 后续接入时应调用 `readIdempotencyKey`、`hashQuoteSubmission`、`authorizeProviderAccount` 和 `authorizeProviderQuote`，并将回执写入与报价写入放进同一事务。上述工具只冻结协议和校验，不接通公开写入、真实登录或客户端身份。
+B 的处理器/内核已调用 `readIdempotencyKey`、`hashQuoteSubmission`、`authorizeProviderAccount` 和 `authorizeProviderQuote`，并将回执写入与报价写入放进同一事务。剩余接入是服务端预检和事务会话参数；演示 reader 已由 D 提供，B 使用演示身份时还必须把成功回执标为 mock。真实登录仍未实现。
 
 `idempotency.ts` 与 `quote-policy.ts` 的导入只向报价 API、报价引擎和 D 服务端基础设施开放；页面、组件、其他角色业务目录及 `use client` 的传递依赖均禁止访问。变更和验收见 `D-quote-replay-boundary.md`。

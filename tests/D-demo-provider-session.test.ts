@@ -206,27 +206,34 @@ test("演示登录使用隔离 SQLite 验证 cookie、会话与报价事务，�
     await assert.rejects(createQuoteAtomically(req, input, identity, readDemoVerifiedSession, db), error => error instanceof QuoteWriteRejected && error.status === 401);
   });
 
-  await t.test("独立进程的默认身份入口读取 cookie，公开报价仍为 501 且不写入", async () => {
+  await t.test("独立进程确认演示会话有效，但报价处理器尚未接入 reader，返回 401 且不写入", async () => {
     const { cookie } = await login();
     const script = join(fixtureDir, "default-session.ts");
     const modulePath = (file: string) => JSON.stringify(resolve(file).replaceAll("\\", "/"));
     writeFileSync(script, `
       import { POST } from ${modulePath("src/app/api/quote/route.ts")};
       import { prisma } from ${modulePath("src/lib/prisma.ts")};
+      import { requireProviderIdentity } from ${modulePath("src/lib/server-auth.ts")};
       async function main() {
         const req = (cookie: string) => new Request('${origin}/api/quote', {
-          method: 'POST', headers: { origin: '${origin}', cookie }, body: ${JSON.stringify(JSON.stringify(input))},
+          method: 'POST', headers: { origin: '${origin}', cookie, 'Idempotency-Key': 'd-session-public-quote-key' }, body: ${JSON.stringify(JSON.stringify(input))},
         });
         const before = await prisma.quote.count();
+        const receiptsBefore = await prisma.quoteSubmissionReceipt.count();
+        const session = await requireProviderIdentity(req(process.env.TEST_SESSION_COOKIE!));
         const denied = await POST(req(''));
         const loggedIn = await POST(req(process.env.TEST_SESSION_COOKIE!));
-        console.log(JSON.stringify({ anonymous: denied.status, authenticated: loggedIn.status, ok: (await loggedIn.json()).ok, added: await prisma.quote.count() - before }));
+        const body = await loggedIn.json();
+        console.log(JSON.stringify({ sessionValid: session.ok, providerId: session.ok ? session.identity.providerId : null,
+          anonymous: denied.status, withDemoCookie: loggedIn.status, ok: body.ok, code: body.error?.code,
+          added: await prisma.quote.count() - before, receiptsAdded: await prisma.quoteSubmissionReceipt.count() - receiptsBefore }));
       }
       main().finally(() => prisma.$disconnect());
     `);
     const output = execFileSync(process.execPath, [resolve("node_modules/tsx/dist/cli.mjs"), script], {
       env: { ...env, DEMO_AUTH_ENABLED: "true", TEST_SESSION_COOKIE: cookie }, encoding: "utf8", stdio: "pipe", timeout: 30000,
     });
-    assert.deepEqual(JSON.parse(output), { anonymous: 401, authenticated: 501, ok: false, added: 0 });
+    assert.deepEqual(JSON.parse(output), { sessionValid: true, providerId: DEMO_PROVIDER_ID,
+      anonymous: 401, withDemoCookie: 401, ok: false, code: "UNAUTHENTICATED", added: 0, receiptsAdded: 0 });
   });
 });
