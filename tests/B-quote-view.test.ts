@@ -8,6 +8,34 @@ import { formatQuoteMoney } from "../src/features/b/format-quote";
 import { loadQuoteData } from "../src/lib/quote-engine/data";
 import { prepareQuotes } from "../src/lib/quote-engine";
 import { providers, quotes } from "../src/lib/mock-data";
+import { demoDemand } from "../src/lib/mock-data";
+import { loadQuoteComparison } from "../src/features/b/load-quotes";
+
+test("混合列表按每份报价标明 mock/live/未知，不从整批或服务方来源推断", async t => {
+  const rows = [
+    { ...quotes[0], id: "synthetic-mock", source: "mock" },
+    { ...quotes[0], id: "synthetic-live", source: "live" },
+    { ...quotes[0], id: "synthetic-legacy", source: undefined },
+  ];
+  // 全部为合成数据，live 仅测试标识，不代表真实报价。
+  for (const source of ["mock", "live"] as const) {
+    t.mock.method(globalThis, "fetch", async (url: string) => Response.json({
+      ok: true, data: url.startsWith("/api/quote?") ? rows : url === "/api/provider" ? providers : { ...demoDemand, source: "live" },
+      meta: { source },
+    }));
+    const data = await loadQuoteComparison(demoDemand.id);
+    assert.equal(data.response.meta.source, "mock");
+    const html = renderToStaticMarkup(createElement(QuoteComparison, { data }));
+    const articles = html.match(/<article\b[\s\S]*?<\/article>/g) ?? [];
+    assert.equal(articles.length, 3);
+    for (const [index, label] of ["mock · 模拟报价", "live · 非模拟报价数据", "未知（接口未提供逐条来源），不能视为真实报价"].entries()) {
+      assert.ok(articles[index].includes(rows[index].id));
+      assert.ok(articles[index].includes(`本份报价来源：${label}`));
+    }
+    assert.ok(!html.includes("展示 3 份模拟报价"));
+    t.mock.restoreAll();
+  }
+});
 
 test("报价金额展示区分未知与零，并保留安全整数范围内的分位", () => {
   assert.equal(formatQuoteMoney(null), "待确认");
@@ -20,7 +48,7 @@ test("报价页展示来源、供应方、列明费用及服务范围限制", ()
   const data = loadQuoteData();
   assert.ok(data);
   const html = renderToStaticMarkup(createElement(QuoteComparison, { data: { ...data, demandSource: "mock", quoteSource: "mock", providerSource: "mock" } }));
-  for (const text of ["模拟数据 · 非真实市场报价", providers[0].name, "¥12,000.00", "¥13,000.00", "垃圾清运", "待确认", "不代表最终总价更低", "实际范围需现场确认"]) {
+  for (const text of ["mock · 模拟报价，不代表真实市场报价", providers[0].name, "¥12,000.00", "¥13,000.00", "垃圾清运", "待确认", "不代表最终总价更低", "实际范围需现场确认"]) {
     assert.ok(html.includes(text), text);
   }
   assert.equal((html.match(/<table /g) ?? []).length, 2);

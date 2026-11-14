@@ -114,7 +114,7 @@ test("报价页把当前需求预算传入每份报价，并保留 mock 来源�
   assert.ok(data);
   const html = renderToStaticMarkup(createElement(QuoteComparison, { data: { ...data, demandSource: "mock", quoteSource: "mock", providerSource: "mock" } }));
   assert.equal((html.match(/aria-label="与需求预算对照"/g) ?? []).length, data.response.data.length);
-  assert.ok(html.includes("模拟数据 · 非真实市场报价"));
+  assert.ok(html.includes("mock · 模拟报价，不代表真实市场报价"));
   assert.ok(html.includes("仍有待确认费用"));
   assert.ok(html.includes("垃圾清运"));
   assert.ok(html.includes("展示顺序不代表价格或质量排名"));
