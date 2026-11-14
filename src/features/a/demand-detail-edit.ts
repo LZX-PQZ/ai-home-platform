@@ -1,9 +1,7 @@
-import { Demand, DemandDeleteResult, DemandIdParams, envelope } from "@/contracts";
+import { Demand, DemandDeleteResult, DemandIdParams } from "@/contracts";
 import type { DemandDTO, DemandDeleteResultDTO, SourceDTO } from "@/contracts";
-import { ApiClientError } from "@/lib/api-client";
+import { ApiClientError, apiDelete, apiPut } from "@/lib/api-client";
 import { formToInput, type DemandForm } from "./demand-chat";
-
-type Failure = { ok: false; error: { code: string; message: string } };
 
 export type DemandMutationOutcome =
   | { kind: "updated"; demand: DemandDTO; source: SourceDTO }
@@ -18,37 +16,6 @@ function failureMessage(status: number, code: string, message: string) {
   if (status === 403) return `没有权限修改这条需求（${code}）。`;
   if (status >= 500) return `需求服务暂时不可用（${code}）：${message}`;
   return `${message}（${code}，HTTP ${status}）`;
-}
-
-async function requestMutation(path: string, init: RequestInit) {
-  let response: Response;
-  try {
-    response = await fetch(path, init);
-  } catch {
-    throw new ApiClientError("网络请求失败。", "NETWORK_ERROR", 0);
-  }
-
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new ApiClientError(
-      `接口返回不是有效 JSON（HTTP ${response.status}）。`,
-      "INVALID_RESPONSE",
-      response.status,
-    );
-  }
-
-  if (!response.ok) {
-    const parsed = (payload && typeof payload === "object" ? payload : {}) as Partial<Failure>;
-    const error = parsed.error && typeof parsed.error === "object" ? parsed.error : null;
-    throw new ApiClientError(
-      error && typeof error.message === "string" ? error.message : `接口请求失败（HTTP ${response.status}）。`,
-      error && typeof error.code === "string" ? error.code : `HTTP_${response.status}`,
-      response.status,
-    );
-  }
-  return { payload, status: response.status };
 }
 
 function parseMutationFailure(cause: unknown): DemandMutationOutcome {
@@ -88,16 +55,13 @@ export async function updateDemand(id: string, form: DemandForm): Promise<Demand
   if (!checked.ok) return { kind: "rejected", messages: checked.messages };
 
   try {
-    const response = await requestMutation(`/api/demand/${encodeURIComponent(id)}`, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(checked.value),
-    });
-    const parsed = envelope(Demand).safeParse(response.payload);
-    if (!parsed.success || parsed.data.data.id !== id) {
-      return { kind: "failed", message: "更新响应不符合需求契约，已停止展示新数据。", status: response.status, code: "INVALID_RESPONSE" };
-    }
-    return { kind: "updated", demand: parsed.data.data, source: parsed.data.meta.source };
+    // 在公共契约上增加当前需求核对，校验失败仍由共享客户端保留 HTTP 状态。
+    const response = await apiPut(
+      `/api/demand/${encodeURIComponent(id)}`,
+      checked.value,
+      Demand.refine(data => data.id === id),
+    );
+    return { kind: "updated", demand: response.data, source: response.source };
   } catch (cause) {
     return parseMutationFailure(cause);
   }
@@ -108,12 +72,11 @@ export async function deleteDemand(id: string): Promise<DemandMutationOutcome> {
   if (!params.success) return { kind: "rejected", messages: ["需求编号无效，请检查链接。"] };
 
   try {
-    const response = await requestMutation(`/api/demand/${encodeURIComponent(id)}`, { method: "DELETE" });
-    const parsed = envelope(DemandDeleteResult).safeParse(response.payload);
-    if (!parsed.success || parsed.data.data.id !== id || !parsed.data.data.deleted) {
-      return { kind: "failed", message: "删除响应不符合需求契约，已停止继续操作。", status: response.status, code: "INVALID_RESPONSE" };
-    }
-    return { kind: "deleted", result: parsed.data.data, source: parsed.data.meta.source };
+    const response = await apiDelete(
+      `/api/demand/${encodeURIComponent(id)}`,
+      DemandDeleteResult.refine(data => data.id === id),
+    );
+    return { kind: "deleted", result: response.data, source: response.source };
   } catch (cause) {
     return parseMutationFailure(cause);
   }
