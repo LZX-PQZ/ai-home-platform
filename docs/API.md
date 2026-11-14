@@ -34,7 +34,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | POST /api/order/progress | OrderProgressInput → OrderProgressResult | D | 业主确认开工/工序/整单完成；需求、接单、排期版本及事件同事务保存，200，来源沿用接单 |
 | GET /api/order/progress?demandId=… | OrderQuery → OrderProgressEvent[] | D | 所属业主读取已保存履约动作，隐藏操作者身份；来源沿用接单，无记录不补造 |
 | GET /api/provider/orders | OrderSummary[] | D | 同一事务验证服务方并只查本人接单关系；无参数，当前演示身份整体 mock |
-| GET /api/match[?demandId=<id>] | Match[] | B | 无参数固定演示；显式 ID 读库，未知 404，空/重复参数 400；未公开需求权限仍待 B 接入 D 读取器 |
+| GET /api/match[?demandId=<id>] | Match[] | B | 无参数固定演示；显式 ID 使用受控读取器，published 公开，其他状态仅本人业主，越权/未知统一 404；非法参数 400 |
 | GET /api/quote[?demandId=<id>] | QuoteQuery → Quote[] | B | 无参数固定 mock；显式 ID 在事务内核验业主归属，读取本人 submitted/accepted 报价并保留来源 |
 | POST /api/quote | QuoteSubmissionInput → Quote | B | 已接演示会话；合法首次提交 201/mock，同键同摘要重放 200/mock；无有效会话 401 |
 | GET /api/schedule[?demandId=<id>&version=<n>] | Schedule | D | 无参数或固定 demo-demand 为公开种子排期 mock；其他需求验证业主会话及归属后读取最新/指定版本 |
@@ -54,9 +54,9 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 公共 `ProviderPerformance` 为 `{ basis: 'completed_order_review_average', averageRating: number | null, reviewCount: number, calculatedAt: ISO8601, source }`。仅统计需求与实际接单均 completed、同需求/业主/服务方且 accepted 报价关系一致、评价/接单/报价来源一致的绑定评价。每接单最多一个样本，均分四舍五入到两位（1–5），无样本明确 null/0；不使用旧 Provider.rating 或其他来源补齐。`calculatedAt` 只要求 ISO 8601 datetime 格式，不用浏览器当前时间判断未来，以容忍客户端时钟偏差。无 orderId 旧评价不在口径内；一致但未完成的关系排除；错绑/坏来源/非法评分/存储异常返回整批 503/PROVIDER_UNAVAILABLE，不伪装空样本。公开响应没有评论、业主、需求、接单或评价 ID。
 
-服务端 `readProviderDirectory({ performanceSource: 'live' | 'mock' })` 在 Serializable 事务内生成同一快照时间并返回公共信封，默认参数为 live；HTTP 与 B 后续 `/api/match` 可复用，抛错为 `ProviderDirectoryError`。浏览器使用 `apiGet('/api/provider?performanceSource=mock', Provider.array())`，不要导入服务端适配器。所有 HTTP 响应 no-store，不依赖 cookie、不写库或更新服务方 rating。`availability` 的窗口按 Asia/Shanghai 自然日解释，固定样例 source=mock；缺省/null 是未知，空窗口只表示覆盖区间内无窗口，过期后不参与排序。当前任一查询范围内的坏评价或坏关联会让整个目录返回 503：C 的需求页和 B 的匹配页会无法完成目录加载；B 的报价对比页会保留报价，但服务方名称与来源提示待确认。此指标是业主评价均分，不是准时率、质量认证或信用分；少于 3 个样本由调用方显示样本少。
+服务端 `readProviderDirectory({ performanceSource: 'live' | 'mock' })` 在 Serializable 事务内生成同一快照时间并返回公共信封，默认参数为 live；HTTP 与 B 的 `/api/match` 已复用，抛错为 `ProviderDirectoryError`。浏览器使用 `apiGet('/api/provider?performanceSource=mock', Provider.array())`，不要导入服务端适配器。所有 HTTP 响应 no-store，不依赖 cookie、不写库或更新服务方 rating。`availability` 的窗口按 Asia/Shanghai 自然日解释，固定样例 source=mock；缺省/null 是未知，空窗口只表示覆盖区间内无窗口，过期后不参与排序。当前任一查询范围内的坏评价或坏关联会让整个目录返回 503：C 的需求页和 B 的匹配页会无法完成目录加载；B 的报价对比页会保留报价，但服务方名称与来源提示待确认。此指标是业主评价均分，不是准时率、质量认证或信用分；少于 3 个样本由调用方显示样本少。
 
-B 排序/来源展示与 `/api/match` 目录接线已随 #153 合入，C 档期展示 #152 已合入，#157 已提供固定演示页的 live/mock 评价选择器；匹配需求权限接线仍待 B 完成。固定 mock 档期、报价单位/列项差异样例与四组合成 completed 接单/评价已提供；运行 db:seed 补齐固定记录。仅种子样本时 mock 汇总为 provider-a 4.67/3、provider-b 4/1；默认 live 不回退这些样本。当前两候选基础分为 98/97，切换评价口径不会翻转排序；同分/互换窗口方案已采纳设计，但因 B 测试依赖旧顺序暂缓替换运行样例，见 `docs/requests/D-demo-integration.md`。操作脚本见 `docs/DEMO.md`，字段说明见 `docs/requests/D-provider-performance.md` 和 `docs/requests/D-provider-availability.md`。
+B 排序/来源展示与 `/api/match` 目录接线已随 #153 合入，C 档期展示 #152 已合入，#157 已提供固定演示页的 live/mock 评价选择器，#161 已接入匹配需求权限。固定 mock 档期、报价单位/列项差异样例与四组合成 completed 接单/评价已提供；运行 db:seed 补齐固定记录。仅种子样本时 mock 汇总为 provider-a 4.67/3、provider-b 4/1；默认 live 不回退这些样本。当前两候选基础分为 98/97，切换评价口径不会翻转排序；同分/互换窗口方案已采纳设计，但因 B 测试依赖旧顺序暂缓替换运行样例，见 `docs/requests/D-demo-integration.md`。操作脚本见 `docs/DEMO.md`，字段说明见 `docs/requests/D-provider-performance.md` 和 `docs/requests/D-provider-availability.md`。
 
 ## 接受报价与本人接单
 
@@ -275,10 +275,10 @@ B 已从 `@/lib/server-auth` 导入 `readDemoVerifiedSession`，作为处理器�
 
 - `demandId` 是可选的单值查询参数。省略时保留 `demo-demand` 的演示入口，返回 `Match[]`，`meta.source` 为 `mock`。
 - 显式 ID（包括 `demo-demand`）读取数据库；不存在返回 `404 DEMAND_NOT_FOUND`，不会回退到默认需求。
-- 参数为空、纯空白或重复传入返回 `400 VALIDATION_ERROR`。错误响应仍使用统一失败信封。
-- 当前按保存需求与公开目录计算匹配，目录含固定 mock 资料，所以整体仍为 mock。当前路由直接按 ID 读库，没有限制未公开需求的访问，也未拒绝未知参数；不能宣称已隔离。
+- 参数为空、纯空白、重复或含未知参数返回 `400 VALIDATION_ERROR`。错误响应仍使用统一失败信封。
+- 当前先执行受控需求读取，再加载公开目录计算匹配；拒绝时不会读取目录或排序。目录含固定 mock 资料，所以整体仍为 mock。
 
-D 已提供服务端 `readMatchingDemand(request)`：复用公共 `DemandIdParams`/`Demand`，严格拒绝未知/重复/空参数；published 可公开读取，其他状态仅所属业主；显式业主凭证必须有效，不回退匿名。会话、当前角色、按范围过滤的查询及输出验证在同一 Serializable 事务中完成。无参数固定 mock；显式 demo 也必须存在且满足发布/归属规则。非公开他人需求与不存在统一 404，凭证失效 401、角色变化 403、坏数据/存储失败 503；成功与失败要求 private, no-store、Vary: Cookie。B 须先接入该读取器再加载目录/匹配，详细导入及错误映射见 `docs/requests/D-match-read-access.md`。**此处为待接线协议，现有 HTTP 路由尚未执行这些权限规则。**
+B #161 已将原始 Request 传给 `loadMatchData(request)` 并调用 D 的 `readMatchingDemand(request)`：复用公共 `DemandIdParams`/`Demand`，published 可公开读取，其他状态仅所属业主；显式业主凭证必须有效，不回退匿名。会话、当前角色、按范围过滤的查询及输出验证在同一 Serializable 事务中完成。无参数固定 mock；显式 demo 也必须存在且满足发布/归属规则。非公开他人需求与不存在统一 404，凭证失效 401、角色变化 403、坏数据/存储失败 503；成功与失败均为 private, no-store，Vary 包含 Cookie。仅服务方即使有实际接单关系，也不能匹配非公开需求。目录错误仍为 503/PROVIDER_UNAVAILABLE，不回退成功。详细导入及错误映射见 `docs/requests/D-match-read-access.md` 和 `docs/requests/B-match-read-access.md`；共享生产冒烟覆盖正常接受报价后的实际非公开需求。
 
 ## ID 与状态
 固定演示需求 demo-demand，服务方 provider-a 到 provider-f。
@@ -325,7 +325,7 @@ POST 先校验同源 Origin 和实际业主会话，在事务外读取/校验 De
 
 DELETE 无请求体，非空 ID 原样精确查找，错误顺序为路径 400 → 方法/同源 Origin 403 → 事务内业主会话 401/403/503 → 本人需求 404 → 只读/状态/关联约束 409 → 删除。凭证规则与 PUT 一致；他人和不存在统一 404。会话、当前账号、归属、状态、五类关联检查、删除及输出校验全部处于同一个 Serializable 事务；最后 DELETE SQL 也限制 ID、ownerId、可编辑状态和关联均为空，必须恰好删除一条。成功为 200/live，重复删除为 404；所有响应 private, no-store、Vary: Cookie。事务/存储故障为中性 503/DATABASE_UNAVAILABLE，提示刷新核实，不承诺之前一定未删除。详见 `docs/requests/D-demand-delete-auth.md`。
 
-需求 POST 当前业主归属沿用 #95，列表/详情的访问范围见下节。历史 demo-owner 需求不自动转移；显式排期查询的独立归属校验见 GET /api/schedule。match 等其他读取接口仍需审计，不能宣称整个模块或平台已经完成权限隔离。
+需求 POST 当前业主归属沿用 #95，列表/详情的访问范围见下节。历史 demo-owner 需求不自动转移；显式排期查询的独立归属校验见 GET /api/schedule，匹配读取权限见 GET /api/match。已验证的接口不代表整个模块或平台已经完成权限隔离。
 
 ## GET /api/demand 与 GET /api/demand/[id]：访问隔离
 

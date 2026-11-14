@@ -1,26 +1,26 @@
 # D：演示验收与集成交接
 
-日期：2026-11-15 · 基线：main d06ef42（#160 已合入）。
+日期：2026-11-15 · 最终基线：main e6ceb61（含 #160、#161）。
 
 ## 本次范围与变更申请
 
 先核对 B 的 `B-ranking-demo-data.md`，在 D 所有的 mock-data 中试验其同分与窗口方案，并运行受影响测试。若涉及 B 测试调整，记录具体影响并交 B 处理，不通过修改算法、检查脚本或关闭测试绕过。
 
-整理 README、API、D 任务书和状态清单，新增 `docs/DEMO.md` 作为演示操作脚本。没有新增公共字段、依赖、数据库字段或配置。原有数据库与 .env 保留；验证只用隔离数据库和合成内容。
+整理 README、API、D 任务书和状态清单，新增 `docs/DEMO.md` 作为演示操作脚本。提交前发现 B #161 已合入，新增 D 所有的 `scripts/smoke-reviews.ts` 修改范围，补共享生产权限回归。没有新增公共字段、依赖、数据库字段或配置。原有数据库与 .env 保留；验证只用隔离数据库和合成内容。
 
-## 匹配权限回归的前置条件
+## 匹配权限生产回归
 
-#160 已提供并验证 D 的读取器，但当前 main 的 `src/app/api/match/route.ts` 与 `src/lib/match/data.ts` 仍未接入。B 接线合入之后，D 在生产 HTTP 冒烟中加入：匿名匹配实际存在的非公开需求返回 404/DEMAND_NOT_FOUND，响应无 data/meta，且带 private, no-store 和 Vary: Cookie。不能只查询不存在的 ID 来代替非公开需求用例，也不能把现有 200/mock 解释为权限通过。
+#160 提供 D 的读取器，#161 已将 B 路由与加载器接入。D 在共享生产 HTTP 冒烟中验证：匿名匹配实际存在的非公开需求返回 404/DEMAND_NOT_FOUND，响应无 data/meta，且带 private, no-store 和包含独立 Cookie token 的 Vary。不存在 ID 不能代替本用例，200/mock 也不表示权限通过。
 
-可复用 `scripts/smoke-reviews.ts` 正常接受报价后的合成需求：确认需求 contracted，再不带 cookie 请求 `/api/match?demandId=<id>`；随后核对所属业主可读、他人同为 404。这避免为了测试直接改库伪造业务状态。B 未接入前，此断言会实际失败，不能默认跳过后宣称权限回归已经纳入 CI。
+复用 `scripts/smoke-reviews.ts` 的真实 HTTP 登录、创建、演示报价与接受链路：先验证 published 需求可匿名匹配，正常接受报价后读取并校验该需求确已 contracted，再以匿名、另一业主和实际接单的服务方请求同一个匹配 URL，均须 404；所属业主仍为 200，按公共 Match 契约核验来源及缓存头。退出后的业主凭证为 401。非公开状态由正常业务接口产生，没有直接改库伪造，也没有跳过断言；该脚本由现有生产 smoke/CI 调用。
 
 ## 演示数据决定与验证
 
 **采纳 B 的样例设计，暂缓替换运行数据，先完成跨角色测试交接。** 试验仅把 provider-b.rating 从 4.6 改为 4.8，并交换 a/b 的既有窗口；未改变城市、工种、标签、日期、来源或算法。按 2026-11-15 上海时间的固定测试时点计算，两者同为 98 分，live 无评价时 b→a；用合成 4.67/3 与 4.00/1 的 mock 评价时 a→b。该结果是受控夹具计算，不代表实际页面或运行数据已经替换。
 
-实际运行 `npx tsx --test tests/B-match.test.ts tests/B-match-demand-api.test.ts`：14 项中 11 通过、3 失败，均为旧断言固定要求 a→b，但新样例实际为 b→a：
+在原基线 d06ef42 实际运行 `npx tsx --test tests/B-match.test.ts tests/B-match-demand-api.test.ts`：14 项中 11 通过、3 失败，均为旧断言固定要求 a→b，但新样例实际为 b→a；#161 未调整这些固定顺序依赖：
 
-| B 文件 | 用例 | 当前行号（基线） |
+| B 文件 | 用例 | 原基线 d06ef42 行号 |
 |---|---|---|
 | tests/B-match-demand-api.test.ts | 每次请求重新读取需求，更新后改变匹配，删除后返回 404 而非缓存结果 | 54 |
 | tests/B-match-demand-api.test.ts | 只有省略参数走固定演示入口，显式 demo-demand 必须存在于数据库 | 79 |
@@ -35,10 +35,10 @@ B 的测试兼容变更合入后，D 按原请求替换运行样例，并同步�
 ## 交付验证
 
 - `npm.cmd run db:setup`：在本轮全新隔离 SQLite 中建表、生成客户端并 seed 成功；原库和 `.env` 未改。
-- `npm.cmd run check`：lint、TypeScript、986/986 测试、模块导入边界全部通过，无失败或跳过。
-- `npm.cmd run build`：生产构建通过。
-- `npm.cmd run scope -- --role D --base origin/main`：通过，6 个共享文档文件，未越界；`git diff --check` 通过。
-- `node scripts/run-production-smoke.mjs`：隔离库生产服务验证通过，13 个页面、32 个 GET 和 13 个 POST 基础场景，以及照片、接单/履约/评价、来源隔离、履约记录和权限拒绝扩展场景；runner 已停止本次子进程。
+- 同步 #161 后重新运行 `npm.cmd run check`：lint、TypeScript、994/994 测试、模块导入边界全部通过，无失败或跳过。
+- `npm.cmd run build`：同步后生产构建通过。
+- `npm.cmd run scope -- --role D --base origin/main`：通过，7 个文件（6 个共享文档、1 个共享冒烟脚本），未越界；`git diff --check` 通过。
+- `node scripts/run-production-smoke.mjs`：本轮隔离库生产验证通过，13 个页面、32 个 GET 和 13 个 POST 基础场景，以及照片、接单/履约/评价、来源隔离、履约记录与新增匹配权限场景。新增断言实际通过：published 匿名 200 → 接受报价后 contracted 匿名/其他业主/接单服务方 404，本人 200，退出凭证 401；runner 已停止本次子进程。
 - 已逐项对照源码核对演示入口：照片上传在施工排期页，评价和工单在需求详情；首版/修订表单及旧版本读取已接入，差异预览与履约记录展示仍未接入。本轮没有做完整浏览器交互验收。
 
-以上为最终文档交付状态的检查结果；前述新样例试验的 3 项失败已单独记录，不能解读为新数据已通过全量验证。运行数据仍是原有 mock 样例，真实 AI 供应商与照片分析均未接通；真实服务方认证未实现，冒烟中的 live 报价仍为合成存储夹具。匹配 API 的匿名非公开需求 404 断言尚未加入，需等 B 接线后独立交付。
+前述新样例试验的 3 项失败单独记录，不能解读为新数据已通过全量验证。运行数据仍是原有 mock 样例，真实 AI 供应商与照片分析均未接通；真实服务方认证未实现，冒烟中的 live 报价仍为合成存储夹具。本次新权限断言使用 mock 演示报价通过正常 HTTP 接受后生成的非公开需求。
