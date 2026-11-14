@@ -63,12 +63,31 @@ export async function loadAdminTickets() {
 export type AdminTicketsState =
   | { status: "loading" }
   | { status: "ready"; response: Awaited<ReturnType<typeof loadAdminTickets>> }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; canExitOwnerSession?: boolean };
+
+export function adminTicketsFailureState(error: unknown): Extract<AdminTicketsState, { status: "error" }> {
+  return {
+    status: "error",
+    message: adminTicketsErrorMessage(error),
+    // The current no-parameter ticket endpoint checks an existing owner cookie.
+    // Unknown authentication errors must not suggest clearing that session.
+    canExitOwnerSession: error instanceof ApiClientError && (
+      (error.status === 401 && error.code === "UNAUTHENTICATED") ||
+      (error.status === 403 && error.code === "FORBIDDEN")
+    ),
+  };
+}
 
 export function adminTicketsErrorMessage(error: unknown) {
   if (error instanceof ApiClientError) {
-    if (error.status === 401) return "请完成平台管理身份验证后重试。角色导航不能代替登录。";
-    if (error.status === 403) return "当前身份无权查看售后工单。";
+    if (error.status === 401 && error.code === "UNAUTHENTICATED") {
+      return "业主登录已失效，当前工单未能读取。可在页面上方重新登录业主后点击“重新加载”，或退出业主会话后重新查询固定模拟工单。服务方登录和角色导航不能解除此问题。";
+    }
+    if (error.status === 403 && error.code === "FORBIDDEN") {
+      return "当前身份无权查看售后工单，业主账号权限可能已变更。可退出业主会话后重新查询固定模拟工单；如需以业主身份访问，请联系维护者核实账号权限。";
+    }
+    if (error.status === 401) return "工单读取的身份验证未通过，请重新加载；角色导航不能代替登录。";
+    if (error.status === 403) return "当前身份无权查看售后工单，请联系维护者核实访问权限。";
     if (error.status === 501) return "工单查询尚未实现，暂时无法展示列表。";
     if (error.status === 503) return "工单服务暂时不可用，请稍后重试。";
     if (error.code === "INVALID_RESPONSE") return "工单数据格式异常，请稍后重新加载。";

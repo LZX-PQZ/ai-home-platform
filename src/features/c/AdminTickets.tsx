@@ -5,8 +5,9 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
 import { AdminTicketSummary } from "./AdminTicketSummary";
+import { DemandAccessRecovery } from "./DemandAccessRecovery";
 import {
-  adminTicketsErrorMessage, filterTickets, loadAdminTickets, ticketCategoryFilterLabels,
+  adminTicketsFailureState, filterTickets, loadAdminTickets, ticketCategoryFilterLabels,
   ticketCategoryFilterOptions, ticketCategoryLabels, ticketStatusFilterLabels, ticketStatusFilterOptions,
   ticketStatusLabels, type AdminTicketsState, type TicketCategoryFilter, type TicketStatusFilter,
 } from "./admin-tickets";
@@ -43,7 +44,8 @@ export function AdminTicketsContent({ state, onReload }: {
 
       <div className={`${C.note} ${C.noteWarn}`}>
         <p>当前为平台管理演示入口，可能包含模拟数据，来源以加载后的标识为准。角色导航不代表登录鉴权。</p>
-        <p className="!mb-0">本页仅供查看，新建工单、派单、状态修改和跟进记录暂未开放。工单数量仅为本次返回的列表范围。</p>
+        <p>本页仅供查看，新建工单、派单、状态修改和跟进记录暂未开放。工单数量仅为本次返回的列表范围。</p>
+        <p className="!mb-0">当前查询只返回固定模拟工单，不包含全站或当前业主的真实工单。平台管理身份认证尚未接入；登录、退出或身份变化后，请重新加载本页。</p>
       </div>
 
       {state.status === "loading" && <div className={C.card} role="status" aria-live="polite">正在读取售后工单，请稍候…</div>}
@@ -51,6 +53,7 @@ export function AdminTicketsContent({ state, onReload }: {
         <div className={`${C.card} border-danger/30`} role="alert">
           <h2>暂时无法加载售后工单</h2>
           <p className="!mb-0">{state.message}</p>
+          {state.canExitOwnerSession && <DemandAccessRecovery context="admin-tickets" />}
         </div>
       )}
 
@@ -185,7 +188,7 @@ export function AdminTickets() {
     let active = true;
     loadAdminTickets().then(
       (response) => { if (active) setState({ status: "ready", response }); },
-      (error: unknown) => { if (active) setState({ status: "error", message: adminTicketsErrorMessage(error) }); },
+      (error: unknown) => { if (active) setState(adminTicketsFailureState(error)); },
     );
     return () => { active = false; };
   }, [reloadKey]);
