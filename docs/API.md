@@ -40,6 +40,8 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/payment | Payment[] | D | 模拟节点列表；simulated 必须 true |
 | GET /api/ticket[?demandId=<id>] | Ticket[] | D | 无参数/精确 demo-demand 返回固定 mock；其他需求仅所属业主可读 |
 | POST /api/ticket | TicketCreateInput → Ticket | D | 当前业主为本人已发布及后续状态需求创建 open 工单，责任方 null；201/live |
+| POST /api/review | ReviewInput → Review | D | 本人实际已完成接单的一次评价；首次 201，同内容重放 200，沿用接单来源 |
+| GET /api/review?demandId=<id> | Review[] | D | 仅所属业主读取，必须显式 demandId；无公开演示入口，坏关联不回退空数组 |
 | POST /api/inspect/images | multipart InspectionUploadFields + images → InspectionUploadResult | D | 当前业主上传本人需求的 JPEG/PNG，真实解码去元数据并原子保存，201/live，引用 24 小时有效 |
 | POST /api/inspect | PhotoInspectionInput → 失败信封 | D | 同源、业主及已上传引用校验；全部有效后仍 501，AI 分析未接通 |
 
@@ -56,6 +58,20 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 写入无效业主会话或仅服务方 cookie 为 401；角色变化/跨源 403；非本人和不存在需求统一 404/DEMAND_NOT_FOUND，确认本人归属后其他需求的报价与不存在报价统一 404/QUOTE_NOT_FOUND。本人演示需求 409/DEMO_DEMAND_READ_ONLY，非法状态 409/INVALID_STATE。读写存储、事务、坏来源/DTO/关联不一致均 503/ORDER_UNAVAILABLE，提示结果暂时无法确认，可对同一报价重试核实。所有成功/失败 private, no-store、Vary: Cookie，不回退 mock 或空成功。
 
 B 接入 `apiPost('/api/order', input, OrderSummary)` 并在明确确认前展示报价、待定费用和来源，成功后刷新报价/需求；C 接入 `apiGet('/api/provider/orders', OrderSummary.array())`，区分本人报价和接单，展示来源及错误。此次未修改两方页面，按钮/接单 UI、生产服务方认证、改选/取消、多服务方拆单及履约推进未实现。数据库须先运行 `npm run db:setup` 同步新表，seed 不补造关系。详见 `docs/requests/D-quote-acceptance.md`。
+
+## 已完成接单的评价
+
+`POST /api/review` 读取严格的公共 `ReviewInput`：demandId、providerId、rating、comment。ID 非空且非纯空白，原样精确匹配；rating 为 1–5 整数，comment 去首尾空白、最多 2000 字符，可留空只评分。拒绝额外字段、查询参数及超过 16 KiB 的正文。客户端 providerId 仅用于核对目标，不能自报身份、接单、来源或状态。
+
+同源及实际业主会话预检后，在 Serializable 事务重验同一身份、当前角色及本人需求归属。只允许非演示需求与实际 ServiceOrder 均为 completed，且 accepted 报价、需求、服务方、状态、来源全部一致时创建。最终写入再次限定归属、两方完成状态、原报价内容及空评价；输出校验失败回滚。仅有 accepted 报价没有接单不能评价，需求公开也不授予评价权。
+
+首次 201 `envelope(Review)`，包含 id、demandId、orderId、providerId、rating、comment、source。每接单一条，数据库唯一约束；当前授权下相同分数与规范化评论重放返回原记录 200，不重复写入；不同内容 409/REVIEW_ALREADY_EXISTS，不覆盖。并发失败可能为 409 或中性 503，先 GET 核实。评价来源沿用接单和 accepted 报价，mock 不升级为 live；live 只表示实际保存，未核实评论事实。不会推进施工/付款状态或更新服务方聚合评分，无修改/删除接口。
+
+`GET /api/review?demandId=…` 必须恰好一个非空 demandId，拒绝其他/重复参数。在同一事务验证业主、归属与接单关联，返回 `Review[]`。确实无评价返回空数组/live（本人固定演示需求空数组为 mock）；有评价则逐条及整体保留来源。不存在公开演示评价或匿名/服务方/管理员入口。旧评价缺 orderId、来源/字段损坏、重复旧行或关联不一致均 503，保留原数据，不过滤后伪装成功空态。
+
+无/失效/撤销/重复/过期业主 cookie 或仅服务方 cookie 为 401/UNAUTHENTICATED，角色改变/跨源为 403/FORBIDDEN；他人与不存在需求统一 404/DEMAND_NOT_FOUND。本人固定演示需求 POST 为 409/DEMO_DEMAND_READ_ONLY；无接单或未完成为 409/REVIEW_NOT_ALLOWED，目标服务方不符为 409/REVIEW_PROVIDER_MISMATCH；存储、事务或坏数据为 503/REVIEW_UNAVAILABLE。所有成功失败 private, no-store、Vary: Cookie，失败无 data/meta。
+
+更新后运行 `npm run db:setup` 同步 Review.orderId 唯一可空关联及 source（默认 mock）；可空仅保留历史记录，新写入必有实际关联，不自动将旧行补造成真实评价。A/C 使用 `apiPost('/api/review', input, Review)` 和 `apiGet(..., Review.array())`，显示来源并对已存在/错误先核实。评价页面、完工流转、公开评价、聚合评分、审核与通知尚未实现；普通流程目前只能签约，测试 completed 状态由隔离夹具准备，不能描述成完整履约链路。详见 `docs/requests/D-review-create.md`。
 
 ## 工单创建与读取
 
@@ -124,7 +140,7 @@ PR #74 已将 `handleQuoteSubmission` 的默认预检及事务会话 reader 接�
 完整决策见 `docs/requests/D-quote-idempotency.md`、`docs/requests/D-demo-provider-session.md`。已用真实演示 cookie 和隔离 SQLite 验证公开 POST；本次未做浏览器手工验收，业主公开 GET/页面读取仍未接通。
 
 ## 已预留、当前返回 501
-- POST /api/inspect 的真实分析、POST /api/review：由 D 后续完成。照片已可通过 /api/inspect/images 上传，但 /api/inspect 校验身份和引用后仍明确 501。ReviewInput 已预留；写入契约先补齐再让页面提交。POST /api/schedule 已实现首版计划创建，PUT /api/schedule 已实现未开工计划确认修订，POST /api/ticket 已实现业主创建工单，见上节；施工中变更与验收、工单派单与解决仍未实现。
+- POST /api/inspect 的真实分析由 D 后续完成：照片已可通过 /api/inspect/images 上传，但 /api/inspect 校验身份和引用后仍明确 501。POST/GET /api/review 已实现本人已完成接单的评价保存/读取，完工状态推进与页面仍未实现。POST /api/schedule 已实现首版计划创建，PUT /api/schedule 已实现未开工计划确认修订，POST /api/ticket 已实现业主创建工单，见上节；施工中变更与验收、工单派单与解决仍未实现。
 - POST /api/payment：已实现最小模拟确认动作，不做身份校验，任何调用方都可触发演示状态转换。输入为 `PaymentActionInput`，只允许 `pending → confirmed_demo` 一次转换；状态只保存在服务进程内，进程重启后恢复初始演示状态。成功返回 `Payment`，`meta.source` 为 `mock` 且 `simulated` 为 `true`；这不是支付接口，不代表真实付款、资金托管或数据库持久化。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
 

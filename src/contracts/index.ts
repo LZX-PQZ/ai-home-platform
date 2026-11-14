@@ -262,7 +262,16 @@ export const PhotoInspectionResult = z.object({
 }).strict();
 export const ChatInput = z.object({ messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(4000) })).min(1).max(30) });
 export const ChatResult = z.object({ reply: z.string(), ready: z.boolean(), draft: DemandInput.nullable(), missingFields: z.array(z.string()) });
-export const ReviewInput = z.object({ demandId: Id, providerId: Id, rating: z.number().int().min(1).max(5), comment: z.string().max(2000) });
+export const ReviewInput = z.object({
+  demandId: Id.refine(value => value.trim().length > 0),
+  providerId: Id.refine(value => value.trim().length > 0),
+  rating: z.number().int().min(1).max(5), comment: z.string().trim().max(2000),
+}).strict();
+export const ReviewQuery = z.object({ demandId: ReviewInput.shape.demandId }).strict();
+/** 来源沿用已完成接单；保存评价不代表事实审核或服务方评分更新。 */
+export const Review = ReviewInput.extend({
+  id: Id, orderId: Id, source: Source, comment: z.string().max(2000),
+});
 export function envelope<T extends z.ZodTypeAny>(schema: T) {
   return z.object({ ok: z.literal(true), data: schema, meta: z.object({ source: Source }) });
 }
@@ -297,6 +306,9 @@ export type PhotoInspectionFindingDTO = z.infer<typeof PhotoInspectionFinding>;
 export type PhotoInspectionResultDTO = z.infer<typeof PhotoInspectionResult>;
 export type ChatInputDTO = z.infer<typeof ChatInput>;
 export type ChatResultDTO = z.infer<typeof ChatResult>;
+export type ReviewInputDTO = z.infer<typeof ReviewInput>;
+export type ReviewQueryDTO = z.infer<typeof ReviewQuery>;
+export type ReviewDTO = z.infer<typeof Review>;
 export type ApiFailure = { ok: false; error: { code: string; message: string } };
 
 // PUT replaces all editable fields; status transitions are a separate server concern.
