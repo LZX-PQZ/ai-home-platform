@@ -103,7 +103,7 @@ for (const [path, cookie, status, code] of [
  assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
 }
 // Implemented owner-only writes: anonymous smoke must never create fixtures.
-for (const path of ['/api/schedule', '/api/ticket', '/api/order', '/api/inspect', '/api/inspect/images']) {
+for (const path of ['/api/schedule', '/api/ticket', '/api/order', '/api/inspect', '/api/inspect/images', '/api/review']) {
 for (const [headers, status, code] of [
  [{}, 403, 'FORBIDDEN'],
  [{ Origin: new URL(base).origin }, 401, 'UNAUTHENTICATED'],
@@ -153,6 +153,23 @@ console.log('3 个 PUT 排期修订鉴权场景通过（无同源、匿名与失
 console.log('另增 6 个照片 POST 鉴权场景通过（无同源、匿名与失效凭证均拒绝）。');
 const { smokeInspectionImages } = tsRequire('./smoke-inspection-images.ts', import.meta.url);
 await smokeInspectionImages(base);
+for (const [query, cookie, status, code] of [
+ ['', '', 400, 'VALIDATION_ERROR'],
+ ['?demandId=demo-demand', '', 401, 'UNAUTHENTICATED'],
+ ['?demandId=smoke-private-demand', '', 401, 'UNAUTHENTICATED'],
+ ['?demandId=demo-demand', '__Host-ai_home_owner_session=invalid', 401, 'UNAUTHENTICATED'],
+ ['?demandId=one&demandId=two', '', 400, 'VALIDATION_ERROR'],
+]) {
+ const response = await fetch(base + '/api/review' + query, { headers: { Cookie: cookie } });
+ assert.equal(response.status, status, 'review read isolation');
+ assert.equal(response.headers.get('cache-control'), 'private, no-store');
+ assert.match(response.headers.get('vary') ?? '', /Cookie/i);
+ const body = await response.json();
+ assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
+}
+const { smokeReviews } = tsRequire('./smoke-reviews.ts', import.meta.url);
+await smokeReviews(base);
+console.log('评价新增 3 个匿名 POST 与 5 个 GET 边界场景通过，无公开演示评价入口。');
 const demandBody = JSON.stringify({
  description: '冒烟测试需求', city: '深圳', areaM2: 60,
  budgetMinCents: 3000000, budgetMaxCents: 5000000,

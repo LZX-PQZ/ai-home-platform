@@ -123,6 +123,7 @@ model ServiceOrder {
   acceptedQuote Quote @relation(fields: [acceptedQuoteId], references: [id])
   source String @default("mock")
   status String @default("contracted")
+  review Review?
   @@index([providerId])
 }
 model QuoteSubmissionReceipt {
@@ -158,8 +159,13 @@ model Review {
   demandId String
   demand DemandOrder @relation(fields: [demandId], references: [id])
   providerId String
+  // Legacy rows remain unlinked; new writes must bind a verified completed order.
+  orderId String? @unique
+  order ServiceOrder? @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  source String @default("mock")
   rating Int
   comment String
+  @@index([demandId])
 }
 model Ticket {
   id String @id @default(cuid())

@@ -63,9 +63,9 @@ function quoteDTO(row: StoredQuote) {
   return Quote.parse({ ...row, source: Source.parse(row.source),
     items: JSON.parse(row.itemsJson), pendingItems: JSON.parse(row.pendingItemsJson) });
 }
-const orderInclude = { demand: { select: { id: true, status: true } }, acceptedQuote: true } as const;
+export const orderInclude = { demand: { select: { id: true, status: true } }, acceptedQuote: true } as const;
 type OrderRow = Prisma.ServiceOrderGetPayload<{ include: typeof orderInclude }>;
-function summary(row: OrderRow) {
+export function orderSummaryFromRecord(row: OrderRow) {
   const quote = quoteDTO(row.acceptedQuote);
   const data = OrderSummary.parse({ id: row.id, demandId: row.demandId, providerId: row.providerId,
     acceptedQuoteId: row.acceptedQuoteId, source: row.source, status: row.status });
@@ -95,7 +95,7 @@ export async function handleOrderAccept(request: Request, db: Database = prisma)
         where: { demandId: demand.id, demand: { ownerId: current.userId } }, include: orderInclude,
       });
       if (existing) {
-        const data = summary(existing);
+        const data = orderSummaryFromRecord(existing);
         if (data.demandId !== demand.id) throw new OrderRejected("ORDER_UNAVAILABLE");
         if (data.acceptedQuoteId !== input.quoteId) throw new OrderRejected("ORDER_ALREADY_EXISTS");
         return { status: 200, body: envelope(OrderSummary).parse({ ok: true, data, meta: { source: data.source } }) };
@@ -124,7 +124,7 @@ export async function handleOrderAccept(request: Request, db: Database = prisma)
         demand: { ownerId: current.userId, status: "contracted" } }, data: { status: "accepted" } });
       if (changedQuote.count !== 1) throw new OrderRejected("INVALID_STATE");
       await tx.serviceOrder.create({ data: planned });
-      const data = summary(await tx.serviceOrder.findUniqueOrThrow({ where: { id: planned.id }, include: orderInclude }));
+      const data = orderSummaryFromRecord(await tx.serviceOrder.findUniqueOrThrow({ where: { id: planned.id }, include: orderInclude }));
       if (JSON.stringify(data) !== JSON.stringify(planned)) throw new OrderRejected("ORDER_UNAVAILABLE");
       return { status: 201, body: envelope(OrderSummary).parse({ ok: true, data, meta: { source: data.source } }) };
     }, { isolationLevel: "Serializable" });
@@ -147,7 +147,7 @@ export async function handleProviderOrders(request: Request, db: Database = pris
       const rows = await tx.serviceOrder.findMany({ where: { providerId: identity.providerId }, orderBy: { id: "asc" }, include: orderInclude });
       const data = rows.map(row => {
         if (row.providerId !== identity.providerId) throw new OrderRejected("ORDER_UNAVAILABLE");
-        return summary(row);
+        return orderSummaryFromRecord(row);
       });
       if (new Set(data.map(order => order.id)).size !== data.length) throw new OrderRejected("ORDER_UNAVAILABLE");
       // Current provider authentication is a demo, including for an empty or live-record list.
