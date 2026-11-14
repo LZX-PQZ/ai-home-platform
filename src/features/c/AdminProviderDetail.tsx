@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ProviderDTO } from "@/contracts";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
+import { ProviderAvailability } from "./ProviderAvailability";
 import { adminProviderDetailFailureState, loadAdminProviderDetail, providerKindLabels, type AdminProviderDetailState } from "./admin-provider-detail";
 
 const linkClass = "rounded-md text-sm font-medium underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
@@ -51,7 +52,7 @@ export function AdminProviderDetailContent({ providerId, state, onReload }: {
             <StatusBadge label={result.source === "mock" ? "资料查询来源：模拟标识（mock）" : "资料查询来源：实时接口（live）"} />
             <p className={`${C.pageSub} mt-2 !mb-0`}>
               {result.source === "mock"
-                ? "本次服务方列表为模拟来源，资料仅供演示，不代表真实机构或认证结果。"
+                ? "本次服务方目录查询含模拟资料；基础资料与档期分别标明来源，模拟内容仅供演示。"
                 : "本次服务方列表由实时接口返回，来源标识不代表已认证或已核实资料。"}
             </p>
           </div>
@@ -60,6 +61,12 @@ export function AdminProviderDetailContent({ providerId, state, onReload }: {
               <h2 id="admin-provider-name" className={`${C.sectionTitle} whitespace-pre-wrap break-words [overflow-wrap:anywhere]`}>
                 {provider.name.trim() ? provider.name : "名称未填写"}
               </h2>
+              <div className="mt-3">
+                <StatusBadge label={provider.source === "mock" ? "基础资料来源：模拟标识（mock）" : provider.source === "live" ? "基础资料来源：实时接口（live）" : "基础资料来源未知"} />
+                <p className={`${C.pageSub} mt-2 !mb-0`}>{provider.source === "mock"
+                  ? "基础资料仅供演示，不代表真实机构或认证结果。"
+                  : provider.source === "live" ? "基础资料由实时接口返回，不代表已认证或已核实资料。" : "接口未提供基础资料来源，不能由目录查询来源推断。"}</p>
+              </div>
               <dl className="mt-4 grid gap-6 sm:grid-cols-2">
                 <div className="min-w-0"><dt className={C.meta}>所在城市</dt><dd className="mt-1 break-words [overflow-wrap:anywhere]">{provider.city.trim() ? provider.city : "城市未填写"}</dd></div>
                 <div><dt className={C.meta}>服务类型</dt><dd className="mt-1">{providerKindLabels[provider.kind]}</dd></div>
@@ -72,6 +79,7 @@ export function AdminProviderDetailContent({ providerId, state, onReload }: {
                   </dd>
                 </div>
               </dl>
+              <ProviderAvailability availability={provider.availability} />
             </article>
           ) : (
             <div role="status" aria-live="polite">

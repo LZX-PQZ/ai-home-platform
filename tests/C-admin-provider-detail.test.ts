@@ -82,7 +82,9 @@ test("资料来源独立披露，类型用中文，不把资料当作责任或�
       for (const text of ["合成服务方", "合成城市", providerKindLabels[kind], "合成标签", "服务方编号：C-provider",
         "不代表已核实责任、资质或履约能力", "资料与工单分别查询", "查看资料不会派单", "返回售后工单"]) assert.ok(html.includes(text), text);
       assert.match(html, /href="\/admin\/tickets"/);
-      assert.ok(html.includes(source === "mock" ? "资料仅供演示，不代表真实机构" : "来源标识不代表已认证或已核实资料"));
+      assert.ok(html.includes(source === "mock" ? "基础资料与档期分别标明来源" : "来源标识不代表已认证或已核实资料"));
+      assert.match(html, /基础资料来源未知/);
+      assert.match(html, /档期未知/);
       assert.doesNotMatch(html, /<form|<input|<select|派单成功|已认证服务方|客户满意度|4\.2/);
       assert.equal((html.match(/<button\b/g) ?? []).length, 1); // Refresh only.
       fetched.mock.restore();
