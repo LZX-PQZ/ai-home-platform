@@ -28,6 +28,7 @@ import { OrderProgressPanel } from "./OrderProgressPanel";
 import { useOwnerOrder } from "./useOwnerOrder";
 import type { OwnerOrderState } from "./owner-order";
 import { OrderProgressHistory } from "./OrderProgressHistoryPanel";
+import { ScheduleComparison } from "./ScheduleComparisonPanel";
 
 /**
  * 业主端「施工进度」页。
@@ -55,6 +56,9 @@ function DemandSchedulePanel({ id }: { id: string }) {
       if (next === version) reloadAll();
       else setVersion(next);
     }} />
+    {version !== undefined && state.phase === "ready" && state.data && state.source ? (
+      <ScheduleComparison key={`comparison-${version}`} selected={state.data} source={state.source} />
+    ) : null}
     <ScheduleContent key={version ?? "latest"} id={id} version={version} state={state} reload={reloadAll} orderState={orderState} reloadOrder={orderState.reload} />
     {version === undefined && id !== "demo-demand" ? <OrderProgressHistory demandId={id} revision={historyRevision} /> : null}
   </>;
