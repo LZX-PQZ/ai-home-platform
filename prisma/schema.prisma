@@ -66,6 +66,7 @@ model ServiceProvider {
 }
 model Quote {
   id String @id @default(cuid())
+  source String @default("mock")
   demandId String
   demand DemandOrder @relation(fields: [demandId], references: [id])
   providerId String

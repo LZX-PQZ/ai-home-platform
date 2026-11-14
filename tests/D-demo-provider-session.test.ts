@@ -206,7 +206,7 @@ test("演示登录使用隔离 SQLite 验证 cookie、会话与报价事务，�
     await assert.rejects(createQuoteAtomically(req, input, identity, readDemoVerifiedSession, db), error => error instanceof QuoteWriteRejected && error.status === 401);
   });
 
-  await t.test("独立进程确认演示会话有效，但报价处理器尚未接入 reader，返回 401 且不写入", async () => {
+  await t.test("独立进程通过演示 cookie 首次报价 201/mock，重连后同键重放 200 且不重复写入", async () => {
     const { cookie } = await login();
     const script = join(fixtureDir, "default-session.ts");
     const modulePath = (file: string) => JSON.stringify(resolve(file).replaceAll("\\", "/"));
@@ -214,6 +214,7 @@ test("演示登录使用隔离 SQLite 验证 cookie、会话与报价事务，�
       import { POST } from ${modulePath("src/app/api/quote/route.ts")};
       import { prisma } from ${modulePath("src/lib/prisma.ts")};
       import { requireProviderIdentity } from ${modulePath("src/lib/server-auth.ts")};
+      import { Quote, envelope } from ${modulePath("src/contracts/index.ts")};
       async function main() {
         const req = (cookie: string) => new Request('${origin}/api/quote', {
           method: 'POST', headers: { origin: '${origin}', cookie, 'Idempotency-Key': 'd-session-public-quote-key' }, body: ${JSON.stringify(JSON.stringify(input))},
@@ -222,11 +223,27 @@ test("演示登录使用隔离 SQLite 验证 cookie、会话与报价事务，�
         const receiptsBefore = await prisma.quoteSubmissionReceipt.count();
         const session = await requireProviderIdentity(req(process.env.TEST_SESSION_COOKIE!));
         const denied = await POST(req(''));
+        const anonymousAdded = await prisma.quote.count() - before;
+        const anonymousReceiptsAdded = await prisma.quoteSubmissionReceipt.count() - receiptsBefore;
         const loggedIn = await POST(req(process.env.TEST_SESSION_COOKIE!));
-        const body = await loggedIn.json();
+        const body = envelope(Quote).parse(await loggedIn.json());
+        const added = await prisma.quote.count() - before;
+        const receiptsAdded = await prisma.quoteSubmissionReceipt.count() - receiptsBefore;
+        const storedReceipt = await prisma.quoteSubmissionReceipt.findUniqueOrThrow({
+          where: { providerId_idempotencyKey: { providerId: body.data.providerId, idempotencyKey: 'd-session-public-quote-key' } },
+        });
+        await prisma.$disconnect();
+        const replay = await POST(req(process.env.TEST_SESSION_COOKIE!));
+        const replayBody = envelope(Quote).parse(await replay.json());
         console.log(JSON.stringify({ sessionValid: session.ok, providerId: session.ok ? session.identity.providerId : null,
-          anonymous: denied.status, withDemoCookie: loggedIn.status, ok: body.ok, code: body.error?.code,
-          added: await prisma.quote.count() - before, receiptsAdded: await prisma.quoteSubmissionReceipt.count() - receiptsBefore }));
+          anonymous: denied.status, anonymousAdded, anonymousReceiptsAdded,
+          withDemoCookie: loggedIn.status, ok: body.ok, source: body.meta.source, added, receiptsAdded,
+          receiptMatchesQuote: storedReceipt.quoteId === body.data.id,
+          replayStatus: replay.status, replayOk: replayBody.ok, replaySource: replayBody.meta.source,
+          sameQuoteId: replayBody.data.id === body.data.id,
+          sameQuote: JSON.stringify(replayBody.data) === JSON.stringify(body.data),
+          afterReplayAdded: await prisma.quote.count() - before,
+          afterReplayReceiptsAdded: await prisma.quoteSubmissionReceipt.count() - receiptsBefore }));
       }
       main().finally(() => prisma.$disconnect());
     `);
@@ -234,6 +251,9 @@ test("演示登录使用隔离 SQLite 验证 cookie、会话与报价事务，�
       env: { ...env, DEMO_AUTH_ENABLED: "true", TEST_SESSION_COOKIE: cookie }, encoding: "utf8", stdio: "pipe", timeout: 30000,
     });
     assert.deepEqual(JSON.parse(output), { sessionValid: true, providerId: DEMO_PROVIDER_ID,
-      anonymous: 401, withDemoCookie: 401, ok: false, code: "UNAUTHENTICATED", added: 0, receiptsAdded: 0 });
+      anonymous: 401, anonymousAdded: 0, anonymousReceiptsAdded: 0,
+      withDemoCookie: 201, ok: true, source: "mock", added: 1, receiptsAdded: 1, receiptMatchesQuote: true,
+      replayStatus: 200, replayOk: true, replaySource: "mock", sameQuoteId: true, sameQuote: true,
+      afterReplayAdded: 1, afterReplayReceiptsAdded: 1 });
   });
 });

@@ -5,6 +5,8 @@ import {
   type VerifiedSessionDTO,
 } from "@/contracts";
 import { DEMO_DEMAND_ID } from "@/lib/demand";
+// B 复用既有服务端入口；来源工具不提供身份验证或权限绕过。
+export { parseStoredQuoteSource, summarizeQuoteSources } from "@/lib/quote-source";
 
 export type ProviderAccountBinding = {
   role: UserRoleDTO | null;
