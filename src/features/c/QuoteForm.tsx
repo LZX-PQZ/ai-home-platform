@@ -47,7 +47,7 @@ export function QuotePreview({ preview }: { preview: QuotePreviewData }) {
   );
 }
 
-export function QuoteSubmissionFeedback({ state }: { state: QuoteSubmissionState }) {
+export function QuoteSubmissionFeedback({ state, onRetry }: { state: QuoteSubmissionState; onRetry?: () => void }) {
   if (state.status === "idle") return null;
   if (state.status === "submitting") return <p role="status">正在提交报价，请勿重复操作或离开页面…</p>;
   if (state.status === "rejected" || state.status === "uncertain") {
@@ -56,6 +56,14 @@ export function QuoteSubmissionFeedback({ state }: { state: QuoteSubmissionState
         <h3>{state.status === "uncertain" ? "提交结果未知" : "报价未提交成功"}</h3>
         <p>{state.message}</p>
         <p className="!mb-0">填写内容仍保留在当前页面；刷新或离开页面会丢失。</p>
+        {state.status === "uncertain" && (
+          <div className="mt-4">
+            <button type="button" onClick={onRetry} disabled={!onRetry} className={buttonClass}>
+              使用同一标识重试
+            </button>
+            <p className="mb-0 mt-2 text-sm">重试会复用本次提交标识和内容，不修改填写内容，也不会换键重发。</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -109,8 +117,9 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
     setSubmission({ status: "idle" });
   }
 
-  async function submit() {
-    if (inFlight.current || !canSubmit || result?.kind !== "preview") return;
+  async function attemptSubmit(allowUncertain: boolean) {
+    if (inFlight.current || result?.kind !== "preview") return;
+    if (allowUncertain ? submission.status !== "uncertain" : !canSubmit) return;
     let input: QuoteSubmissionInputDTO;
     try {
       input = quoteSubmissionInput(demandId, result.preview);
@@ -129,6 +138,14 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
     } finally {
       inFlight.current = false;
     }
+  }
+
+  async function submit() {
+    await attemptSubmit(false);
+  }
+
+  async function retry() {
+    await attemptSubmit(true);
   }
 
   function updateLine(code: string, patch: Partial<Omit<QuoteLineFields, "code">>) {
@@ -243,7 +260,7 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
         <p id="quote-submit-notice" className="mb-0 mt-3 text-sm text-slate-600">先检查并预览，再由你点击提交；预览不会发送报价。身份由服务端确认，角色导航不能代替登录。提交期间暂停编辑，失败时保留输入。</p>
       </form>
       <div ref={submissionFeedback} tabIndex={-1} className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">
-        <QuoteSubmissionFeedback state={submission} />
+        <QuoteSubmissionFeedback state={submission} onRetry={retry} />
       </div>
       <div aria-live="polite">
         {result?.kind === "preview" && submission.status === "idle" && <QuotePreview preview={result.preview} />}

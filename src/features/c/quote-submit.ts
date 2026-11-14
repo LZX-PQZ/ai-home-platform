@@ -28,7 +28,7 @@ export function quoteSubmissionFailure(error: unknown): Extract<QuoteSubmissionS
       return { status: "rejected", message: "无法准备本次报价的提交标识，本次未发送请求。请使用支持安全随机数的浏览器环境后再尝试。" };
     }
     if (error.status === 409 && error.code === "IDEMPOTENCY_CONFLICT") {
-      return { status: "uncertain", message: "本次提交标识与先前报价内容冲突，已有报价需要核实。请保持此页面并联系平台；本页暂不允许再次提交，也不会换标识重发。" };
+      return { status: "uncertain", message: "本次提交标识与先前报价内容冲突，已有报价需要核实。请保持此页面并联系平台；如需确认，可使用同一标识重试，不会换标识重发。" };
     }
     const messages: Partial<Record<number, string>> = {
       400: "报价字段未通过校验，请检查填写内容后重新预览。",
@@ -43,5 +43,5 @@ export function quoteSubmissionFailure(error: unknown): Extract<QuoteSubmissionS
     if (message) return { status: "rejected", message };
   }
   // 网络中断、服务端异常或无效回执可能发生在写入之后，不能断言未保存或自动重发。
-  return { status: "uncertain", message: "未取得可验证的报价回执，提交结果未知。请保持此页面，先联系平台核实，避免重复报价；本页暂不允许再次提交。" };
+  return { status: "uncertain", message: "未取得可验证的报价回执，提交结果未知。请保持此页面，先联系平台核实，或使用同一标识重试；不会换标识重发。" };
 }
