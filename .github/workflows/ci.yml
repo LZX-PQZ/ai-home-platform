@@ -28,3 +28,6 @@ jobs:
         if: github.event_name == 'pull_request'
         run: node scripts/check-scope.mjs --ci
       - run: npm run build
+      - name: Production HTTP smoke
+        run: node scripts/run-production-smoke.mjs
+        timeout-minutes: 3
