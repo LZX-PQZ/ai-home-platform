@@ -29,15 +29,15 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] `DELETE /api/demand/[id]`：同源检查；同一事务验证实际业主会话、归属、状态和五类关联并删除。最终 SQL 再限制归属/状态/空关联，拒绝匿名与跨业主，演示需求只读。隔离 SQLite 覆盖角色/会话变化、并发修改/删除及失败回滚。见 `docs/requests/D-demand-delete-auth.md`。
 - [x] 业主密码登录入口与注销：维护者交互开通新账号，随机盐 scrypt 摘要；POST 验证密码后事务内重验角色/凭证并轮换会话，同源退出撤销 cookie。全局共享登录界面、持久化限频和隔离测试已提供。不支持客户端 userId/角色签发；公开注册、找回密码、MFA 和第三方登录仍未实现。见 `docs/requests/D-owner-login.md`。
 - [x] 需求 POST 当前业主归属：同源及会话预检、事务内重验后以当前 userId 创建 published 需求；禁止客户端身份字段，移除固定 demo-owner 入口。公开接口验收登录、创建、修改及本人报价读取，另一业主拒绝。见 `docs/requests/D-demand-create-auth.md`。
-- [ ] 需求查询隔离：确认列表/详情的角色访问范围，避免跨用户读取；历史 demo-owner 需求不自动转移给新账号。
+- [x] 需求列表/详情隔离：同一事务核验当前身份及 SQL 范围；无业主 cookie 时公开列表仅 published，有效业主列表仅本人所有状态。published 详情公开，非公开仅所属业主可读，其余与不存在统一 404。失效业主 cookie 仍 401，不回退匿名。见 `docs/requests/D-demand-read-auth.md`。
 
-业主会话与报价读取授权见 `docs/requests/D-owner-quote-read-auth.md`。密码登录、PUT、DELETE 和 B 报价读取已合入，本轮补齐 POST 当前业主归属；列表/详情隔离仍待实现，不能宣称整个平台已完成权限保护。
+业主会话与报价读取授权见 `docs/requests/D-owner-quote-read-auth.md`。需求 POST 沿用 #95，本轮补齐两个需求 GET 的范围控制；match/schedule 等其他接口仍需审计，不能宣称整个平台已隔离。
 
 ## 成员反馈与后续顺序（2026-11-14）
 
 - [x] PR #81 已合入；README 补充拉取 main 后运行 `npm run db:setup` 的提示，本机已执行成功。该同步保留已有记录，历史报价来源回填 mock。
 - [x] 业主密码登录、刷新和退出入口；临时合成账号浏览器验收通过，密码认证是真实实现，账号不代表实名认证。B 的报价读取 API/页面合入后仍需联验。
-- [ ] 随后的独立 PR：DELETE 已随 #91 合入；POST 当前业主归属由 #95 完成；需求查询隔离由 #101 按已发布需求公开、非公开需求仅所属业主可读的规则修订。完成前保留上方待办与接口限制说明。
+- [x] #95 已合入，#101 公开读取修订已普通合并同步 main dc5d8ef，并重新运行 `npm run db:setup`；检查与生产冒烟结果见 `docs/requests/D-demand-read-auth.md`。后续 D 功能继续依次交付，避免多个 PR 同时修改共享接口文档和需求基础设施。
 - [x] C 的服务方身份过滤基础查询：按 `C-provider-orders.md` 允许的最小方案提供 `GET /api/provider/quotes`，复用 Quote[]，在同一事务按实际服务方会话绑定过滤本人报价，拒绝自报身份参数，覆盖匿名/跨服务方/撤销及来源测试。演示身份整体 mock，接线协议见 `docs/requests/D-provider-own-quotes.md`。
 - [ ] 真正接单关系与履约查询、生产服务方登录仍未实现；本人报价不等于接单。C 需将页面接到新接口并使用“本人报价”文案，D 不修改 C 页面。
 
@@ -49,4 +49,4 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] 持久化来源严格校验、混合/空列表来源汇总；真实旧表升级、回执关联保留和重复同步测试。
 - [ ] B 交接：创建、重放、GET 输出持久化来源并调用汇总工具；这是 PR #79 合入前的必要接入，D 未改写 B 的私有内核。
 
-报价来源基础设施不补齐业主登录入口；需求 PUT/DELETE 的鉴权已单独记录在上方，POST 和查询隔离仍待办。来源实现及数据库同步见 `docs/requests/D-quote-source.md`。
+需求 PUT/DELETE 和 GET 的鉴权已单独记录在上方，POST 由 #95 处理。来源实现及数据库同步见 `docs/requests/D-quote-source.md`。
