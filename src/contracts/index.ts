@@ -29,7 +29,7 @@ export const ProviderPerformance = z.object({
   basis: z.literal("completed_order_review_average"),
   averageRating: z.number().finite().min(1).max(5).multipleOf(0.01).nullable(),
   reviewCount: z.number().int().nonnegative().safe(),
-  calculatedAt: z.string().datetime({ offset: true }).refine(value => Date.parse(value) <= Date.now(), { message: "计算时间不能在未来" }),
+  calculatedAt: z.string().datetime({ offset: true }),
   source: Source,
 }).strict().refine(value => value.reviewCount === 0 ? value.averageRating === null : value.averageRating !== null,
   { message: "无样本必须为 null/0，有样本必须提供均分" });

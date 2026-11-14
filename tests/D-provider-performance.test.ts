@@ -38,7 +38,7 @@ function decorate(db: PrismaClient, transform: (tx: Prisma.TransactionClient) =>
   } } as unknown as Database;
 }
 
-test("服务方汇总契约兼容旧字段；样本数与均分成对，来源和非未来时间严格校验", () => {
+test("服务方汇总契约兼容旧字段；样本数与均分成对，来源和时间格式严格校验", () => {
   assert.deepEqual(ProviderQuery.parse({}), { performanceSource: "live" });
   for (const source of ["mock", "live"]) assert.ok(ProviderQuery.safeParse({ performanceSource: source }).success);
   for (const query of [{ performanceSource: "" }, { performanceSource: "LIVE" }, { providerId: "one" }]) assert.equal(ProviderQuery.safeParse(query).success, false);
@@ -50,9 +50,15 @@ test("服务方汇总契约兼容旧字段；样本数与均分成对，来源�
   for (const patch of [{ averageRating: 5 }, { reviewCount: 1 }, { reviewCount: -1 }, { reviewCount: 0.5 },
     { reviewCount: Number.MAX_SAFE_INTEGER + 1 }, { averageRating: 0, reviewCount: 1 }, { averageRating: 5.01, reviewCount: 1 },
     { averageRating: 4.567, reviewCount: 1 }, { averageRating: Infinity, reviewCount: 1 }, { source: "unknown" },
-    { basis: "credit_score" }, { calculatedAt: "tomorrow" }, { calculatedAt: new Date(Date.now() + 60000).toISOString() }, { comments: [] }]) {
+    { basis: "credit_score" }, { calculatedAt: "tomorrow" }, { comments: [] }]) {
     assert.equal(ProviderPerformance.safeParse({ ...performance, ...patch }).success, false, JSON.stringify(patch));
   }
+});
+
+test("客户端时钟略慢时，完整 Provider 仍接受未来几秒的计算时间", () => {
+  const calculatedAt = new Date(Date.now() + 5000).toISOString();
+  const parsed = Provider.parse({ ...providers[0], performance: { ...performance, calculatedAt } });
+  assert.equal(parsed.performance?.calculatedAt, calculatedAt);
 });
 
 test("公开服务方评价汇总：隔离 SQLite，快照、真实关联校验和来源隔离", async t => {
