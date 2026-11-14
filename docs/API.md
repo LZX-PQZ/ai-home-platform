@@ -32,6 +32,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | POST /api/order | OrderAcceptInput → OrderSummary | D | 所属业主接受已提交报价，原子建立单一接单关系；首次 201，同报价重放 200，保留报价来源 |
 | GET /api/order?demandId=… | OrderQuery → OwnerOrderResult | D | 仅所属业主读取实际接单；OrderSummary 或 null，不重放接受报价，不写业务数据 |
 | POST /api/order/progress | OrderProgressInput → OrderProgressResult | D | 业主确认开工/工序/整单完成；需求、接单、排期版本及事件同事务保存，200，来源沿用接单 |
+| GET /api/order/progress?demandId=… | OrderQuery → OrderProgressEvent[] | D | 所属业主读取已保存履约动作，隐藏操作者身份；来源沿用接单，无记录不补造 |
 | GET /api/provider/orders | OrderSummary[] | D | 同一事务验证服务方并只查本人接单关系；无参数，当前演示身份整体 mock |
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
 | GET /api/quote | Quote[] | B | 固定 mock |
@@ -102,7 +103,17 @@ scheduleVersion 必须与当前最新值一致，包括 null；旧值 409/SCHEDU
 
 无/坏/重复/过期/撤销业主 cookie 或仅服务方 401/UNAUTHENTICATED，角色/同源失败 403/FORBIDDEN；他人与不存在需求统一 404/DEMAND_NOT_FOUND；本人需求缺目标关系或错误 orderId 为 404/ORDER_NOT_FOUND，未知工序 404/TASK_NOT_FOUND。跳级/回退 409/ORDER_PROGRESS_NOT_ALLOWED，计划状态/责任方/版本上限不支持 409/SCHEDULE_PROGRESS_NOT_ALLOWED，工序状态/依赖不支持 409/TASK_PROGRESS_NOT_ALLOWED，计划未全完成 409/SCHEDULE_NOT_COMPLETE。存储/关联/坏数据/竞争不确定结果为 503/ORDER_PROGRESS_UNAVAILABLE，需先刷新核实。所有响应 private, no-store、Vary: Cookie。
 
-A 用 `apiPost('/api/order/progress', input, OrderProgressResult)` 接线，展示动作、当前版本、来源并取得用户确认，之后刷新需求与排期；C 的接单列表/详情会读到一致的新状态。接受报价→开工→（有排期逐项推进）→确认完成→评价已可通过正常 API 走通，生产冒烟不再直接修改完成状态。前端按钮/评价表单、服务方申请/双方审批、专业验收材料、实际日期、阻塞/返工/施工中变更、付款联动和事件查询仍未交付。数据库先 `npm run db:setup` 同步操作记录表，见 `docs/requests/D-order-progress.md`。
+A 用 `apiPost('/api/order/progress', input, OrderProgressResult)` 接线，展示动作、当前版本、来源并取得用户确认，之后刷新需求与排期；C 的接单列表/详情会读到一致的新状态。接受报价→开工→（有排期逐项推进）→确认完成→评价已可通过正常 API 走通，生产冒烟不再直接修改完成状态。服务方申请/双方审批、专业验收材料、实际日期、阻塞/返工/施工中变更和付款联动仍未交付；本人事件查询见下节。数据库先 `npm run db:setup` 同步操作记录表，见 `docs/requests/D-order-progress.md`。
+
+## GET /api/order/progress：本人履约操作记录
+
+复用严格的公共 `OrderQuery`，必须恰好一个非空 demandId，保留原值精确匹配；缺失、空白、重复或其他参数为 400/VALIDATION_ERROR。无匿名演示入口。同一 Serializable 事务验证当前业主会话与角色、需求 ownerId、实际接单及 accepted 报价关联，再用 orderId、demandId 和当前 ownerId 过滤事件。
+
+成功 200 `envelope(OrderProgressEvent[])`，每条含 id、orderId、action、fromStatus、toStatus、taskId、scheduleVersion、createdAt 和 source。无工序/排期分别显式 null；工序动作必须有 taskId 和至少为 2 的结果版本。合法动作组合与现有 POST 一致，不允许跳级记录或与当前接单状态矛盾的完成记录。createdAt 是服务端保存动作的 ISO 8601 时间，按时间升序、同时间按 id 升序稳定排序；同毫秒 ID 排序不表示实际执行先后。
+
+逐条及整体来源沿用已验证的接单，mock 不升级。已有接单但没有事件时返回空数组，不为种子或历史接单补造操作；本人 draft/published 需求无接单时也为空，来源沿用需求。后续状态缺接单、坏事件/来源/关联或存储失败为 503/ORDER_PROGRESS_UNAVAILABLE，不能过滤后伪装空态。查询不推进业务状态、不写事件，不保证历史记录完整性。只选公开事件字段，不读取事件 actorId，响应不包含姓名、凭证或报价明细。
+
+无/坏/重复/过期/撤销业主 cookie 或只有服务方 cookie 为 401/UNAUTHENTICATED，当前账号非 owner 为 403/FORBIDDEN；他人与不存在需求统一 404/DEMAND_NOT_FOUND。双 cookie 仍业主优先。全部响应 private, no-store、Vary: Cookie。A 使用 `apiGet('/api/order/progress?demandId=' + encodeURIComponent(demandId), OrderProgressEvent.array())`，按来源展示并保留错误；页面接线另由 A 完成。记录只表示业主确认，不等于专业验收、付款或 AI 判断。无 schema/依赖变化，交接与验证见 `docs/requests/D-order-progress-history.md`。
 
 ## 已完成接单的评价
 

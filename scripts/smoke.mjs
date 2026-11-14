@@ -118,6 +118,7 @@ for (const [headers, status, code] of [
 }
 }
 // Orders are never inferred from public demo quotes; the provider list requires a verified session.
+for (const path of ['/api/order', '/api/order/progress']) {
 for (const [query, cookie, status, code] of [
  ['', '', 400, 'VALIDATION_ERROR'],
  ['?demandId=', '', 400, 'VALIDATION_ERROR'],
@@ -127,13 +128,14 @@ for (const [query, cookie, status, code] of [
  ['?demandId=smoke-private-demand', '', 401, 'UNAUTHENTICATED'],
  ['?demandId=demo-demand', '__Host-ai_home_owner_session=invalid', 401, 'UNAUTHENTICATED'],
 ]) {
- const response = await fetch(base + '/api/order' + query, { headers: { Cookie: cookie } });
- assert.equal(response.status, status, 'owner order read isolation');
+ const response = await fetch(base + path + query, { headers: { Cookie: cookie } });
+ assert.equal(response.status, status, `${path} owner read isolation`);
  assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.match(response.headers.get('vary') ?? '', /Cookie/i);
  const body = await response.json(); assert.equal(body.ok, false); assert.equal(body.error.code, code);
  assert.equal('data' in body, false); assert.equal('meta' in body, false);
 }
-console.log('业主接单读取另增 7 个参数/匿名/失效凭证场景通过，无公开演示入口。');
+}
+console.log('业主接单及履约记录读取各 7 个参数/匿名/失效凭证场景通过，无公开演示入口。');
 for (const [query, cookie, status, code] of [
  ['', '', 401, 'UNAUTHENTICATED'],
  ['', 'ai_home_demo_session=invalid', 401, 'UNAUTHENTICATED'],
