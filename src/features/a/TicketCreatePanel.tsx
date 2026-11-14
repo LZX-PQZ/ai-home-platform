@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { DemandDTO, TicketDTO } from "@/contracts";
 import { Badge, Button, C, Card, Field, Note, SectionHead } from "./ui";
 import {
-  categoryLabel, loadTickets, statusLabel, submitTicket, ticketErrorMessage,
+  categoryLabel, isTicketAccessDenied, loadTickets, statusLabel, submitTicket, ticketErrorMessage,
   type TicketCreateForm, type TicketCreateOutcome, type TicketListResponse,
 } from "./ticket-create";
 
@@ -61,7 +61,12 @@ function TicketRow({ ticket }: { ticket: TicketDTO }) {
 }
 
 export function TicketCreatePanel({ demand }: { demand: DemandDTO }) {
-  const [listState, setListState] = useState<{ status: "loading" } | { status: "ready"; response: TicketListResponse } | { status: "error"; message: string }>({ status: "loading" });
+  const [listState, setListState] = useState<
+    | { status: "loading" }
+    | { status: "ready"; response: TicketListResponse }
+    | { status: "inaccessible" }
+    | { status: "error"; message: string }
+  >({ status: "loading" });
   const [form, setForm] = useState<TicketCreateForm>({ description: "", category: "quality" });
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<TicketCreateOutcome | null>(null);
@@ -72,11 +77,14 @@ export function TicketCreatePanel({ demand }: { demand: DemandDTO }) {
     try {
       setListState({ status: "ready", response: await loadTickets(demand.id) });
     } catch (error) {
-      setListState({ status: "error", message: ticketErrorMessage(error) });
+      setListState(isTicketAccessDenied(error) ? { status: "inaccessible" } : { status: "error", message: ticketErrorMessage(error) });
     }
   }, [demand.id]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  // 先成功读取本人列表，再公开工单面板；匿名或其他业主访问公开需求时不泄露写入口。
+  if (listState.status === "loading" || listState.status === "inaccessible") return null;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
