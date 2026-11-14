@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import sharp from "sharp";
-import { InspectionUploadResult, envelope } from "../src/contracts";
+import { InspectionUploadResult, PhotoInspectionResult, PHOTO_INSPECTION_DISCLAIMER, envelope } from "../src/contracts";
 import { createOwnerAccount } from "../src/lib/owner-account";
 
 /** Synthetic accounts/photos in the explicitly configured local smoke database. No intercepted HTTP. */
-export async function smokeInspectionImages(base: string) {
+export async function smokeInspectionImages(base: string, mode: "mock" | "live" = "mock") {
   assert.ok(process.env.DATABASE_URL?.trim(), "Set DATABASE_URL to a seeded test database");
   assert.ok(["127.0.0.1", "localhost"].includes(new URL(base).hostname), "Smoke fixtures require a loopback test server");
   const db = new PrismaClient();
@@ -19,6 +19,23 @@ export async function smokeInspectionImages(base: string) {
       ...(body === undefined ? {} : { body: body instanceof FormData ? body : JSON.stringify(body) }) });
     const payload = await response.json();
     return { response, payload };
+  };
+  const checkedInspection = (result: Awaited<ReturnType<typeof http>>, demandId: string, refs: string[], started: number) => {
+    assert.equal(result.response.headers.get("cache-control"), "private, no-store");
+    assert.match(result.response.headers.get("vary") ?? "", /Cookie/i);
+    if (mode === "live") {
+      assert.equal(result.response.status, 501); assert.equal(result.payload.ok, false);
+      assert.equal(result.payload.error.code, "NOT_IMPLEMENTED");
+      assert.equal("data" in result.payload, false); assert.equal("meta" in result.payload, false);
+      return;
+    }
+    assert.equal(result.response.status, 200);
+    const parsed = envelope(PhotoInspectionResult).parse(result.payload);
+    assert.equal(parsed.meta.source, "mock"); assert.equal(parsed.data.demandId, demandId);
+    assert.equal(parsed.data.disclaimer, PHOTO_INSPECTION_DISCLAIMER);
+    assert.deepEqual(parsed.data.findings.map(finding => finding.imageRef), refs);
+    for (const finding of parsed.data.findings) assert.match(finding.message, /【模拟】未分析照片内容/);
+    assert.ok(parsed.data.reviewedAt && Date.parse(parsed.data.reviewedAt) >= started && Date.parse(parsed.data.reviewedAt) <= Date.now());
   };
   try {
     for (const suffix of ["one", "two"]) {
@@ -50,9 +67,12 @@ export async function smokeInspectionImages(base: string) {
     const persisted = await db.inspectionImage.findUniqueOrThrow({ where: { id: imageRef } });
     assert.equal(persisted.ownerId, owners[0]); assert.equal(persisted.demandId, demandId);
     const metadata = await sharp(persisted.bytes).metadata(); assert.equal(metadata.exif, undefined); assert.equal(metadata.orientation, undefined);
+    const started = Date.now();
+    const demandBefore = await db.demandOrder.findUniqueOrThrow({ where: { id: demandId } });
     const inspection = await http("/api/inspect", "POST", cookie, { demandId, imageRefs: [imageRef] });
-    assert.equal(inspection.response.status, 501); assert.equal(inspection.payload.error.code, "NOT_IMPLEMENTED");
-    assert.equal("data" in inspection.payload, false); assert.equal("meta" in inspection.payload, false);
+    checkedInspection(inspection, demandId, [imageRef], started);
+    assert.deepEqual(await db.demandOrder.findUniqueOrThrow({ where: { id: demandId } }), demandBefore);
+    assert.deepEqual(await db.inspectionImage.findUniqueOrThrow({ where: { id: imageRef } }), persisted);
     for (const [target, credential, ref, code] of [[demandId, otherCookie, imageRef, "DEMAND_NOT_FOUND"],
       [otherDemandId, otherCookie, imageRef, "IMAGE_NOT_FOUND"], [altDemandId, cookie, imageRef, "IMAGE_NOT_FOUND"],
       [demandId, cookie, "filename.jpg", "IMAGE_NOT_FOUND"]]) {
@@ -79,14 +99,14 @@ export async function smokeInspectionImages(base: string) {
     assert.equal(await db.inspectionImage.count({ where: { id: otherRefs[0] } }), 0);
     assert.deepEqual(await db.inspectionImage.findUniqueOrThrow({ where: { id: otherRefs[1] } }), retained);
     const activeOther = await http("/api/inspect", "POST", otherCookie, { demandId: otherDemandId, imageRefs: [otherRefs[1]] });
-    assert.equal(activeOther.response.status, 501); assert.equal(activeOther.payload.error.code, "NOT_IMPLEMENTED");
+    checkedInspection(activeOther, otherDemandId, [otherRefs[1]], started);
     const removedOther = await http("/api/inspect", "POST", otherCookie, { demandId: otherDemandId, imageRefs: [otherRefs[0]] });
     assert.equal(removedOther.response.status, 404); assert.equal(removedOther.payload.error.code, "IMAGE_NOT_FOUND");
     assert.equal((await http("/api/auth/owner", "DELETE", cookie)).response.status, 200);
     assert.equal((await http("/api/inspect/images", "POST", cookie, form())).response.status, 401);
     assert.equal((await http("/api/inspect", "POST", cookie, { demandId, imageRefs: [imageRef] })).response.status, 401);
     assert.equal((await http("/api/auth/owner", "DELETE", otherCookie)).response.status, 200);
-    console.log("照片生产 HTTP 链路通过：真实登录/上传/去元数据/live、有效引用 501、跨归属与过期拒绝、跨业主过期清理且保留有效照片、重复批次回滚、注销后拒绝。");
+    console.log(`照片生产 HTTP 链路通过：真实登录/上传/去元数据/live、${mode === "mock" ? "有效引用 200/mock（未分析照片内容）" : "live 分析明确 501，无 mock 降级"}、业务状态不变、跨归属与过期拒绝、跨业主过期清理且保留有效照片、重复批次回滚、注销后拒绝。`);
   } finally {
     try {
       if (owners.length) {

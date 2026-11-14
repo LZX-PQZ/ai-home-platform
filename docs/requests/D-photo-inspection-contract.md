@@ -1,5 +1,7 @@
 # D：施工照片辅助检查接口契约
 
+> 本文为最初契约交接记录，示例不是当前成功响应。最新上传与权限实现见 `D-photo-image-upload.md`；mock 检查结果及 A 上传接线见 `D-photo-inspection-mock.md`。当前仅 live 分析保持 501，mock 模式校验已上传引用后返回 200/mock；文件名或示例中的 upload:// 引用不可用于真实请求。
+
 - 角色：D
 - 状态：输入/输出契约已提供；真实图片存储、模型分析和人工复核流程仍未接通。
 - 关联请求：`docs/requests/A-photo-inspection.md`
