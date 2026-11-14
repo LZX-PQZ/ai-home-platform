@@ -245,7 +245,8 @@ test("业主会话与 B 读取内核使用同一隔离 SQLite，签发前身份�
     const result = await read();
     assert.deepEqual(result?.response.data, [saved.quote]);
     assert.deepEqual(result?.response.data[0].items.map(item => item.amountCents), [15, null, 0]);
-    assert.equal(result?.response.meta.source, "live");
+    assert.equal(result?.response.meta.source, "mock");
+    assert.equal(result?.response.data[0].source, "mock");
     await db.quote.update({ where: { id: row.id }, data: { status: "accepted" } });
     await db.demandOrder.update({ where: { id: demand.id }, data: { status: "completed" } });
     assert.equal((await read())?.response.data[0].status, "accepted");
