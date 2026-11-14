@@ -43,7 +43,7 @@ A 先上传 multipart，用 InspectionUploadResult 校验回执，再把返回�
 ## 实际验证（2026-11-14）
 
 - `npm run check`：725/725，包含 lint、类型检查和模块边界；隔离 SQLite 验证真实 PNG/JPEG 解码、EXIF 方向及元数据移除、大小/字段限制、身份/归属中途变化、摘要损坏、配额并发、忙碌释放和失败回滚。
-- `npm run build`、`npm run scope -- --role D --base origin/main`（15 文件）、`git diff --check` 通过。独立临时库 `npm run db:setup` 同步/seed 成功；未改日常开发库或 .env。Windows 初次同步遇到运行中测试占用 Prisma DLL，等待测试结束后串行重试通过。
+- `npm run build`、`npm run scope -- --role D --base origin/main`（16 文件）、`git diff --check` 通过。独立临时库 `npm run db:setup` 同步/seed 成功；未改日常开发库或 .env。Windows 初次同步遇到运行中测试占用 Prisma DLL，等待测试结束后串行重试通过。WORKFLOW 已补充测试数据库的显式环境变量及自动启停运行方式。
 - 本机生产 HTTP 冒烟：13 页面、30 GET、原 13 POST + 新 6 照片鉴权 POST、3 PUT 通过；新增 `scripts/smoke-inspection-images.ts` 使用随机合成账号和生成图片，实际 HTTP 登录/创建需求/上传，验证持久化、旋转和去元数据、live 来源、有效引用 501、跨归属/过期拒绝、重复批次回滚及退出后 401，结束清理仅本脚本创建的账号/需求/照片。该链路随 CI 的 Production HTTP smoke 自动执行。
 - 所有照片和账号均为合成测试数据，无用户照片写入仓库；测试中对故障/配额使用的注入仅存在于测试。运行时上传与存储为实际实现，没有 mock 上传回执或 AI 结果。
 

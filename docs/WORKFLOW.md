@@ -35,6 +35,10 @@ npm run scope -- --role A --base origin/main
 ```bash
 node scripts/smoke.mjs
 ```
+照片冒烟会创建随机合成业主和图片，经实际 HTTP 上传验证后清理本次创建的数据。服务端和冒烟进程必须显式使用同一个已同步 seed 的隔离测试数据库 `DATABASE_URL`；仅配置工作树 `.env` 不能替代冒烟进程的环境变量。不要把冒烟地址指向远端服务。
+
+也可让 runner 自动启动并停止独立端口的生产服务。PowerShell 在同一终端设置 `$env:DATABASE_URL = "file:./smoke.db"`、`$env:AI_MODE = "mock"`，然后依次运行 `npm.cmd run db:setup`、`npm.cmd run build`、`node scripts/run-production-smoke.mjs`。macOS/Linux 先 `export DATABASE_URL="file:./smoke.db" AI_MODE=mock`，再使用 `npm` 执行相同命令。使用专门测试库，保留已有 `.env`。
+
 默认服务地址为 `http://127.0.0.1:3000`，可用 `SMOKE_BASE_URL` 指定。冒烟使用已同步 seed 的本地测试数据库及 `AI_MODE=mock`；匿名创建需求应返回 401/403，不能断言匿名写入成功。完成后停止本次启动的服务；dev 和 build 不得同时写 `.next`。鉴权或接口变更须同步更新冒烟断言，并实际在生产服务上运行。
 
 检查通过后提交：
