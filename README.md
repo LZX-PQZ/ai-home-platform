@@ -43,10 +43,23 @@ macOS / Linux：使用 npm 而非 npm.cmd，使用 cp .env.example .env。
 
 本轮固定演示验收（不需要新增依赖或 schema）：
 
-1. 使用已有本机数据库运行 `npm.cmd run db:seed`，再重启应用。只新增缺失的固定记录，不覆盖已有报价或账号；不为 demo-owner 设置密码。
-2. 打开 `/owner/quotes/demo-demand`：同名“防滑地面”分别按平方米/项报价；“成品保护”只在 quote-b 单独列明，触发列项差异；quote-a 的“垃圾清运”仍待确认。已知小计仍为 ¥12,000.00 / ¥13,000.00，全部标 mock，不代表最终总价。
+1. 如需核对数据库中的完整新样例，按下方命令使用**全新隔离数据库**。已有库运行 `npm.cmd run db:seed` 只补缺失记录，**不会覆盖 quote-a/quote-b 等既有演示报价**，所以库中旧报价不会因此出现新的单位/列项提醒；原账号也保留，不为 demo-owner 设置密码。
+2. 打开 `/owner/quotes/demo-demand`：这个固定公开报价页直接使用当前代码样例，不读取数据库内的同 ID 报价，更新代码并重启即可核对提醒。同名“防滑地面”分别按平方米/项报价；“成品保护”只在 quote-b 单独列明，触发列项差异；quote-a 的“垃圾清运”仍待确认。已知小计仍为 ¥12,000.00 / ¥13,000.00，全部标 mock，不代表最终总价。其他受保护报价仍按实际业主归属读取数据库。
 3. 打开 `/api/provider?performanceSource=mock`：在仅含种子样本的数据库中，provider-a 的评价均分为 4.67、样本 3，provider-b 为 4、样本 1；来自四条明确 mock 的合成已完成接单/评价。已有其他 mock 样本时按全部有效样本重新汇总。无 live 评价时，`/api/provider` 仍返回 live 的 null/0。
 4. 同一目录返回固定档期：provider-a 为 31 天连续窗口，provider-b 为两段较短窗口，另含空窗口与未知样例。覆盖 2026-11-15 至 2026-12-31；到期后须标为待更新，不能继续排序。当前只交付接口数据，B 的档期排序和评价分展示尚未接线，完整演示版本仍待最终集成。
+
+数据库演示准备：先停止本工作目录已有的 dev 服务，避免多个进程同时写 `.next`，再单独打开 PowerShell 终端。每次生成新库名，保留原库及 `.env`：
+
+```powershell
+$env:DATABASE_URL = "file:./demo-$([guid]::NewGuid().ToString('N')).db"
+$env:AI_MODE = "mock"
+$env:DEMO_AUTH_ENABLED = "true"
+npm.cmd run db:setup
+if ($LASTEXITCODE -ne 0) { throw "演示数据库准备失败，请先检查错误" }
+npm.cmd run dev
+```
+
+演示结束按 Ctrl+C 停止本次服务并关闭该终端，正常启动仍使用原 `.env`。不要删除或重置已有数据库来更新样例。受保护报价的演示应在同一隔离库环境下运行 `npm.cmd run owner:create`，登录新账号、创建本人需求，再由演示服务方提交报价；seed 中的 demo-owner 不能直接登录。
 
 履约后端新增 `POST /api/order/progress`，业主明确确认后，需求与接单在同一事务中“已签约→施工中→已完成”。有排期时按依赖逐项开工/确认完成，保留历史版本，全部完成才允许整单完成；无排期也须显式确认。运行 `npm.cmd run db:setup` 同步操作记录表后重启。生产 HTTP 冒烟已通过正常接口推进到评价，不再直接改库伪造完工。A/C 的按钮及评价表单仍待接线，专业验收、返工/阻塞和付款联动未实现。详见 [履约交接](docs/requests/D-order-progress.md)。
 

@@ -7,6 +7,70 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { canReadAcrossOwner } from "../scripts/check-boundaries.mjs";
 
+test("匹配服务端可读取服务方目录，客户端可达路径与其他业务不能读取", () => {
+  const target = "src/lib/provider-directory.ts";
+  for (const file of [
+    "src/lib/match/provider-data.ts", "src/app/api/match/route.ts",
+    "src/app/api/match/rank/route.ts", "src/app/api/provider/route.ts", "src/lib/d-directory-service.ts",
+  ]) {
+    assert.equal(canReadAcrossOwner(file, target), true, file);
+    assert.equal(canReadAcrossOwner(file, target, true), false, `客户端可达：${file}`);
+  }
+  for (const file of [
+    "src/lib/match.ts", "src/app/owner/matches/[id]/page.tsx", "src/components/ProviderCard.tsx",
+    "src/features/b/provider-data.ts", "src/app/api/quote/route.ts", "src/lib/quote-engine/compare.ts",
+    "src/features/c/provider-data.ts", "src/components/ui/ProviderDirectory.tsx", "src/app/layout.tsx",
+  ]) {
+    assert.equal(canReadAcrossOwner(file, target), false, file);
+    assert.equal(canReadAcrossOwner(file, target, true), false, `客户端可达：${file}`);
+  }
+});
+
+test("扫描器允许服务端读取目录，并拒绝客户端直接或间接导入、重导出和动态导入", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "d-match-directory-boundaries-"));
+  const script = fileURLToPath(new URL("../scripts/check-boundaries.mjs", import.meta.url));
+  const put = (file: string, source: string) => {
+    const target = path.join(root, file);
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, source);
+  };
+  const scan = () => execFileSync(process.execPath, [script], { cwd: root, encoding: "utf8", stdio: "pipe" });
+  const rejected = () => assert.throws(scan, (error: unknown) => {
+    assert.ok(error instanceof Error && "stderr" in error);
+    assert.match(String(error.stderr), / -> src\/lib\/provider-directory\.ts/);
+    return true;
+  });
+  try {
+    put("src/lib/provider-directory.ts", "export const value = 1;");
+    const client = "src/features/b/client.tsx";
+    for (const bridge of ["src/lib/match/provider-data.ts", "src/app/api/match/provider-data.ts", "src/lib/mock-data.ts"]) {
+      const specifier = `@/${bridge.slice(4, -3)}`;
+      for (const statement of [
+        "import { value } from '@/lib/provider-directory';",
+        "export { value } from '@/lib/provider-directory';",
+        "export const load = () => import('@/lib/provider-directory');",
+      ]) {
+        put(client, "export {};");
+        put(bridge, statement);
+        assert.match(scan(), /边界检查通过/);
+        put(client, `'use client'; export * from '${specifier}';`);
+        rejected();
+        put(client, `'use client'; export const load = () => import('${specifier}');`);
+        rejected();
+        put(client, "export {};");
+        put(bridge, `'use client'; ${statement}`);
+        rejected();
+        put(bridge, "export {};");
+        put(client, `'use client'; ${statement}`);
+        rejected();
+      }
+      put(bridge, "export {};");
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("报价服务端 API 和引擎可以读取服务端身份基础设施", () => {
   for (const file of [
     "src/app/api/quote/route.ts",
