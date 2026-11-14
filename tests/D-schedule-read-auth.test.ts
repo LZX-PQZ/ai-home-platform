@@ -9,6 +9,8 @@ import { PrismaClient, type Prisma } from "@prisma/client";
 import { Schedule, envelope, DEMO_PROVIDER_ID, DEMO_PROVIDER_USER_ID } from "../src/contracts";
 import { handleScheduleRead } from "../src/lib/schedule-read";
 import { createOwnerAccount } from "../src/lib/owner-account";
+import { DEMO_DEMAND_ID } from "../src/lib/demand";
+import { schedule as demoSchedule } from "../src/lib/mock-data";
 import { OWNER_SESSION_COOKIE, issueOwnerSession, revokeOwnerSession } from "../src/lib/owner-auth";
 import { DEMO_SESSION_COOKIE, issueDemoSession } from "../src/lib/demo-provider-session";
 
@@ -77,7 +79,7 @@ test("排期读取：真实业主会话、隔离 SQLite 和公开登录路由", 
   const providerCookie = `${DEMO_SESSION_COOKIE}=${provider.token}`;
   const exactId = " 需求/a?b#c%20 ";
   const tasks = [{ id: "inspect", name: "Synthetic inspection", startDay: 0, durationDays: 1, dependsOn: [], responsibleProviderId: null, status: "pending" }];
-  const rows = ["one", "two", "demo-demand", exactId, exactId.trim(), "empty"].map(id => ({
+  const rows = ["one", "two", DEMO_DEMAND_ID, " demo-demand ", exactId, exactId.trim(), "empty"].map(id => ({
     id, ownerId: id === "two" || id === exactId.trim() ? other.userId : id === "demo-demand" ? "demo-owner" : first.userId,
     description: "Synthetic", city: "Test", areaM2: 10, budgetMinCents: 0, budgetMaxCents: 10000,
     renovationType: "repair", desiredDays: 5, status: "published",
@@ -106,30 +108,78 @@ test("排期读取：真实业主会话、隔离 SQLite 和公开登录路由", 
       }
     }
     const missing = await denied(await read("missing"), 404, "DEMAND_NOT_FOUND");
-    for (const id of ["two", "demo-demand"]) assert.deepEqual(await denied(await read(id), 404, "DEMAND_NOT_FOUND"), missing);
+    assert.deepEqual(await denied(await read("two"), 404, "DEMAND_NOT_FOUND"), missing);
     await denied(await read("one", otherCookie), 404, "DEMAND_NOT_FOUND");
     await denied(await read("empty"), 404, "SCHEDULE_NOT_FOUND");
     await denied(await read("one", cookie, 2), 404, "SCHEDULE_NOT_FOUND");
   });
 
-  await t.test("固定演示不访问数据库；显式演示需归属且保留 mock，精确 ID 不 trim", async () => {
+  await t.test("固定种子排期公开且始终 mock，不读取数据库中的同 ID 排期", async () => {
     let calls = 0;
     const unavailable = { $transaction: () => { calls++; throw new Error("private database"); } } as unknown as Database;
-    for (const value of ["", `${OWNER_SESSION_COOKIE}=bad`]) {
-      const demo = await success(await handleScheduleRead(request(value, ""), unavailable));
-      assert.equal(demo.meta.source, "mock"); assert.equal(demo.data.demandId, "demo-demand");
+    const expected = { ok: true, data: demoSchedule, meta: { source: "mock" } };
+    for (const value of ["", providerCookie, `${DEMO_SESSION_COOKIE}=invalid`]) {
+      for (const query of ["", `?demandId=${DEMO_DEMAND_ID}`, `?demandId=${DEMO_DEMAND_ID}&version=${demoSchedule.version}`]) {
+        assert.deepEqual(await success(await handleScheduleRead(request(value, query), unavailable)), expected);
+      }
+      await denied(await read(DEMO_DEMAND_ID, value, 3, unavailable), 404, "SCHEDULE_NOT_FOUND");
     }
     assert.equal(calls, 0);
-    await denied(await read("demo-demand", ""), 401, "UNAUTHENTICATED");
-    assert.equal((await success(await read("demo-demand", demoCookie))).meta.source, "mock");
+    const noBusinessRead = decorate(db, tx => ({ ...tx,
+      demandOrder: { ...tx.demandOrder, findFirst: async () => { throw new Error("unexpected demand read"); } },
+      schedule: { ...tx.schedule, findFirst: async () => { throw new Error("unexpected schedule read"); },
+        findUnique: async () => { throw new Error("unexpected schedule version read"); } },
+    }) as unknown as Prisma.TransactionClient);
+    for (const value of [cookie, otherCookie, demoCookie, `${cookie}; ${providerCookie}`]) {
+      assert.deepEqual(await success(await read(DEMO_DEMAND_ID, value, undefined, noBusinessRead)), expected);
+      assert.deepEqual(await success(await read(DEMO_DEMAND_ID, value, 1, noBusinessRead)), expected);
+      // The database fixture has version 3; the public exception serves only the fixed seed.
+      await denied(await read(DEMO_DEMAND_ID, value, 3, noBusinessRead), 404, "SCHEDULE_NOT_FOUND");
+    }
+    await db.schedule.updateMany({ where: { demandId: DEMO_DEMAND_ID }, data: { tasksJson: "{" } });
+    await db.demandOrder.update({ where: { id: DEMO_DEMAND_ID }, data: { ownerId: other.userId, status: "draft" } });
+    assert.deepEqual(await success(await read(DEMO_DEMAND_ID, cookie)), expected);
+  });
+
+  await t.test("例外仅匹配固定 ID，已发布真实需求及相似 ID 仍需归属，精确 ID 不 trim", async () => {
+    for (const id of ["one", "two", "missing", " demo-demand ", "DEMO-DEMAND", "demo-demand-other"]) {
+      await denied(await read(id, ""), 401, "UNAUTHENTICATED");
+      await denied(await read(id, providerCookie), 403, "FORBIDDEN");
+    }
+    const similar = await success(await read(" demo-demand "));
+    assert.equal(similar.data.demandId, " demo-demand "); assert.equal(similar.meta.source, "live");
+    await denied(await read(" demo-demand ", otherCookie), 404, "DEMAND_NOT_FOUND");
     assert.equal((await success(await read(exactId))).data.demandId, exactId);
     await denied(await read(exactId.trim()), 404, "DEMAND_NOT_FOUND");
+  });
+
+  await t.test("演示入口仍拒绝无效、重复、过期、撤销业主 cookie，不回退匿名或服务方", async () => {
+    const queries = ["", `?demandId=${DEMO_DEMAND_ID}`, `?demandId=${DEMO_DEMAND_ID}&version=1`, `?demandId=${DEMO_DEMAND_ID}&version=3`];
+    const reject = async (value: string, status = 401, code = "UNAUTHENTICATED") => {
+      for (const query of queries) await denied(await handleScheduleRead(request(value, query), db), status, code);
+    };
+    for (const value of [`${OWNER_SESSION_COOKIE}=`, `${OWNER_SESSION_COOKIE}=bad`, `${OWNER_SESSION_COOKIE}=${"0".repeat(64)}`,
+      `${cookie}; ${cookie}`, `${OWNER_SESSION_COOKIE}=bad; ${providerCookie}`, `${cookie}; ${cookie}; ${providerCookie}`]) await reject(value);
+    await db.ownerSession.update({ where: { tokenHash: hash }, data: { expiresAt: new Date(0) } });
+    await reject(`${cookie}; ${providerCookie}`);
+    await db.ownerSession.update({ where: { tokenHash: hash }, data: { expiresAt: issued.expiresAt } });
+    await db.$transaction(tx => revokeOwnerSession(request(cookie), tx));
+    await reject(cookie);
+    await db.ownerSession.update({ where: { tokenHash: hash }, data: { revokedAt: null } });
+    await db.user.update({ where: { id: first.userId }, data: { role: "admin" } });
+    await reject(cookie, 403, "FORBIDDEN");
+    const brokenSession = decorate(db, tx => ({ ...tx, ownerSession: { ...tx.ownerSession,
+      findUnique: async () => { throw new Error("private database tokenHash"); },
+    } }) as unknown as Prisma.TransactionClient);
+    await denied(await read(DEMO_DEMAND_ID, cookie, undefined, brokenSession), 503, "SCHEDULE_UNAVAILABLE");
   });
 
   await t.test("非法/重复/未知/自报身份参数在任何数据库操作前拒绝", async () => {
     let calls = 0;
     const unavailable = { $transaction: () => { calls++; throw new Error("private database"); } } as unknown as Database;
     for (const query of ["?unknown=", "?ownerId=x", "?version=1", "?demandId=", "?demandId=%20%20", "?demandId=one&demandId=two",
+      `?demandId=${DEMO_DEMAND_ID}&role=owner`, `?demandId=${DEMO_DEMAND_ID}&version=0`,
+      `?demandId=${DEMO_DEMAND_ID}&demandId=one`, `?demandId=${DEMO_DEMAND_ID}&version=1&version=3`,
       "?demandId=one&role=owner", "?demandId=one&version=1&version=3", ...["", "0", "-1", "1.1", "1e2", "%2B1", "2147483648"].map(version => `?demandId=one&version=${version}`)]) {
       await denied(await handleScheduleRead(request(cookie, query), unavailable), 400, "VALIDATION_ERROR");
     }
@@ -217,14 +267,22 @@ test("排期读取：真实业主会话、隔离 SQLite 和公开登录路由", 
       import assert from 'node:assert/strict';
       import { GET, POST as write } from ${modulePath("src/app/api/schedule/route.ts")};
       import { POST as login, DELETE as logout } from ${modulePath("src/app/api/auth/owner/route.ts")};
+      import { schedule } from ${modulePath("src/lib/mock-data.ts")};
       import { prisma } from ${modulePath("src/lib/prisma.ts")};
       const req = (path, method = 'GET', cookie = '', body) => new Request('${origin}' + path, { method,
         headers: { origin: '${origin}', cookie, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
       async function main() {
+        for (const query of ['?demandId=demo-demand', '?demandId=demo-demand&version=1']) {
+          const demo = await GET(req('/api/schedule' + query));
+          assert.equal(demo.status, 200); assert.deepEqual(await demo.json(), { ok: true, data: schedule, meta: { source: 'mock' } });
+          assert.equal((await GET(req('/api/schedule' + query, 'GET', '${OWNER_SESSION_COOKIE}=invalid'))).status, 401);
+        }
+        assert.equal((await GET(req('/api/schedule?demandId=demo-demand&version=3'))).status, 404);
         assert.equal((await GET(req('/api/schedule?demandId=one'))).status, 401);
         const loggedIn = await login(req('/api/auth/owner', 'POST', '', { login: 'schedule-owner-one', password: ${JSON.stringify(password)} }));
         assert.equal(loggedIn.status, 200);
         const cookie = loggedIn.headers.get('set-cookie').split(';')[0];
+        assert.equal((await GET(req('/api/schedule?demandId=demo-demand', 'GET', cookie))).status, 200);
         const latest = await GET(req('/api/schedule?demandId=one', 'GET', cookie));
         assert.equal(latest.status, 200); assert.equal(latest.headers.get('cache-control'), 'private, no-store');
         assert.equal((await latest.json()).data.version, 3);
@@ -233,6 +291,7 @@ test("排期读取：真实业主会话、隔离 SQLite 和公开登录路由", 
         assert.equal((await GET(req('/api/schedule?demandId=two', 'GET', cookie))).status, 404);
         assert.equal((await logout(req('/api/auth/owner', 'DELETE', cookie))).status, 200);
         assert.equal((await GET(req('/api/schedule?demandId=one', 'GET', cookie))).status, 401);
+        assert.equal((await GET(req('/api/schedule?demandId=demo-demand', 'GET', cookie))).status, 401);
         const pending = await write(); assert.equal(pending.status, 501); assert.equal((await pending.json()).ok, false);
         console.log('public-schedule-read-ok');
       }

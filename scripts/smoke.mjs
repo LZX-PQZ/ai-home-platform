@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 const base = process.env.SMOKE_BASE_URL ?? 'http://127.0.0.1:3000';
+let demoSchedule;
 for (const route of ['/', '/owner', '/owner/demand/chat', '/owner/demand/demo-demand', '/owner/matches/demo-demand', '/owner/quotes/demo-demand', '/owner/project/demo-demand', '/owner/payments/demo-demand', '/provider', '/provider/demand/demo-demand', '/provider/orders', '/admin', '/admin/tickets']) {
  const response = await fetch(base + route);
  assert.equal(response.status, 200, route);
@@ -16,6 +17,7 @@ for (const route of ['/api/health', '/api/demand', '/api/provider', '/api/match'
   assert.ok(payload.data.some(demand => demand.id === 'demo-demand'));
  }
  else assert.equal(payload.meta.source, 'mock');
+ if (route === '/api/schedule') demoSchedule = payload.data;
 }
 const demoDetail = await fetch(base + '/api/demand/demo-demand');
 assert.equal(demoDetail.status, 200);
@@ -34,8 +36,19 @@ for (const route of ['/api/demand', '/api/demand/demo-demand']) {
 }
 const missingDetail = await fetch(base + '/api/demand/missing-demand');
 assert.equal(missingDetail.status, 404);
+for (const path of ['/api/schedule?demandId=demo-demand', '/api/schedule?demandId=demo-demand&version=1']) {
+ const response = await fetch(base + path);
+ assert.equal(response.status, 200, path);
+ assert.equal(response.headers.get('cache-control'), 'private, no-store');
+ assert.ok((response.headers.get('vary') ?? '').split(',').some(value => value.trim().toLowerCase() === 'cookie'));
+ const body = await response.json();
+ assert.equal(body.ok, true); assert.equal(body.meta.source, 'mock');
+ assert.equal(body.data.demandId, 'demo-demand'); assert.equal(body.data.version, 1);
+ assert.deepEqual(body.data, demoSchedule);
+}
 for (const [path, status, code] of [
- ['/api/schedule?demandId=demo-demand', 401, 'UNAUTHENTICATED'],
+ ['/api/schedule?demandId=smoke-private-demand', 401, 'UNAUTHENTICATED'],
+ ['/api/schedule?demandId=demo-demand&version=2', 404, 'SCHEDULE_NOT_FOUND'],
  ['/api/schedule?unknown=', 400, 'VALIDATION_ERROR'],
 ]) {
  const response = await fetch(base + path);
@@ -44,6 +57,14 @@ for (const [path, status, code] of [
  assert.ok((response.headers.get('vary') ?? '').split(',').some(value => value.trim().toLowerCase() === 'cookie'));
  const body = await response.json();
  assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
+}
+for (const path of ['/api/schedule', '/api/schedule?demandId=demo-demand', '/api/schedule?demandId=demo-demand&version=1']) {
+ const response = await fetch(base + path, { headers: { Cookie: '__Host-ai_home_owner_session=invalid' } });
+ assert.equal(response.status, 401, `${path} must reject an invalid owner cookie`);
+ assert.equal(response.headers.get('cache-control'), 'private, no-store');
+ assert.ok((response.headers.get('vary') ?? '').split(',').some(value => value.trim().toLowerCase() === 'cookie'));
+ const body = await response.json();
+ assert.equal(body.ok, false); assert.equal(body.error.code, 'UNAUTHENTICATED'); assert.equal('data' in body, false);
 }
 const scheduleWrite = await fetch(base + '/api/schedule', { method: 'POST' });
 assert.equal(scheduleWrite.status, 501);
@@ -80,4 +101,4 @@ const forbidden = await withoutOrigin.json();
 assert.equal(forbidden.ok, false);
 assert.equal(forbidden.error.code, 'FORBIDDEN');
 assert.equal('data' in forbidden, false);
-console.log('13 个页面、14 个 GET 场景和 5 个 POST 场景通过（公开需求、受保护排期与未实现写入检查通过）。');
+console.log('13 个页面、20 个 GET 场景和 5 个 POST 场景通过（固定演示排期公开、失效凭证拒绝及真实排期隔离检查通过）。');

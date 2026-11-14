@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { Schedule, ScheduleQuery, envelope, type ApiFailure, type ScheduleQueryDTO } from "@/contracts";
 import { readDemoVerifiedSession } from "@/lib/demo-provider-session";
+import { DEMO_DEMAND_ID } from "@/lib/demand";
 import { schedule } from "@/lib/mock-data";
 import { OWNER_SESSION_COOKIE, OwnerAccessError, readOwnerVerifiedSession } from "@/lib/owner-auth";
 import { prisma } from "@/lib/prisma";
@@ -25,7 +26,7 @@ function failure(code: keyof typeof failures) {
   return Response.json({ ok: false, error: { code, message } } satisfies ApiFailure, { status, headers });
 }
 
-/** Only an entirely empty query is the fixed demo entry. IDs retain their exact value. */
+/** Unknown parameters never select the demo entry. IDs retain their exact value. */
 function parseQuery(params: URLSearchParams): ScheduleQueryDTO | null {
   const keys = [...params.keys()];
   if (keys.length === 0) return null;
@@ -41,21 +42,31 @@ function parseQuery(params: URLSearchParams): ScheduleQueryDTO | null {
   return parsed.data;
 }
 
+function demoSchedule(version?: number) {
+  if (version !== undefined && version !== schedule.version) throw new ScheduleReadRejected("SCHEDULE_NOT_FOUND");
+  return envelope(Schedule).parse({ ok: true, data: schedule, meta: { source: "mock" } });
+}
+
 export async function handleScheduleRead(request: Request, db: Pick<PrismaClient, "$transaction"> = prisma) {
   try {
     const query = parseQuery(new URL(request.url).searchParams);
     if (!["GET", "HEAD"].includes(request.method)) return failure("FORBIDDEN");
-    if (query === null) return Response.json(envelope(Schedule).parse({ ok: true, data: schedule, meta: { source: "mock" } }), { headers });
+    const hasOwnerCookie = (request.headers.get("cookie") ?? "").split(";")
+      .some(value => value.trim().startsWith(`${OWNER_SESSION_COOKIE}=`));
+    // Only the fixed seed ID is public; status and source cannot grant access.
+    if ((query === null || query.demandId === DEMO_DEMAND_ID) && !hasOwnerCookie) {
+      return Response.json(demoSchedule(query?.version), { headers });
+    }
 
     // Credentials, current ownership and schedule data must share the same snapshot.
     const body = await db.$transaction(async tx => {
       const identity = await readOwnerVerifiedSession(request, tx);
       if (!identity) {
-        const hasOwnerCookie = (request.headers.get("cookie") ?? "").split(";")
-          .some(value => value.trim().startsWith(`${OWNER_SESSION_COOKIE}=`));
         if (!hasOwnerCookie && await readDemoVerifiedSession(request, tx)) throw new ScheduleReadRejected("FORBIDDEN");
         throw new ScheduleReadRejected("UNAUTHENTICATED");
       }
+      // A supplied owner credential must be valid even for fixed demo data.
+      if (query === null || query.demandId === DEMO_DEMAND_ID) return demoSchedule(query?.version);
       const demand = await tx.demandOrder.findFirst({
         where: { id: query.demandId, ownerId: identity.userId }, select: { id: true, ownerId: true },
       });
