@@ -103,7 +103,7 @@ for (const [path, cookie, status, code] of [
  assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
 }
 // Implemented owner-only writes: anonymous smoke must never create fixtures.
-for (const path of ['/api/schedule', '/api/ticket', '/api/order', '/api/inspect', '/api/inspect/images', '/api/review']) {
+for (const path of ['/api/schedule', '/api/ticket', '/api/order', '/api/order/progress', '/api/inspect', '/api/inspect/images', '/api/review']) {
 for (const [headers, status, code] of [
  [{}, 403, 'FORBIDDEN'],
  [{ Origin: new URL(base).origin }, 401, 'UNAUTHENTICATED'],
@@ -169,6 +169,7 @@ for (const [query, cookie, status, code] of [
 }
 const { smokeReviews } = tsRequire('./smoke-reviews.ts', import.meta.url);
 await smokeReviews(base);
+console.log('履约推进另增 3 个 POST 同源/匿名/失效凭证拒绝场景通过。');
 console.log('评价新增 3 个匿名 POST 与 5 个 GET 边界场景通过，无公开演示评价入口。');
 const demandBody = JSON.stringify({
  description: '冒烟测试需求', city: '深圳', areaM2: 60,

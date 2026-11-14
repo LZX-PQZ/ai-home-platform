@@ -37,11 +37,13 @@ macOS / Linux：使用 npm 而非 npm.cmd，使用 cp .env.example .env。
 
 照片上传后端新增 `sharp` 依赖与 `InspectionImage` 表，更新到包含该功能的分支后运行 `npm ci`、`npm run db:setup` 并重启（PowerShell 使用 `npm.cmd`）。上传入口 `POST /api/inspect/images` 仅接受当前业主本人需求的 JPEG/PNG，保存标准化内容并返回 24 小时有效的引用。照片保存为 live，AI 辅助分析仍为 501；A 页面上传接线尚未完成，现有文件名不能作为已上传引用。照片仅存本地 SQLite，没有公开图片 URL；到期立即停止引用，后续成功上传清理本人过期记录。详见 [上传交接](docs/requests/D-photo-image-upload.md)。
 
-评价后端已提供 `POST /api/review` 和 `GET /api/review?demandId=…`，更新后运行 `npm.cmd run db:setup` 同步评价接单关联与来源列，再重启；历史评价保留，不自动补造成真实接单评价。仅所属业主可对需求与接单均已完成的实际关系提交一次评价，来源沿用接单，mock 不升级。完工状态推进与评价页面仍未实现，正常流程目前不能直接走通完成→评价；测试用隔离合成完成记录验证接口。详见 [评价交接](docs/requests/D-review-create.md)。
+评价后端已提供 `POST /api/review` 和 `GET /api/review?demandId=…`，更新后运行 `npm.cmd run db:setup` 同步评价接单关联与来源列，再重启；历史评价保留，不自动补造成真实接单评价。仅所属业主可对需求与接单均已完成的实际关系提交一次评价，来源沿用接单，mock 不升级。详见 [评价交接](docs/requests/D-review-create.md)。
+
+履约后端新增 `POST /api/order/progress`，业主明确确认后，需求与接单在同一事务中“已签约→施工中→已完成”。有排期时按依赖逐项开工/确认完成，保留历史版本，全部完成才允许整单完成；无排期也须显式确认。运行 `npm.cmd run db:setup` 同步操作记录表后重启。生产 HTTP 冒烟已通过正常接口推进到评价，不再直接改库伪造完工。A/C 的按钮及评价表单仍待接线，专业验收、返工/阻塞和付款联动未实现。详见 [履约交接](docs/requests/D-order-progress.md)。
 
 ## 接单数据同步
 
-接受报价与接单后端已提供 `POST /api/order` 和 `GET /api/provider/orders`，部署本功能前运行 `npm.cmd run db:setup` 同步新增的 ServiceOrder 表，然后重启应用；不要重置数据库。既有需求、报价及提交回执保留，历史 accepted 报价不自动补成接单。B 的接受按钮和 C 的接单界面仍待接入；当前 `/provider/orders` 页面仍是“本人报价”。本版一需求只能接受一份报价，含待定费用的报价不会被宣称已确认最终总价。演示报价建立的关系仍标 mock，不代表生产服务方认证、付款或履约完成。协议见 [接受报价交接](docs/requests/D-quote-acceptance.md)。
+接受报价与接单后端已提供 `POST /api/order` 和 `GET /api/provider/orders`，部署本功能前运行 `npm.cmd run db:setup` 同步新增的 ServiceOrder 表，然后重启应用；不要重置数据库。既有需求、报价及提交回执保留，历史 accepted 报价不自动补成接单。B 的接受按钮与 C 的实际接单页面已随 #121/#122/#125 合入；履约动作按钮仍待接线。本版一需求只能接受一份报价，含待定费用的报价不会被宣称已确认最终总价。演示报价建立的关系仍标 mock，不代表生产服务方认证、付款或履约完成。协议见 [接受报价交接](docs/requests/D-quote-acceptance.md)。
 
 ## 演示服务方登录
 

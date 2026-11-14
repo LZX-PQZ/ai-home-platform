@@ -37,7 +37,9 @@ node scripts/smoke.mjs
 ```
 照片冒烟会创建随机合成业主和图片，经实际 HTTP 上传验证后清理本次创建的数据。服务端和冒烟进程必须显式使用同一个已同步 seed 的隔离测试数据库 `DATABASE_URL`；仅配置工作树 `.env` 不能替代冒烟进程的环境变量。不要把冒烟地址指向远端服务。
 
-评价冒烟也会创建并清理随机合成账号/报价，实际经 HTTP 登录、接受报价、提交和读取评价。需求与接单的 completed 状态仅由隔离测试夹具在同一事务中准备，不是已交付的完工流转接口；分别验证 mock/live 来源不变、未完成/跨归属/坏数据/退出拒绝。不能在真实用户数据库上运行这些夹具。
+履约/评价冒烟创建并清理随机合成账号，经实际 HTTP 登录、演示服务方报价、接受报价、创建排期、开工/工序完成/整单完成、提交和读取评价，同时检查服务方接单列表和详情状态。不会直接改库伪造 completed；仅 live 来源的报价仍为存储夹具，因为生产服务方认证尚未实现。分别验证 mock/live 不变、未完成/跨归属/旧版本/跳级/坏数据/退出拒绝。不能在真实用户数据库上运行这些夹具。
+
+runner 只对本次服务和冒烟子进程设置 `DEMO_AUTH_ENABLED=true` 与 `AI_MODE=mock`，不修改 .env 或正常启动配置。直接运行 smoke.mjs 时需给测试服务及冒烟进程均显式开启该演示开关；固定 demo-demand 仍只读，写链路使用新建的合成业主需求。
 
 也可让 runner 自动启动并停止独立端口的生产服务。PowerShell 在同一终端设置 `$env:DATABASE_URL = "file:./smoke.db"`、`$env:AI_MODE = "mock"`，然后依次运行 `npm.cmd run db:setup`、`npm.cmd run build`、`node scripts/run-production-smoke.mjs`。macOS/Linux 先 `export DATABASE_URL="file:./smoke.db" AI_MODE=mock`，再使用 `npm` 执行相同命令。使用专门测试库，保留已有 `.env`。
 
