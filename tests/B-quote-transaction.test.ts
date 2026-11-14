@@ -329,11 +329,11 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
     return body;
   };
 
-  await t.test("POST 处理器首次返回 201/live，重新连接后同键规范化重放 200，仅有一份持久化记录", async () => {
+  await t.test("POST 处理器首次返回 201/mock，重新连接后同键规范化重放 200，仅有一份持久化记录", async () => {
     const first = await http();
     assert.equal(first.status, 201);
     const firstBody = envelope(Quote).parse(await first.json());
-    assert.equal(firstBody.meta.source, "live");
+    assert.equal(firstBody.meta.source, "mock");
     assert.equal(firstBody.data.status, "submitted");
     assert.equal(firstBody.data.providerId, identity.providerId);
     assert.equal(firstBody.data.knownTotalCents, 30);
