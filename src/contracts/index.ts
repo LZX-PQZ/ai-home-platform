@@ -24,10 +24,22 @@ export const Demand = z.object({
   status: z.enum(["draft", "published", "contracted", "in_progress", "completed"]),
   source: Source.optional(),
 });
+/** 已完成接单的评价均分，不代表准时率、质量鉴定或信用评分。 */
+export const ProviderPerformance = z.object({
+  basis: z.literal("completed_order_review_average"),
+  averageRating: z.number().finite().min(1).max(5).multipleOf(0.01).nullable(),
+  reviewCount: z.number().int().nonnegative().safe(),
+  calculatedAt: z.string().datetime({ offset: true }).refine(value => Date.parse(value) <= Date.now(), { message: "计算时间不能在未来" }),
+  source: Source,
+}).strict().refine(value => value.reviewCount === 0 ? value.averageRating === null : value.averageRating !== null,
+  { message: "无样本必须为 null/0，有样本必须提供均分" });
+export const ProviderQuery = z.object({ performanceSource: Source.default("live") }).strict();
 export const Provider = z.object({
   id: Id, name: z.string(), city: z.string(),
   kind: z.enum(["construction", "materials", "design", "supervision"]),
   tags: z.array(z.string()), rating: z.number().min(0).max(5),
+  source: Source.optional(),
+  performance: ProviderPerformance.nullable().optional(),
 });
 export const UserRole = z.enum(["owner", "provider", "admin"]);
 /** 只表示已由服务端认证适配器验证过的会话，不表示客户端角色切换状态。 */
@@ -296,6 +308,8 @@ export type DemandDTO = z.infer<typeof Demand>;
 export type DemandInputDTO = z.infer<typeof DemandInput>;
 export type DemandStatus = DemandDTO["status"];
 export type ProviderDTO = z.infer<typeof Provider>;
+export type ProviderPerformanceDTO = z.infer<typeof ProviderPerformance>;
+export type ProviderQueryDTO = z.infer<typeof ProviderQuery>;
 export type UserRoleDTO = z.infer<typeof UserRole>;
 export type VerifiedSessionDTO = z.infer<typeof VerifiedSession>;
 export type ProviderIdentityDTO = z.infer<typeof ProviderIdentity>;

@@ -102,4 +102,5 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [ ] A/C 动作按钮、评价表单、双方审批、专业验收材料、实际日期、阻塞/返工/施工中变更、付款联动、操作记录查询待后续。
 - [x] 照片检查 mock 结果已提供；过期照片全局配额修复 #136 与业主接单查询 #132 已合入。上传 live 与检查 mock 分开，真实 AI 仍未接通。
 - [x] 回复 B #133 的档期/履约评价请求，确认固定 mock 档期、已完成接单评价均分和样本数、mock/live 分开统计，见 `docs/requests/D-match-ranking-response.md`。
-- [ ] Provider 汇总字段与查询、固定 mock 档期样例、B 排序接线待独立实现；本次只确认口径，不宣称接口已交付。
+- [x] Provider 可选 source/performance、ProviderPerformance 与 ProviderQuery，以及 GET /api/provider 的评价汇总已交付：公开目录范围不扩大，完成接单的一次评价、均分/样本数、mock/live 分开、无样本 null/0、坏数据 503。共享只读适配器供 B 后续接线，见 `docs/requests/D-provider-performance.md`。
+- [ ] 固定 mock 档期样例、B 排序接线待独立实现；随后调整演示报价种子的单位/缺项提示、README 演示步骤与最终演示版本。
