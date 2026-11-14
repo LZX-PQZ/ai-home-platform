@@ -15,7 +15,7 @@ import {
 export const GREETING: ChatMessage = {
   role: "assistant",
   content:
-    "您好，我是需求澄清助手。用一句话说说房子的情况和您想怎么改（例如：深圳 60 平老房，给老人住，卫生间太滑，预算 3–5 万，一个月内完工），我会整理成结构化需求单。",
+    "您好，请描述房子的情况和您想怎么改，例如城市、面积、预算范围和期望工期。请留意返回结果的来源：模拟追问仅供演示，您也可以直接手动填写需求单。",
 };
 
 export type ChatPhase = "idle" | "sending" | "failed";
