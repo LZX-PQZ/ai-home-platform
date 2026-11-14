@@ -37,7 +37,7 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 
 - [x] PR #81 已合入；README 补充拉取 main 后运行 `npm run db:setup` 的提示，本机已执行成功。该同步保留已有记录，历史报价来源回填 mock。
 - [x] 业主密码登录、刷新和退出入口；临时合成账号浏览器验收通过，密码认证是真实实现，账号不代表实名认证。B 的报价读取 API/页面合入后仍需联验。
-- [ ] 提交顺序：先合入 #95，再同步并提交 #101 的公开读取修订；后续 D 功能依次交付，避免多个 PR 同时修改共享接口文档和需求基础设施。
+- [x] #95 已合入，#101 公开读取修订已普通合并同步 main dc5d8ef，并重新运行 `npm run db:setup`；检查与生产冒烟结果见 `docs/requests/D-demand-read-auth.md`。后续 D 功能继续依次交付，避免多个 PR 同时修改共享接口文档和需求基础设施。
 - [x] C 的服务方身份过滤基础查询：按 `C-provider-orders.md` 允许的最小方案提供 `GET /api/provider/quotes`，复用 Quote[]，在同一事务按实际服务方会话绑定过滤本人报价，拒绝自报身份参数，覆盖匿名/跨服务方/撤销及来源测试。演示身份整体 mock，接线协议见 `docs/requests/D-provider-own-quotes.md`。
 - [ ] 真正接单关系与履约查询、生产服务方登录仍未实现；本人报价不等于接单。C 需将页面接到新接口并使用“本人报价”文案，D 不修改 C 页面。
 
