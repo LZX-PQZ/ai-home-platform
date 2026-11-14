@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useTransition } from "react";
 
 const roles = {
   owner: {
@@ -33,18 +33,16 @@ const roles = {
 type Role = keyof typeof roles;
 
 function roleForPath(pathname: string): Role {
-  if (pathname.startsWith("/provider")) return "provider";
-  if (pathname.startsWith("/admin")) return "operator";
+  if (pathname === "/provider" || pathname.startsWith("/provider/")) return "provider";
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return "operator";
   return "owner";
 }
 
 export function RoleNavigation() {
   const pathname = usePathname();
-  const [role, setRole] = useState<Role>("owner");
-
-  useEffect(() => {
-    setRole(roleForPath(pathname));
-  }, [pathname]);
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const role = roleForPath(pathname);
 
   const current = roles[role];
   return (
@@ -60,7 +58,11 @@ export function RoleNavigation() {
               aria-label="身份切换"
               className="rounded-input border border-line bg-white px-2.5 py-1.5 text-[12.5px] text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
               value={role}
-              onChange={(event) => setRole(event.target.value as Role)}
+              disabled={pending}
+              onChange={(event) => {
+                const nextRole = event.target.value as Role;
+                startTransition(() => router.push(roles[nextRole].links[0][1]));
+              }}
             >
               {Object.entries(roles).map(([value, item]) => (
                 <option key={value} value={value}>
@@ -72,6 +74,7 @@ export function RoleNavigation() {
           <span className="rounded-full bg-brand-soft px-3 py-1 text-[12px] font-medium text-brand-hover">
             当前身份：{current.label}
           </span>
+          {pending && <span role="status" className="text-[12px] text-ink-2">正在切换页面…</span>}
         </div>
       </div>
       <nav className="mx-auto mt-3 flex max-w-[1080px] flex-wrap items-center gap-x-5 gap-y-2" aria-label="产品导航">
