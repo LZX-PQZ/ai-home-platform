@@ -110,7 +110,7 @@ export function OrderProgressPanel({
                 </Button>
               </div>
               <p className={`mt-1 !mb-0 ${C.meta}`}>{action.description}</p>
-              {pending === action ? (
+              {pending?.action === action.action && pending.taskId === action.taskId ? (
                 <div className="mt-3 rounded-[8px] bg-[#FEF6E7] p-3">
                   <p className="!mb-2 text-[12.5px] text-[#8A5A06]">请再次确认：{action.label}？确认后才会发送请求。</p>
                   <div className="flex flex-wrap gap-2">
