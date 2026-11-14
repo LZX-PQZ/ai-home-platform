@@ -7,6 +7,23 @@ export const serviceOrderStatusLabels: Record<OrderSummaryDTO["status"], string>
   completed: "已完成",
 };
 
+export type ServiceOrderStatusFilter = "all" | OrderSummaryDTO["status"];
+export const serviceOrderFilterOptions = ["all", ...OrderSummary.shape.status.options] as const;
+export const serviceOrderFilterLabels: Record<ServiceOrderStatusFilter, string> = {
+  all: "全部接单",
+  ...serviceOrderStatusLabels,
+};
+
+export function summarizeServiceOrders(orders: readonly OrderSummaryDTO[]) {
+  const byStatus: Record<OrderSummaryDTO["status"], number> = { contracted: 0, in_progress: 0, completed: 0 };
+  for (const order of orders) byStatus[order.status] += 1;
+  return { total: orders.length, byStatus };
+}
+
+export function filterServiceOrders(orders: readonly OrderSummaryDTO[], status: ServiceOrderStatusFilter) {
+  return orders.filter(order => status === "all" || order.status === status);
+}
+
 export async function loadProviderServiceOrders() {
   const response = await apiGet("/api/provider/orders", OrderSummary.array());
   // 当前契约每个需求和被接受报价只能对应一条关系，不能静默合并坏记录。
