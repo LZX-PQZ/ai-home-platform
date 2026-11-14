@@ -1,11 +1,58 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Schedule } from "../src/contracts";
-import { loadSchedule } from "../src/features/a/schedule-query";
+import { loadSchedule, parseScheduleVersion } from "../src/features/a/schedule-query";
 
 // 仅用于测试的排期，不向页面注入本地演示数据。
 const schedule = Schedule.parse({ demandId: "test-demand", version: 7, tasks: [] });
 const ok = (data: unknown = schedule, source = "live") => ({ ok: true, data, meta: { source } });
+
+test("版本输入仅接受公共契约范围内的十进制正整数", () => {
+  for (const input of ["", " ", "0", "-1", "1.5", "1e2", "0x10", "Infinity", "2147483648"]) {
+    assert.equal(parseScheduleVersion(input), null, input);
+  }
+  assert.equal(parseScheduleVersion(" 007 "), 7);
+  assert.equal(parseScheduleVersion("2147483647"), 2147483647);
+});
+
+test("指定版本使用编码后的需求 ID 查询，返回最新时省略 version", async (t) => {
+  const id = "需求/a?&#";
+  const paths: string[] = [];
+  t.mock.method(globalThis, "fetch", async (path: string) => {
+    paths.push(path);
+    return Response.json(ok({ ...schedule, demandId: id }));
+  });
+  assert.equal((await loadSchedule(id, 7)).data?.version, 7);
+  assert.equal((await loadSchedule(id)).phase, "ready");
+  assert.deepEqual(paths, [`/api/schedule?demandId=${encodeURIComponent(id)}&version=7`, `/api/schedule?demandId=${encodeURIComponent(id)}`]);
+});
+
+test("非法数值版本不请求接口，指定版本响应错位时拒绝展示", async (t) => {
+  const request = t.mock.method(globalThis, "fetch", async () => Response.json(ok()));
+  for (const version of [0, -1, 1.5, NaN, Infinity, 2147483648]) {
+    assert.equal((await loadSchedule(schedule.demandId, version)).phase, "failed");
+  }
+  assert.equal(request.mock.callCount(), 0);
+  const result = await loadSchedule(schedule.demandId, 6);
+  assert.equal(result.phase, "failed");
+  assert.equal(result.data, null);
+  assert.match(result.error!, /版本.*不一致/);
+  assert.equal(request.mock.callCount(), 1);
+});
+
+test("指定版本不存在或服务失败时不回退到最新版本", async (t) => {
+  for (const status of [404, 501, 503]) {
+    const request = t.mock.method(globalThis, "fetch", async (path: string) => {
+      assert.equal(path, "/api/schedule?demandId=test-demand&version=2");
+      return Response.json({ ok: false, error: { code: status === 404 ? "SCHEDULE_NOT_FOUND" : "TEST_ERROR", message: "测试错误" } }, { status });
+    });
+    const result = await loadSchedule(schedule.demandId, 2);
+    assert.equal(result.phase, status === 404 ? "missing" : "failed");
+    assert.equal(result.data, null);
+    assert.equal(request.mock.callCount(), 1);
+    t.mock.restoreAll();
+  }
+});
 
 test("按需求查询最新排期，保留服务端版本和 mock/live 来源", async (t) => {
   for (const source of ["mock", "live"] as const) {

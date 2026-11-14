@@ -4,6 +4,7 @@ import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Schedule } from "../src/contracts";
 import { ScheduleContent } from "../src/features/a/SchedulePanel";
+import { ScheduleVersionControls } from "../src/features/a/ScheduleVersionControls";
 import type { ScheduleState } from "../src/features/a/useSchedule";
 
 // tsx 对 jsx:preserve 使用经典 JSX，仅在渲染测试期间提供 React。
@@ -19,9 +20,50 @@ const schedule = Schedule.parse({
   tasks: [{ id: "test-task", name: "测试工序", startDay: 2, durationDays: 3, dependsOn: [], responsibleProviderId: null, status: "done" }],
 });
 const ready = (source: "mock" | "live" = "mock"): ScheduleState => ({ phase: "ready", data: schedule, source, error: null });
-const render = (state: ScheduleState, id = schedule.demandId) => renderToStaticMarkup(
-  createElement(ScheduleContent, { id, state, reload() {} }),
+const render = (state: ScheduleState, id = schedule.demandId, version?: number) => renderToStaticMarkup(
+  createElement(ScheduleContent, { id, version, state, reload() {} }),
 );
+
+test("版本选择器标明查询模式并允许返回最新，不编造可用版本列表", () => {
+  const latest = renderToStaticMarkup(createElement(ScheduleVersionControls, { onSelect() {} }));
+  assert.match(latest, /排期版本号|查看指定版本/);
+  assert.match(latest, /查询模式：最新排期/);
+  const historical = renderToStaticMarkup(createElement(ScheduleVersionControls, { version: 2, onSelect() {} }));
+  assert.match(historical, /指定版本 v2/);
+  assert.match(historical, /返回最新排期/);
+  assert.match(historical, /不代表最新排期或当前现场进度/);
+  assert.doesNotMatch(historical, /<select|<option/);
+});
+
+test("指定版本只供查阅，保留来源和工序但隐藏当前项目操作", () => {
+  const html = render(ready(), schedule.demandId, 1);
+  assert.match(html, /正在查看指定版本 v1/);
+  assert.match(html, /不代表当前现场进度/);
+  assert.match(html, /本排期为模拟数据（mock）/);
+  assert.match(html, /测试工序/);
+  assert.match(html, /刷新指定版本/);
+  assert.doesNotMatch(html, /刷新最新排期|申请排期变更|确认阶段验收|照片辅助检查/);
+});
+
+test("指定版本缺失不意味着需求没有排期，错位版本不展示工序", () => {
+  const missing = render({ phase: "missing", data: null, source: null, error: null }, schedule.demandId, 2);
+  assert.match(missing, /未找到指定版本 v2/);
+  assert.match(missing, /不代表该需求没有其他排期/);
+  assert.doesNotMatch(missing, /暂无排期|尚未找到这条需求的排期|progressbar/);
+  const mismatch = render(ready(), schedule.demandId, 2);
+  assert.match(mismatch, /排期版本不一致/);
+  assert.doesNotMatch(mismatch, /测试工序|progressbar|确认阶段验收/);
+});
+
+test("指定版本的加载和空工序状态保留版本信息及来源语义", () => {
+  const loading = render({ phase: "loading", data: null, source: null, error: null }, schedule.demandId, 2);
+  assert.match(loading, /排期版本 v2/);
+  assert.match(loading, /本页数据可能包含模拟数据，加载完成后显示具体来源/);
+  const empty = render({ ...ready("live"), data: { ...schedule, tasks: [] } }, schedule.demandId, 1);
+  assert.match(empty, /排期版本 v1/);
+  assert.match(empty, /排期来源：live/);
+  assert.doesNotMatch(empty, /模拟数据|确认阶段验收/);
+});
 
 test("排期 ID 不匹配时不展示他人图表、统计、工序或操作", () => {
   const html = render(ready(), "other/a?#");
