@@ -2,6 +2,7 @@ import * as React from "react";
 import type { DemandDTO, ProviderDTO, QuoteDTO } from "@/contracts";
 import { formatQuoteMoney } from "@/features/b/format-quote";
 import { QuoteBudgetSummary } from "@/features/b/QuoteBudgetSummary";
+import { QuoteDurationSummary } from "@/features/b/QuoteDurationSummary";
 import { getPendingQuoteItems, summarizeQuote } from "@/lib/quote-engine";
 
 const units: Record<QuoteDTO["items"][number]["unit"], string> = { m2: "㎡", piece: "件", job: "项" };
@@ -58,6 +59,7 @@ export function QuoteTable({ quotes, providers = [], demand }: { quotes: QuoteDT
                 <strong className="text-2xl tabular-nums text-teal-800">{formatQuoteMoney(summary.knownTotalCents)}</strong>
               </div>
               {demand && <QuoteBudgetSummary demand={demand} quote={quote} />}
+              {demand && <QuoteDurationSummary demand={demand} quote={quote} />}
               {summary.pendingItems.length ? <div className="rounded-xl bg-amber-50 p-4 text-amber-950">
                 <h4 className="text-sm font-semibold">待确认项目 · {summary.pendingItems.length} 项</h4>
                 <ul className="mt-2 list-inside list-disc break-words text-sm leading-6">
