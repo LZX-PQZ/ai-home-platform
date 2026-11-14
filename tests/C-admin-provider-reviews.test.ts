@@ -7,7 +7,7 @@ import { ApiClientError } from "../src/lib/api-client";
 import Page from "../src/app/admin/provider-reviews/page";
 import AdminPage from "../src/app/admin/page";
 import { AdminProviderReviewsContent } from "../src/features/c/AdminProviderReviews";
-import { adminProviderReviewsFailure, loadAdminProviderReviews, type AdminProviderReviewsState } from "../src/features/c/admin-provider-reviews";
+import { adminProviderReviewsFailure, defaultAdminProviderReviewFilters, loadAdminProviderReviews, type AdminProviderReviewsState } from "../src/features/c/admin-provider-reviews";
 
 // Synthetic test fixtures; the runtime UI never substitutes these for a failed API response.
 const performance = { basis: "completed_order_review_average" as const, averageRating: 4.25, reviewCount: 4,
@@ -18,7 +18,8 @@ function payload(data: ProviderDTO[] = [provider], source: SourceDTO = "mock") {
   return { ok: true as const, data, meta: { source } };
 }
 function render(state: AdminProviderReviewsState, source: SourceDTO = "live") {
-  return renderToStaticMarkup(createElement(AdminProviderReviewsContent, { source, state, onSourceChange() {}, onReload() {} }));
+  return renderToStaticMarkup(createElement(AdminProviderReviewsContent, { source, state, onSourceChange() {}, onReload() {},
+    filters: defaultAdminProviderReviewFilters, onFiltersChange() {} }));
 }
 
 test("评价看板入口可达，首次加载默认 live，不提前显示统计或成功来源", () => {
@@ -62,7 +63,7 @@ test("目录整体、基础资料和评价各自标明来源，显示均分样�
     "合成评价服务方", "合成城市", "C-review-provider", "4.25", "4 条", performance.calculatedAt,
     "已完成接单的业主评价", "不代表准时率、质量认证或信用分", "角色导航不代表管理员登录"]) assert.ok(html.includes(text), text);
   assert.match(html, /<time dateTime="2026-11-14T10:00:00.000Z"/);
-  assert.doesNotMatch(html, /4\.99|样本少|<input|<form|平台总均分|排名/);
+  assert.doesNotMatch(html, /4\.99|样本少|<form|平台总均分|排名/);
   const liveProfile = render({ status: "ready", response: payload([{ ...provider, source: "live" }]) });
   assert.match(liveProfile, /基础资料来源：实际记录（live）/);
 });
@@ -90,7 +91,7 @@ test("旧 DTO 缺少或 null 汇总不等于无样本，缺少基础资料来源
     assert.match(html, /未提供评价汇总，暂不能判断是否有样本/);
     assert.match(html, /基础资料来源：未知（未提供）/);
     assert.match(html, /目录响应来源：实际记录（live）/);
-    assert.doesNotMatch(html, /评价来源：|暂无该来源样本|暂无均分|0 条|4\.99|<time/);
+    assert.doesNotMatch(html, /评价来源：|暂无该来源样本|暂无均分|>0 条<|4\.99|<time/);
     fetched.mock.restore();
   }
 });

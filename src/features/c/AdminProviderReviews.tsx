@@ -5,17 +5,25 @@ import Link from "next/link";
 import { Source, type SourceDTO } from "@/contracts";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
-import { adminProviderReviewsFailure, loadAdminProviderReviews, reviewSourceLabels, type AdminProviderReviewsState } from "./admin-provider-reviews";
+import {
+  adminProviderReviewsFailure, defaultAdminProviderReviewFilters, filterAdminProviderReviews,
+  loadAdminProviderReviews, reviewSampleLabels, reviewSampleOptions, reviewSourceLabels,
+  type AdminProviderReviewFilters, type AdminProviderReviewsState,
+} from "./admin-provider-reviews";
 
 type ContentProps = {
   source: SourceDTO;
   state: AdminProviderReviewsState;
   onSourceChange: (source: SourceDTO) => void;
   onReload: () => void;
+  filters: AdminProviderReviewFilters;
+  onFiltersChange: (filters: AdminProviderReviewFilters) => void;
 };
 
-export function AdminProviderReviewsContent({ source, state, onSourceChange, onReload }: ContentProps) {
+export function AdminProviderReviewsContent({ source, state, onSourceChange, onReload, filters, onFiltersChange }: ContentProps) {
   const response = state.status === "ready" ? state.response : null;
+  const visibleProviders = response ? filterAdminProviderReviews(response.data, filters) : [];
+  const hasFilters = filters.keyword.length > 0 || filters.sampleState !== "all";
   return <section aria-labelledby="admin-provider-reviews-title" className="space-y-6">
     <nav aria-label="评价汇总返回导航">
       <Link href="/admin" className="rounded-md text-sm font-medium underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">返回管理看板</Link>
@@ -53,9 +61,40 @@ export function AdminProviderReviewsContent({ source, state, onSourceChange, onR
         <StatusBadge label={`目录响应来源：${reviewSourceLabels[response.meta.source]}`} />
         <p className={`${C.pageSub} mt-2 !mb-0`}>本次目录 {response.data.length} 家服务方，所选评价口径：{reviewSourceLabels[source]}。目录整体来源不覆盖各服务方的基础资料及评价来源。</p>
       </div>
-      {response.data.length === 0 ? <Empty title="本次目录暂无服务方" hint="接口本次返回空目录，不能据此判断平台没有服务方或评价。可刷新汇总重试。" /> : (
+      <section aria-labelledby="admin-review-filters-title" className={`${C.card} space-y-4`}>
+        <h2 id="admin-review-filters-title" className={C.sectionTitle}>筛选服务方评价汇总</h2>
+        <p className={`${C.pageSub} !mb-0`}>只筛选本次公开目录和所选来源的评价汇总。刷新汇总或切换评价来源会保留筛选条件；离开页面后重置。</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="min-w-0">
+            <label htmlFor="admin-review-keyword" className={`${C.label} mb-2`}>关键词</label>
+            <input id="admin-review-keyword" type="search" className={`${C.input} w-full min-w-0`}
+              value={filters.keyword} aria-describedby="admin-review-keyword-hint"
+              onChange={event => onFiltersChange({ ...filters, keyword: event.target.value })} />
+            <p id="admin-review-keyword-hint" className={`${C.meta} mt-2 !mb-0`}>匹配服务方名称、编号或城市；忽略首尾空格和字母大小写，按原文连续匹配。</p>
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="admin-review-samples" className={`${C.label} mb-2`}>评价样本状态</label>
+            <select id="admin-review-samples" className={`${C.input} w-full min-w-0`} value={filters.sampleState}
+              aria-describedby="admin-review-samples-hint" onChange={event => {
+                const sampleState = reviewSampleOptions.find(value => value === event.target.value);
+                if (sampleState) onFiltersChange({ ...filters, sampleState });
+              }}>
+              {reviewSampleOptions.map(value => <option key={value} value={value}>{reviewSampleLabels[value]}</option>)}
+            </select>
+            <p id="admin-review-samples-hint" className={`${C.meta} mt-2 !mb-0`}>暂无样本指所选来源为 0 条，不等于 0 分；汇总未知指接口未提供汇总，不能判断样本数。</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p role="status" aria-live="polite" className={`${C.pageSub} !mb-0`}>当前显示 {visibleProviders.length} / {response.data.length} 家服务方。</p>
+          {hasFilters && <Button type="button" variant="secondary" size="sm" onClick={() => onFiltersChange(defaultAdminProviderReviewFilters)}
+            className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">清除筛选</Button>}
+        </div>
+      </section>
+      {response.data.length === 0 ? <Empty title="本次目录暂无服务方" hint="接口本次返回空目录，不能据此判断平台没有服务方或评价。可刷新汇总重试。" /> : visibleProviders.length === 0 ? (
+        <Empty title="没有符合筛选条件的服务方" hint="本次目录仍有服务方，可调整关键词、评价样本状态或清除筛选。当前无匹配不代表平台没有服务方或评价。" />
+      ) : (
         <ul aria-label="服务方评价汇总列表" className="grid gap-4 md:grid-cols-2">
-          {response.data.map(provider => <li key={provider.id} className={`${C.card} min-w-0`}>
+          {visibleProviders.map(provider => <li key={provider.id} className={`${C.card} min-w-0`}>
             <h2 className={`${C.sectionTitle} break-words [overflow-wrap:anywhere]`}>{provider.name.trim() ? provider.name : "名称未填写"}</h2>
             <p className={`${C.meta} mt-2 break-all`}>服务方编号：{provider.id}</p>
             <p className={`${C.pageSub} break-words [overflow-wrap:anywhere]`}>城市：{provider.city.trim() ? provider.city : "城市未填写"}</p>
@@ -77,7 +116,7 @@ export function AdminProviderReviewsContent({ source, state, onSourceChange, onR
   </section>;
 }
 
-function AdminProviderReviewsLoader({ source, onSourceChange, onReload }: Omit<ContentProps, "state">) {
+function AdminProviderReviewsLoader({ source, onSourceChange, onReload, filters, onFiltersChange }: Omit<ContentProps, "state">) {
   const [state, setState] = useState<AdminProviderReviewsState>({ status: "loading" });
   useEffect(() => {
     let active = true;
@@ -87,12 +126,15 @@ function AdminProviderReviewsLoader({ source, onSourceChange, onReload }: Omit<C
     );
     return () => { active = false; };
   }, [source]);
-  return <AdminProviderReviewsContent source={source} state={state} onSourceChange={onSourceChange} onReload={onReload} />;
+  return <AdminProviderReviewsContent source={source} state={state} onSourceChange={onSourceChange} onReload={onReload}
+    filters={filters} onFiltersChange={onFiltersChange} />;
 }
 
 export function AdminProviderReviews() {
   const [source, setSource] = useState<SourceDTO>("live");
   const [reloadKey, setReloadKey] = useState(0);
+  const [filters, setFilters] = useState<AdminProviderReviewFilters>(defaultAdminProviderReviewFilters);
   // Remount on source changes and refresh: clear old results immediately and ignore late responses.
-  return <AdminProviderReviewsLoader key={`${source}:${reloadKey}`} source={source} onSourceChange={setSource} onReload={() => setReloadKey(key => key + 1)} />;
+  return <AdminProviderReviewsLoader key={`${source}:${reloadKey}`} source={source} onSourceChange={setSource}
+    onReload={() => setReloadKey(key => key + 1)} filters={filters} onFiltersChange={setFilters} />;
 }

@@ -1,9 +1,29 @@
-import { Provider, ProviderQuery, type SourceDTO } from "@/contracts";
+import { Provider, ProviderQuery, type ProviderDTO, type SourceDTO } from "@/contracts";
 import { apiGet, ApiClientError } from "@/lib/api-client";
 
 export const reviewSourceLabels: Record<SourceDTO, string> = {
   live: "实际记录（live）", mock: "模拟记录（mock）",
 };
+
+export const reviewSampleOptions = ["all", "with_reviews", "no_reviews", "unknown"] as const;
+export type AdminProviderReviewFilters = {
+  keyword: string;
+  sampleState: typeof reviewSampleOptions[number];
+};
+export const reviewSampleLabels: Record<AdminProviderReviewFilters["sampleState"], string> = {
+  all: "全部样本状态", with_reviews: "已有评价", no_reviews: "暂无样本", unknown: "汇总未知",
+};
+export const defaultAdminProviderReviewFilters: AdminProviderReviewFilters = { keyword: "", sampleState: "all" };
+
+export function filterAdminProviderReviews(providers: readonly ProviderDTO[], filters: AdminProviderReviewFilters) {
+  const keyword = filters.keyword.trim().toLowerCase();
+  return providers.filter(provider => {
+    const sampleState = provider.performance == null ? "unknown"
+      : provider.performance.reviewCount === 0 ? "no_reviews" : "with_reviews";
+    return (filters.sampleState === "all" || filters.sampleState === sampleState)
+      && (!keyword || [provider.id, provider.name, provider.city].some(value => value.toLowerCase().includes(keyword)));
+  });
+}
 
 export async function loadAdminProviderReviews(source: SourceDTO) {
   const query = ProviderQuery.safeParse({ performanceSource: source });
