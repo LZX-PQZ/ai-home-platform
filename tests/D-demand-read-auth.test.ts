@@ -34,9 +34,9 @@ async function denied(response: Response, status: number, code: string) {
 async function listBody(response: Response) {
   privateResponse(response);
   assert.equal(response.status, 200);
-  const body = envelope(Demand.array()).parse(await response.json());
-  for (const row of body.data) assert.equal("ownerId" in row, false);
-  return body;
+  const raw = await response.json();
+  for (const row of raw.data) assert.equal("ownerId" in row, false);
+  return envelope(Demand.array()).parse(raw);
 }
 function decorate(db: PrismaClient, transform: (tx: Prisma.TransactionClient) => Prisma.TransactionClient): Database {
   return { $transaction: (run: (tx: Prisma.TransactionClient) => Promise<unknown>, options: { isolationLevel: "Serializable" }) => {
@@ -111,7 +111,7 @@ test("需求 GET：隔离 SQLite、合成业主与实际持久化会话", async 
   const list = (value = cookie, client: Database = db) => handleDemandList(request(value), client);
   const detail = (id = "one-published", value = cookie, client: Database = db) => handleDemandDetail(request(value), id, client);
 
-  await t.test("两个业主只能列出和读取本人全部状态；历史演示需求不转移", async () => {
+  await t.test("业主列表仅本人全部状态；详情可读他人 published，其余与不存在统一 404", async () => {
     for (const [userId, value] of [[first.userId, cookie], [other.userId, otherCookie]]) {
       const body = await listBody(await list(value));
       assert.deepEqual(body.data.map(row => row.id).sort(), rows.filter(row => row.ownerId === userId).map(row => row.id).sort());
@@ -123,7 +123,13 @@ test("需求 GET：隔离 SQLite、合成业主与实际持久化会话", async 
       }
     }
     const missing = await denied(await detail("missing"), 404, "DEMAND_NOT_FOUND");
-    for (const id of ["two-published", "two-draft", "demo-demand"]) assert.deepEqual(await denied(await detail(id), 404, "DEMAND_NOT_FOUND"), missing);
+    for (const status of statuses.filter(status => status !== "published")) {
+      assert.deepEqual(await denied(await detail(`two-${status}`), 404, "DEMAND_NOT_FOUND"), missing);
+    }
+    for (const id of ["two-published", "demo-demand"]) {
+      const response = await detail(id); privateResponse(response); assert.equal(response.status, 200);
+      const body = await response.json(); assert.equal(body.data.id, id); assert.equal("ownerId" in body.data, false);
+    }
     assert.deepEqual((await db.demandOrder.findUniqueOrThrow({ where: { id: "demo-demand" } })).ownerId, "demo-owner");
   });
 
@@ -151,17 +157,34 @@ test("需求 GET：隔离 SQLite、合成业主与实际持久化会话", async 
     assert.deepEqual(await listBody(await list(providerCookie)), { ok: true, data: [], meta: { source: "mock" } });
   });
 
-  await t.test("匿名/伪造/重复凭证拒绝且不读取任何需求，不根据请求头选身份", async () => {
+  await t.test("匿名无需服务方登录即可读 published，非公开与不存在统一 404，来源与隐私保留", async () => {
+    process.env.DEMO_AUTH_ENABLED = "false";
+    const publicRows = rows.filter(row => row.status === "published").map(row => row.id).sort();
+    const body = await listBody(await list(""));
+    assert.deepEqual(body.data.map(row => row.id), publicRows); assert.equal(body.meta.source, "mock");
+    for (const id of publicRows) {
+      const response = await detail(id, ""); privateResponse(response); assert.equal(response.status, 200);
+      const raw = await response.json(); assert.equal("ownerId" in raw.data, false);
+      assert.equal(raw.meta.source, id === "demo-demand" ? "mock" : "live");
+    }
+    const missing = await denied(await detail("missing", ""), 404, "DEMAND_NOT_FOUND");
+    for (const row of rows.filter(row => row.status !== "published")) assert.deepEqual(await denied(await detail(row.id, ""), 404, "DEMAND_NOT_FOUND"), missing);
+    const forged = request(); forged.headers.set("x-user-id", first.userId); forged.headers.set("x-role", "owner");
+    assert.deepEqual((await listBody(await handleDemandList(forged, db))).data.map(row => row.id), publicRows);
+    await db.demandOrder.update({ where: { id: "demo-demand" }, data: { status: "draft" } });
+    assert.equal((await listBody(await list(""))).meta.source, "live");
+    await db.demandOrder.updateMany({ data: { status: "draft" } });
+    assert.deepEqual(await listBody(await list("")), { ok: true, data: [], meta: { source: "live" } });
+  });
+
+  await t.test("无效或重复业主凭证拒绝且不读取需求，不回退公开访问", async () => {
     const noDemandRead = decorate(db, tx => ({ ...tx, demandOrder: {
       ...tx.demandOrder, findMany: () => { assert.fail("anonymous demand read"); }, findFirst: () => { assert.fail("anonymous demand read"); },
     } }) as unknown as Prisma.TransactionClient);
-    for (const value of ["", `${OWNER_SESSION_COOKIE}=forged`, `${OWNER_SESSION_COOKIE}=${"0".repeat(64)}`, `${cookie}; ${cookie}`, `${providerCookie}; ${providerCookie}`]) {
+    for (const value of [`${OWNER_SESSION_COOKIE}=forged`, `${OWNER_SESSION_COOKIE}=${"0".repeat(64)}`, `${cookie}; ${cookie}`]) {
       await denied(await list(value, noDemandRead), 401, "UNAUTHENTICATED");
       await denied(await detail("demo-demand", value, noDemandRead), 401, "UNAUTHENTICATED");
     }
-    const forged = request();
-    forged.headers.set("x-user-id", first.userId); forged.headers.set("x-role", "owner");
-    await denied(await handleDemandList(forged, noDemandRead), 401, "UNAUTHENTICATED");
   });
 
   await t.test("业主过期、撤销及当前角色变化立即生效", async () => {
@@ -175,25 +198,34 @@ test("需求 GET：隔离 SQLite、合成业主与实际持久化会话", async 
     await denied(await list(), 403, "FORBIDDEN"); await denied(await detail(), 403, "FORBIDDEN");
   });
 
-  await t.test("服务方关闭、过期、退出及角色/绑定变化拒绝", async () => {
+  await t.test("服务方关闭、过期、退出、重复及绑定变化仍可读公开需求，不能读非公开需求", async () => {
+    const publicAccess = async (value = providerCookie) => {
+      const body = await listBody(await list(value));
+      assert.ok(body.data.every(row => row.status === "published"));
+      const response = await detail("one-published", value);
+      assert.equal(response.status, 200); assert.equal((await response.json()).meta.source, "live");
+      await denied(await detail("one-draft", value), 404, "DEMAND_NOT_FOUND");
+    };
     process.env.DEMO_AUTH_ENABLED = "false";
-    await denied(await list(providerCookie), 401, "UNAUTHENTICATED");
+    await publicAccess();
     process.env.DEMO_AUTH_ENABLED = "true";
     await db.demoProviderSession.update({ where: { tokenHash: providerHash }, data: { expiresAt: new Date(0) } });
-    await denied(await detail("one-published", providerCookie), 401, "UNAUTHENTICATED");
+    await publicAccess();
     await db.demoProviderSession.update({ where: { tokenHash: providerHash }, data: { expiresAt: new Date(provider.data.expiresAt) } });
     for (const data of [{ role: "owner" }, { role: "provider", providerId: "provider-two" }]) {
       await db.user.update({ where: { id: DEMO_PROVIDER_USER_ID }, data });
-      await denied(await list(providerCookie), 401, "UNAUTHENTICATED");
+      await publicAccess();
     }
     await db.user.update({ where: { id: DEMO_PROVIDER_USER_ID }, data: { role: "provider", providerId: DEMO_PROVIDER_ID } });
+    await publicAccess(`${providerCookie}; ${providerCookie}`);
     await revokeDemoSession(request(providerCookie), db);
-    await denied(await list(providerCookie), 401, "UNAUTHENTICATED");
+    await publicAccess();
   });
 
   await t.test("双 cookie 优先业主，无效业主不能回退服务方获得跨业主需求", async () => {
     assert.deepEqual(await listBody(await list(`${cookie}; ${providerCookie}`)), await listBody(await list()));
-    await denied(await detail("two-published", `${cookie}; ${providerCookie}`), 404, "DEMAND_NOT_FOUND");
+    assert.equal((await detail("two-published", `${cookie}; ${providerCookie}`)).status, 200);
+    await denied(await detail("two-draft", `${cookie}; ${providerCookie}`), 404, "DEMAND_NOT_FOUND");
     for (const ownerCookie of [`${OWNER_SESSION_COOKIE}=bad`, `${cookie}; ${cookie}`]) await denied(await list(`${ownerCookie}; ${providerCookie}`), 401, "UNAUTHENTICATED");
     await db.$transaction(tx => revokeOwnerSession(request(cookie), tx));
     await denied(await list(`${cookie}; ${providerCookie}`), 401, "UNAUTHENTICATED");
@@ -214,13 +246,13 @@ test("需求 GET：隔离 SQLite、合成业主与实际持久化会话", async 
 
   await t.test("SQL 已限制范围；不可信数据库越界结果或坏 DTO 返回 503", async () => {
     const original = await db.demandOrder.findUniqueOrThrow({ where: { id: "one-published" } });
-    for (const changed of [{ ownerId: other.userId }, { status: "unknown" }, { areaM2: -1 }, { budgetMinCents: -1 }]) {
+    for (const changed of [{ ownerId: other.userId, status: "draft" }, { status: "unknown" }, { areaM2: -1 }, { budgetMinCents: -1 }]) {
       const corrupt = decorate(db, tx => ({ ...tx, demandOrder: { ...tx.demandOrder,
         findMany: async (args: Prisma.DemandOrderFindManyArgs) => {
           assert.deepEqual(args.where, { ownerId: first.userId }); return [{ ...original, ...changed }];
         },
         findFirst: async (args: Prisma.DemandOrderFindFirstArgs) => {
-          assert.deepEqual(args.where, { ownerId: first.userId, id: original.id }); return { ...original, ...changed };
+          assert.deepEqual(args.where, { id: original.id, OR: [{ status: "published" }, { ownerId: first.userId }] }); return { ...original, ...changed };
         },
       } }) as unknown as Prisma.TransactionClient);
       await denied(await list(cookie, corrupt), 503, "DATABASE_UNAVAILABLE");
@@ -232,6 +264,8 @@ test("需求 GET：隔离 SQLite、合成业主与实际持久化会话", async 
     } }) as unknown as Prisma.TransactionClient);
     await denied(await list(providerCookie, privateProvider), 503, "DATABASE_UNAVAILABLE");
     await denied(await detail(original.id, providerCookie, privateProvider), 503, "DATABASE_UNAVAILABLE");
+    await denied(await list("", privateProvider), 503, "DATABASE_UNAVAILABLE");
+    await denied(await detail(original.id, "", privateProvider), 503, "DATABASE_UNAVAILABLE");
   });
 
   await t.test("会话/账户/查询/事务故障返回 503，绝不伪装空列表或 mock 成功", async () => {
@@ -254,12 +288,13 @@ test("需求 GET：隔离 SQLite、合成业主与实际持久化会话", async 
     await second.demandOrder.update({ where: { id: "one-published" }, data: { ownerId: other.userId, status: "draft" } });
     await denied(await detail(), 404, "DEMAND_NOT_FOUND");
     await denied(await detail("one-published", providerCookie), 404, "DEMAND_NOT_FOUND");
+    await denied(await detail("one-published", ""), 404, "DEMAND_NOT_FOUND");
     assert.ok(!(await listBody(await list())).data.some(row => row.id === "one-published"));
     await second.ownerSession.update({ where: { tokenHash: hash }, data: { revokedAt: new Date() } });
     await denied(await list(), 401, "UNAUTHENTICATED");
   });
 
-  await t.test("默认公开路由：真实密码登录、本人列表/详情、跨业主拒绝、服务方读取及退出失效", () => {
+  await t.test("默认公开路由：匿名 published、真实登录本人列表、非公开隔离及退出后公开访问", () => {
     const modulePath = (path: string) => JSON.stringify(resolve(path).replaceAll("\\", "/"));
     const script = join(fixture, "public-read.ts");
     writeFileSync(script, `
@@ -274,8 +309,13 @@ test("需求 GET：隔离 SQLite、合成业主与实际持久化会话", async 
         method, headers: { origin, cookie, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
       const get = (id, cookie = '') => detail(request('/api/demand/' + encodeURIComponent(id), 'GET', cookie), { params: { id } });
       async function main() {
-        assert.equal((await list(request('/api/demand'))).status, 401);
-        assert.equal((await get('demo-demand')).status, 401);
+        const anonymous = await list(request('/api/demand'));
+        assert.equal(anonymous.status, 200);
+        const publicBody = await anonymous.json();
+        assert.ok(publicBody.data.every(row => row.status === 'published' && !('ownerId' in row)));
+        assert.ok(publicBody.data.some(row => row.id === 'demo-demand'));
+        assert.equal((await get('demo-demand')).status, 200);
+        assert.equal((await get('one-draft')).status, 404);
         const loggedIn = await login(request('/api/auth/owner', 'POST', '', { login: 'read-owner-one', password: ${JSON.stringify(password)} }));
         assert.equal(loggedIn.status, 200);
         const cookie = loggedIn.headers.get('set-cookie').split(';')[0];
@@ -283,7 +323,8 @@ test("需求 GET：隔离 SQLite、合成业主与实际持久化会话", async 
         assert.equal(listed.status, 200); assert.equal(listed.headers.get('cache-control'), 'private, no-store');
         assert.ok((await listed.json()).data.every(row => !row.id.startsWith('two-') && row.id !== 'demo-demand'));
         assert.equal((await get('one-draft', cookie)).status, 200);
-        assert.equal((await get('two-published', cookie)).status, 404);
+        assert.equal((await get('two-published', cookie)).status, 200);
+        assert.equal((await get('two-draft', cookie)).status, 404);
         const provider = await providerLogin(request('/api/auth/demo-provider', 'POST', '', { action: 'login_demo' }));
         assert.equal(provider.status, 200);
         const providerCookie = provider.headers.get('set-cookie').split(';')[0];
@@ -292,11 +333,14 @@ test("需求 GET：隔离 SQLite、合成业主与实际持久化会话", async 
         const publishedBody = await published.json();
         assert.equal(publishedBody.meta.source, 'mock'); assert.ok(publishedBody.data.every(row => row.status === 'published'));
         assert.equal((await get('two-draft', providerCookie)).status, 404);
-        assert.equal((await get('two-published', cookie + '; ' + providerCookie)).status, 404);
+        assert.equal((await get('two-published', cookie + '; ' + providerCookie)).status, 200);
+        assert.equal((await get('two-draft', cookie + '; ' + providerCookie)).status, 404);
         assert.equal((await logout(request('/api/auth/owner', 'DELETE', cookie))).status, 200);
         assert.equal((await get('one-published', cookie)).status, 401);
         assert.equal((await providerLogout(request('/api/auth/demo-provider', 'DELETE', providerCookie))).status, 200);
-        assert.equal((await list(request('/api/demand', 'GET', providerCookie))).status, 401);
+        assert.equal((await list(request('/api/demand', 'GET', providerCookie))).status, 200);
+        assert.equal((await get('one-published')).status, 200);
+        assert.equal((await get('one-draft')).status, 404);
         console.log('public-demand-read-ok');
       }
       main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

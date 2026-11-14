@@ -10,12 +10,28 @@ for (const route of ['/api/health', '/api/demand', '/api/provider', '/api/match'
  assert.equal(response.status, 200, route);
  const payload = await response.json();
  assert.equal(payload.ok, true);
- if (route === '/api/demand') assert.ok(['mock', 'live'].includes(payload.meta.source));
+ if (route === '/api/demand') {
+  assert.ok(['mock', 'live'].includes(payload.meta.source));
+  assert.ok(payload.data.every(demand => demand.status === 'published' && !('ownerId' in demand)));
+  assert.ok(payload.data.some(demand => demand.id === 'demo-demand'));
+ }
  else assert.equal(payload.meta.source, 'mock');
 }
 const demoDetail = await fetch(base + '/api/demand/demo-demand');
 assert.equal(demoDetail.status, 200);
-assert.equal((await demoDetail.json()).meta.source, 'mock');
+const demoPayload = await demoDetail.json();
+assert.equal(demoPayload.meta.source, 'mock');
+assert.equal(demoPayload.data.status, 'published');
+assert.equal('ownerId' in demoPayload.data, false);
+for (const route of ['/api/demand', '/api/demand/demo-demand']) {
+ const invalidOwner = await fetch(base + route, { headers: { Cookie: '__Host-ai_home_owner_session=invalid' } });
+ assert.equal(invalidOwner.status, 401, `${route} must not downgrade an invalid owner cookie to public access`);
+ assert.equal(invalidOwner.headers.get('cache-control'), 'private, no-store');
+ assert.ok((invalidOwner.headers.get('vary') ?? '').split(',').some(value => value.trim().toLowerCase() === 'cookie'));
+ const failure = await invalidOwner.json();
+ assert.equal(failure.ok, false); assert.equal(failure.error.code, 'UNAUTHENTICATED');
+ assert.equal('data' in failure, false);
+}
 const missingDetail = await fetch(base + '/api/demand/missing-demand');
 assert.equal(missingDetail.status, 404);
 const chat = await fetch(base + '/api/demand/chat', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({messages:[{role:'user',content:'我想翻新浴室'}]}) });
@@ -49,4 +65,4 @@ const forbidden = await withoutOrigin.json();
 assert.equal(forbidden.ok, false);
 assert.equal(forbidden.error.code, 'FORBIDDEN');
 assert.equal('data' in forbidden, false);
-console.log('13 个页面、10 个 GET 场景和 4 个 POST 场景通过（匿名创建已拒绝，未写入需求）。');
+console.log('13 个页面、12 个 GET 场景和 4 个 POST 场景通过（公开读取、失效凭证与匿名写入检查通过）。');
