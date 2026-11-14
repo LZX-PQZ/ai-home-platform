@@ -183,7 +183,7 @@ test("live 回执展示服务端金额且不声称已接单或业主已查看，
     assert.doesNotMatch(html, /<script|本地报价预览|本次未提交成功/);
     if (source === "mock") {
       assert.match(html, /模拟报价回执（mock）/);
-      assert.match(html, /不代表真实保存或业主已收到/);
+      assert.match(html, /演示身份报价已保存，不代表真实业务身份或业主已收到/);
       assert.doesNotMatch(html, /报价已提交（live）/);
     } else {
       assert.match(html, /报价已提交（live）/);
