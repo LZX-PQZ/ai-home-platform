@@ -1,16 +1,14 @@
 import type { DemandOrder } from "@prisma/client";
-import { Demand, type DemandDTO, type DemandInputDTO, type SourceDTO } from "@/contracts";
+import { Demand, type DemandDTO, type SourceDTO } from "@/contracts";
 import { prisma } from "@/lib/prisma";
 
 export type DemandDatabase = {
-  user: Pick<typeof prisma.user, "upsert">;
   demandOrder: Pick<
     typeof prisma.demandOrder,
-    "findMany" | "findUnique" | "create"
+    "findMany" | "findUnique"
   >;
 };
 
-export const DEMO_OWNER_ID = "demo-owner";
 export const DEMO_DEMAND_ID = "demo-demand";
 export const EDITABLE_DEMAND_STATUSES = ["draft", "published"] as const;
 
@@ -55,21 +53,4 @@ export async function findDemand(id: string, db: DemandDatabase = prisma) {
   const row = await db.demandOrder.findUnique({ where: { id } });
   if (!row) return null;
   return { data: toDemandDTO(row), source: demandSource([row]) };
-}
-
-export async function createDemand(input: DemandInputDTO, db: DemandDatabase = prisma) {
-  // 当前没有鉴权，所有提交先归属本地演示业主；接入鉴权后由服务端会话替换。
-  await db.user.upsert({
-    where: { id: DEMO_OWNER_ID },
-    update: {},
-    create: { id: DEMO_OWNER_ID, name: "演示业主", role: "owner" },
-  });
-  const row = await db.demandOrder.create({
-    data: {
-      ...input,
-      ownerId: DEMO_OWNER_ID,
-      status: "published",
-    },
-  });
-  return toDemandDTO(row);
 }

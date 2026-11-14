@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { POST } from "../src/app/api/demand/route";
 import { DELETE as detailDELETE, GET as detailGET, PUT as detailPUT } from "../src/app/api/demand/[id]/route";
-import { createDemand, findDemand, listDemands, type DemandDatabase } from "../src/lib/demand";
+import { findDemand, listDemands, type DemandDatabase } from "../src/lib/demand";
 
 const input = {
   description: "测试需求：浴室防滑改造。",
@@ -18,7 +18,6 @@ const row = { id: "demand-test", ...input, status: "published", ownerId: "demo-o
 
 function fakeDb(rows: typeof row[] = [row]): DemandDatabase {
   return {
-    user: { upsert: async () => ({}) },
     demandOrder: {
       findMany: async () => rows as never,
       findUnique: async ({ where }: { where: { id: string } }) => {
@@ -26,26 +25,24 @@ function fakeDb(rows: typeof row[] = [row]): DemandDatabase {
         if (!found) return null as never;
         return found as never;
       },
-      create: async () => row as never,
     },
   } as unknown as DemandDatabase;
 }
 
-test("POST /api/demand 拒绝倒置预算", async () => {
-  const response = await POST(new Request("http://localhost/api/demand", {
+test("POST /api/demand 无同源 Origin 时先拒绝，不消费正文", async () => {
+  const request = new Request("http://localhost/api/demand", {
     method: "POST",
     body: JSON.stringify({ ...input, budgetMinCents: 6000000 }),
-  }));
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), { ok: false, error: { code: "VALIDATION_ERROR", message: "需求字段不符合契约。" } });
+  });
+  const response = await POST(request);
+  assert.equal(response.status, 403);
+  assert.equal(request.bodyUsed, false);
 });
 
 test("需求服务从数据库读取，并避免混合列表把演示需求标成 live", async () => {
   const result = await listDemands(fakeDb());
   assert.equal(result.source, "live");
   assert.equal(result.data[0].id, row.id);
-  const created = await createDemand(input, fakeDb());
-  assert.equal(created.status, "published");
   const demo = await listDemands(fakeDb([{ ...row, id: "demo-demand" }]));
   assert.equal(demo.source, "mock");
   const mixed = await listDemands(fakeDb([{ ...row, id: "demo-demand" }, row]));

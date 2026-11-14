@@ -28,15 +28,16 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] `PUT /api/demand/[id]`：同源检查、真实业主凭证预检及写事务内重验；按 id + 当前 userId 过滤并校验可编辑状态，最终 SQL 再限制身份/状态。匿名和失效会话拒绝，跨业主与不存在统一 404；输出验证失败回滚。旧的无鉴权更新入口已移除。见 `docs/requests/D-demand-update-auth.md`。
 - [x] `DELETE /api/demand/[id]`：同源检查；同一事务验证实际业主会话、归属、状态和五类关联并删除。最终 SQL 再限制归属/状态/空关联，拒绝匿名与跨业主，演示需求只读。隔离 SQLite 覆盖角色/会话变化、并发修改/删除及失败回滚。见 `docs/requests/D-demand-delete-auth.md`。
 - [x] 业主密码登录入口与注销：维护者交互开通新账号，随机盐 scrypt 摘要；POST 验证密码后事务内重验角色/凭证并轮换会话，同源退出撤销 cookie。全局共享登录界面、持久化限频和隔离测试已提供。不支持客户端 userId/角色签发；公开注册、找回密码、MFA 和第三方登录仍未实现。见 `docs/requests/D-owner-login.md`。
-- [ ] 需求 POST 与查询隔离：POST 当前固定归属 demo-owner；后续改用当前业主，并确认列表/详情的角色访问范围，避免读取或创建跨用户数据。
+- [x] 需求 POST 当前业主归属：同源及会话预检、事务内重验后以当前 userId 创建 published 需求；禁止客户端身份字段，移除固定 demo-owner 入口。公开接口验收登录、创建、修改及本人报价读取，另一业主拒绝。见 `docs/requests/D-demand-create-auth.md`。
+- [ ] 需求查询隔离：确认列表/详情的角色访问范围，避免跨用户读取；历史 demo-owner 需求不自动转移给新账号。
 
-业主会话与报价读取授权见 `docs/requests/D-owner-quote-read-auth.md`。密码登录、PUT 及 B 报价读取已合入，本轮补齐 DELETE；POST 当前业主归属和查询隔离仍待实现，不能宣称整个业务闭环已经完成。
+业主会话与报价读取授权见 `docs/requests/D-owner-quote-read-auth.md`。密码登录、PUT、DELETE 和 B 报价读取已合入，本轮补齐 POST 当前业主归属；列表/详情隔离仍待实现，不能宣称整个平台已完成权限保护。
 
 ## 成员反馈与后续顺序（2026-11-14）
 
 - [x] PR #81 已合入；README 补充拉取 main 后运行 `npm run db:setup` 的提示，本机已执行成功。该同步保留已有记录，历史报价来源回填 mock。
 - [x] 业主密码登录、刷新和退出入口；临时合成账号浏览器验收通过，密码认证是真实实现，账号不代表实名认证。B 的报价读取 API/页面合入后仍需联验。
-- [ ] 随后的独立 PR：DELETE 已随 #91 合入；POST 当前业主归属由 #95 处理，需求查询隔离独立开发。完成前保留上方待办与接口限制说明。
+- [ ] 随后的独立 PR：DELETE 已随 #91 合入；POST 当前业主归属由 #95 完成；需求查询隔离由 #101 按已发布需求公开、非公开需求仅所属业主可读的规则修订。完成前保留上方待办与接口限制说明。
 - [x] C 的服务方身份过滤基础查询：按 `C-provider-orders.md` 允许的最小方案提供 `GET /api/provider/quotes`，复用 Quote[]，在同一事务按实际服务方会话绑定过滤本人报价，拒绝自报身份参数，覆盖匿名/跨服务方/撤销及来源测试。演示身份整体 mock，接线协议见 `docs/requests/D-provider-own-quotes.md`。
 - [ ] 真正接单关系与履约查询、生产服务方登录仍未实现；本人报价不等于接单。C 需将页面接到新接口并使用“本人报价”文案，D 不修改 C 页面。
 
