@@ -5,7 +5,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Ticket, type SourceDTO } from "../src/contracts";
 import { ApiClientError } from "../src/lib/api-client";
 import { AdminTicketsContent } from "../src/features/c/AdminTickets";
-import { adminTicketsErrorMessage, loadAdminTickets, type AdminTicketsState } from "../src/features/c/admin-tickets";
+import {
+  adminTicketsErrorMessage, filterTickets, loadAdminTickets, ticketCategoryFilterLabels,
+  ticketStatusFilterLabels, type AdminTicketsState,
+} from "../src/features/c/admin-tickets";
 
 // 仅测试使用的合成工单，运行页面只读公共接口，不生成或回退到这些记录。
 const ticket = Ticket.parse({
@@ -36,11 +39,28 @@ test("模拟工单披露整批来源、只读和鉴权边界，保留项目及�
   for (const text of [
     "工单列表来源：含模拟数据（mock）", "不能据此认定真实售后已受理或已解决", "来源标识针对整份列表",
     "本页仅供查看", "角色导航不代表登录鉴权", "本次返回 1 条工单", "工单编号：C-ticket-test",
+    "筛选当前列表", "当前显示 1 / 1 条工单", "问题分类", "当前状态", "全部分类", "全部状态",
     "测试墙面问题", "质量问题", "已分派", "C-provider-test", "关联需求编号：C-demand-test",
     'href="/admin/demand/C-demand-test"', "查看工单 C-ticket-test 的关联需求",
   ]) assert.ok(html.includes(text), text);
-  assert.doesNotMatch(html, /工单列表来源：实时接口|<form|<input|<select|<textarea|提交成功|派单成功/);
+  assert.doesNotMatch(html, /工单列表来源：实时接口|<form|<input|<textarea|提交成功|派单成功/);
+  assert.match(html, /<select/);
   assert.equal((html.match(/<button\b/g) ?? []).length, 1); // 只有刷新，不提供写入动作。
+});
+
+test("分类和状态筛选组合使用公共 Ticket 字段，不修改原始列表", () => {
+  const data = [
+    ticket,
+    { ...ticket, id: "schedule-open", category: "schedule" as const, status: "open" as const },
+    { ...ticket, id: "quality-resolved", status: "resolved" as const },
+  ];
+  const original = structuredClone(data);
+  assert.deepEqual(filterTickets(data, "all", "all"), data);
+  assert.deepEqual(filterTickets(data, "quality", "assigned").map((item) => item.id), [ticket.id]);
+  assert.deepEqual(filterTickets(data, "schedule", "resolved"), []);
+  assert.deepEqual(data, original);
+  assert.equal(ticketCategoryFilterLabels.all, "全部分类");
+  assert.equal(ticketStatusFilterLabels.all, "全部状态");
 });
 
 test("四种分类与三种状态使用中文，状态不推导责任服务方", () => {
@@ -171,7 +191,7 @@ test("重新查询可更新状态、责任服务方和来源，失败后重试�
   await assert.rejects(loadAdminTickets());
   const updated = render({ status: "ready", response: await loadAdminTickets() });
   for (const text of ["已解决", "暂未指定责任服务方", "工单列表来源：实时接口（live）"]) assert.ok(updated.includes(text), text);
-  assert.doesNotMatch(updated, /C-provider-test|已分派/);
+  assert.doesNotMatch(updated, /C-provider-test/);
   assert.match(render({ status: "ready", response: await loadAdminTickets() }), /本次列表暂无工单/);
   assert.equal(fetchMock.mock.callCount(), 4);
 });
