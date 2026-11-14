@@ -21,9 +21,9 @@
 
 PR #74 将报价 POST 处理器的 `QuoteSubmissionAuth.readSession` 与 `readTransactionSession` 默认值都改为 `readDemoVerifiedSession`，事务验证使用内核传入的当前 tx。开启演示认证并准备固定账号后，同源有效 cookie、合法输入和幂等键可给非演示、published 的数据库需求报价：首次返回 `201 envelope(Quote)`，同键同摘要且当前授权有效时重放原报价返回 `200`；两者均为 `ok: true`、`meta.source: mock`。
 
-首次提交实际写入一条报价及一条幂等回执，重放不新增记录；匿名、关闭、过期、退出或绑定失效仍返回 401，状态及幂等冲突沿用原协议。数据库落库不等于真实身份验证或业主已收到报价，不能将 mock 解释为“没有保存”。本次 D 只更新测试及文档，B 的路由/内核改动属于 PR #74。报价读取规则见 `D-quote-read-protocol.md`；公开 GET 接线和真实业主登录仍未实现。
+首次提交实际写入一条报价及一条幂等回执，重放不新增记录；匿名、关闭、过期、退出或绑定失效仍返回 401，状态及幂等冲突沿用原协议。数据库落库不等于真实身份验证或业主已收到报价，不能将 mock 解释为“没有保存”。D 在 PR #80 中更新了测试及文档，B 的路由/内核改动属于 PR #74。报价读取规则见 `D-quote-read-protocol.md`；公开 GET 接线和真实业主登录仍未实现。
 
-演示身份可以给 live 需求报价，因此历史报价不能仅凭需求来源标 live。持久化 `Quote.source`、兼容 DTO、混合/空列表和重放来源的后续方案已冻结于 `D-quote-source.md`；本次尚未改 schema 或实现该来源适配，公开 POST 暂统一保守标 mock。
+演示身份可以给 live 需求报价，因此历史报价不能仅凭需求来源标 live。D 已按 `D-quote-source.md` 增加默认 mock 的持久化 `Quote.source`、兼容 DTO 及来源校验/汇总工具；历史回填和新演示记录均保守保存 mock。B 的首次/重放 DTO 与 GET 来源适配仍待接入，公开 POST 暂统一保守标 mock。
 
 `server-auth.ts` 及演示会话实现纳入客户端传递导入检查。B 仅通过已有 server-auth 服务端入口使用适配器；UI 只调用公共 HTTP 接口。
 

@@ -71,7 +71,7 @@ PR #74 已将 `handleQuoteSubmission` 的默认预检及事务会话 reader 接�
 
 显式查询按参数 400 → 会话 401 → 当前账户/角色 403 → 归属查询的顺序处理。有效业主查询不存在或不属于自己的需求统一返回 `404 DEMAND_NOT_FOUND`，不区分两者，避免透露资源是否存在。凭证、撤销、账户和归属均须在同一事务核验；请求头或参数中的自报身份不参与授权。
 
-业主可读取本人需求在 draft、published、contracted、in_progress、completed 各状态下的 submitted/accepted 报价；不返回 draft/rejected 报价。存在且无可比报价为 `200 envelope(Quote[])` 空数组，不能把查询失败变成空数组。数据库或数据校验失败为 `503 DATABASE_UNAVAILABLE`，不回退 mock。显式查询所有成功和失败响应均须 `Cache-Control: private, no-store`、`Vary: Cookie`，禁止共享缓存。目标来源协议改为同时考虑需求及持久化报价来源：只有需求与所有返回报价都为 live 才标 live，混入 mock 或未知来源即标 mock；空列表沿用已验证的需求来源。该协议的 schema 和 B 读写适配尚未实施，实施前不得开放会误标 live 的数据库 GET。服务方资料仍须独立标识来源，详见 `docs/requests/D-quote-source.md`。
+业主可读取本人需求在 draft、published、contracted、in_progress、completed 各状态下的 submitted/accepted 报价；不返回 draft/rejected 报价。存在且无可比报价为 `200 envelope(Quote[])` 空数组，不能把查询失败变成空数组。数据库或数据校验失败为 `503 DATABASE_UNAVAILABLE`，不回退 mock。显式查询所有成功和失败响应均须 `Cache-Control: private, no-store`、`Vary: Cookie`，禁止共享缓存。目标来源协议改为同时考虑需求及持久化报价来源：只有需求与所有返回报价都为 live 才标 live，混入 mock 或未知来源即标 mock；空列表沿用已验证的需求来源。D 已提供 schema、兼容字段和来源工具，B 读写适配仍需接入；接入前不得开放会误标 live 的数据库 GET。服务方资料仍须独立标识来源，详见 `docs/requests/D-quote-source.md`。
 
 参数细节、错误优先级、服务端适配器约束和 D/B 后续交付见 `docs/requests/D-quote-read-protocol.md`。
 
@@ -120,6 +120,8 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 ## 逐条来源
 
 `Demand.source` 是输出中的可选字段，值为 `mock` 或 `live`；字段缺失表示来源未知。需求服务会为演示需求填入 `mock`，为数据库需求填入 `live`。`DemandInput` 和更新输入不接受该字段，客户端不能声明来源。整体响应的 `meta.source` 继续按整批数据标记，混入 `demo-demand` 时仍为 `mock`。
+
+`Quote.source` 已增加为输出中的可选字段，沿用公共 Source；缺省兼容旧 DTO，不能解释为 live。数据库 `Quote.source` 非空且默认 mock，普通 schema 同步会把无来源的历史记录回填 mock，固定 mock 报价也显式输出 source。`QuoteSubmissionInput` 仍拒绝 source/meta，客户端不能指定来源。B 服务端从 `@/lib/quote-policy` 导入 `parseStoredQuoteSource` 严格校验库值，再用 `summarizeQuoteSources(demand.source, returnedQuotes)` 汇总：全 live 才 live，混合/缺省 mock，空列表沿用需求来源。非法持久化值须报错，不能降级为 mock。B 的首次/重放/GET 映射仍待接入，详见 `docs/requests/D-quote-source.md` 的调用与旧库同步步骤。
 
 ## AI 接入
 默认 `AI_MODE=mock`，会返回固定追问并标记 `meta.source: "mock"`。设为 `live` 后，服务端读取 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`，调用 OpenAI 兼容的 `/chat/completions` JSON 接口；响应必须通过 `ChatResult` 校验后才标记 `meta.source: "live"`。
