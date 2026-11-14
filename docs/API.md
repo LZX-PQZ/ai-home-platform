@@ -24,7 +24,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | POST /api/auth/owner | OwnerLoginInput → OwnerSessionState | D | 验证密码并在事务内重验凭证/角色，轮换当前浏览器的业主会话 |
 | DELETE /api/auth/owner | OwnerSessionState | D | 同源撤销当前会话，成功后清除 cookie，可重复退出 |
 | GET /api/demand | Demand[] | D | 查询 Prisma；每条 `Demand` 输出 `source`，列表含 `demo-demand` 时整体仍标 mock |
-| POST /api/demand | DemandInput → Demand | D | 校验后写入 Prisma，创建为 published，返回 live；无数据库时 503 |
+| POST /api/demand | DemandInput → Demand | D | 验证业主会话后写入本人需求，published/live；无会话 401，存储故障 503 |
 | GET /api/demand/[id] | Demand | D | 按 ID 查询 Prisma；每条输出 `source`，不存在 404，不回退到 demo-demand |
 | POST /api/demand/chat | ChatResult | D | 读取 ChatInput；`AI_MODE=mock` 返回 mock，`AI_MODE=live` 调用服务端 LLM 网关并返回 live |
 | GET /api/provider | Provider[] | D | 固定 mock |
@@ -149,7 +149,7 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 
 | 方法 | 输入 | 成功返回 | 当前实现 |
 |---|---|---|---|
-| POST /api/demand | DemandInput | 201 envelope(Demand)，初始 published | 已实现；写入 Prisma，返回 live |
+| POST /api/demand | DemandInput | 201 envelope(Demand)，初始 published | 已接同源与实际业主会话；事务内以当前业主为 ownerId |
 | GET /api/demand/[id] | DemandIdParams | 200 envelope(Demand) | 已实现；按 ID 查询 Prisma，不存在 404 |
 | PUT /api/demand/[id] | DemandIdParams + DemandUpdateInput | 200 envelope(Demand) | 已接业主会话、同源检查及事务内归属/状态校验，可使用密码登录凭证 |
 | DELETE /api/demand/[id] | DemandIdParams | 200 envelope(DemandDeleteResult) | 已实现状态/关联检查；鉴权待接入 |
@@ -160,4 +160,6 @@ PUT 的非空 ID 原样精确查找，不去除首尾空白。处理顺序为路
 
 PUT 所有响应均带 `Cache-Control: private, no-store`、`Vary: Cookie`。输出 DTO 在事务内验证，拒绝、非法输出及写入异常回滚；存储/事务异常返回 503/DATABASE_UNAVAILABLE，不回退 mock。异常响应只说明暂时无法确认更新结果，调用方应刷新核实，不能推断此前一定未保存。成功返回数据库需求及 `meta.source: live`。完整协议及验证见 `docs/requests/D-demand-update-auth.md`。
 
-需求列表、创建、详情和删除仍未接入完整鉴权：DELETE 尚未校验会话或 ownerId，仍可被调用方用于删除非本人需求；POST 仍固定归属 demo-owner，列表/详情仍缺少访问隔离。密码登录及 PUT 的修复不能代表整个需求模块已形成生产权限边界。维护者开通的新账号可登录并修改本人已有需求，但不会自动取得旧需求或 POST 创建的 demo-owner 需求归属。未登录编辑为 401，他人需求为 404。后续事项已登记在 `docs/tasks/D.md`。
+POST 先校验同源 Origin 和实际业主会话，在事务外读取/校验 DemandInput，再在写事务内重验会话和当前账号角色；两次身份不同为 403。ownerId 仅取最终验证的当前 userId，初始 published，禁止客户端身份/状态/来源字段。成功 201/live，公共输出在事务内验证；无会话 401、非业主/跨源 403、输入 400，存储或未知提交结果 503 提示刷新核实。所有响应 private, no-store、Vary: Cookie。已移除固定 demo-owner 创建入口，历史需求归属不自动转移。验收通过实际登录 → 创建 → 修改 → 演示服务方报价 → 本人读取，另一业主无法修改或读取该报价。详见 `docs/requests/D-demand-create-auth.md`。
+
+需求列表/详情仍缺少访问隔离；DELETE 鉴权由独立 PR #91 处理。本次登录、POST 与 PUT 的实现不代表整个需求模块已形成生产权限边界。未登录创建/编辑为 401，他人需求编辑/报价读取为 404。后续事项已登记在 `docs/tasks/D.md`。
