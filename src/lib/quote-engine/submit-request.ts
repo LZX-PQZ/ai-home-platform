@@ -1,42 +1,64 @@
 import { ZodError } from "zod";
-import type { ApiFailure } from "@/contracts";
-import { notImplemented } from "@/lib/api-response";
-import { findDemand } from "@/lib/demand";
-import { providerIdentityFailureResponse, requireProviderIdentity, type VerifiedSessionReader } from "@/lib/server-auth";
+import { Prisma, type PrismaClient } from "@prisma/client";
+import { Quote, envelope, type ApiFailure } from "@/contracts";
+import { readIdempotencyKey } from "@/lib/idempotency";
+import { noVerifiedSession, providerIdentityFailureResponse, requireProviderIdentity, type VerifiedSessionReader } from "@/lib/server-auth";
 import { calculateQuoteSubmission } from "@/lib/quote-engine/submission";
+import { createQuoteAtomically, QuoteWriteRejected, type QuoteTransactionSessionReader } from "@/lib/quote-engine/transaction";
 
-/** readSession 只能由服务端注入已验证会话适配器，HTTP 路由不接受客户端指定它。 */
-export async function handleQuoteSubmission(request: Request, readSession?: VerifiedSessionReader) {
-  const identity = await requireProviderIdentity(request, readSession);
+/** 只供服务端接入；必须同时提供预检和事务内验证，不能复用预检身份快照。 */
+export type QuoteSubmissionAuth = {
+  readSession: VerifiedSessionReader;
+  readTransactionSession: QuoteTransactionSessionReader;
+};
+
+const defaultAuth: QuoteSubmissionAuth = {
+  readSession: noVerifiedSession,
+  readTransactionSession: noVerifiedSession,
+};
+
+export async function handleQuoteSubmission(
+  request: Request,
+  auth: QuoteSubmissionAuth = defaultAuth,
+  db?: Pick<PrismaClient, "$transaction">,
+) {
+  const identity = await requireProviderIdentity(request, auth.readSession);
   if (!identity.ok) return providerIdentityFailureResponse(identity);
+  if (!readIdempotencyKey(request)) {
+    return failure(400, "VALIDATION_ERROR", "请提供有效的 Idempotency-Key。");
+  }
 
   let input: unknown;
   try {
     input = await request.json();
   } catch {
-    return Response.json({ ok: false, error: { code: "INVALID_JSON", message: "请求不是有效 JSON。" } } satisfies ApiFailure, { status: 400 });
+    return failure(400, "INVALID_JSON", "请求不是有效 JSON。");
   }
-  let submission: ReturnType<typeof calculateQuoteSubmission>;
   try {
-    submission = calculateQuoteSubmission(input);
+    // 只在此处把输入/计价错误映射为 400；事务内的坏输出不是客户端错误。
+    calculateQuoteSubmission(input);
   } catch (error) {
     if (!(error instanceof ZodError)) throw error;
-    return Response.json({ ok: false, error: { code: "VALIDATION_ERROR", message: "报价字段不符合契约，或计算金额超出安全范围。" } } satisfies ApiFailure, { status: 400 });
+    return failure(400, "VALIDATION_ERROR", "报价字段不符合契约，或计算金额超出安全范围。");
   }
 
   try {
-    const demand = await findDemand(submission.demandId);
-    if (!demand) {
-      return Response.json({ ok: false, error: { code: "DEMAND_NOT_FOUND", message: "这份需求不存在。" } } satisfies ApiFailure, { status: 404 });
+    // 身份、回执和需求均由内核在同一事务复核；外部需求预检会破坏重放错误优先级。
+    const result = await createQuoteAtomically(request, input, identity.identity, auth.readTransactionSession, db);
+    const body = envelope(Quote).parse({ ok: true, data: result.quote, meta: { source: "live" } });
+    return Response.json(body, { status: result.replayed ? 200 : 201 });
+  } catch (error) {
+    if (error instanceof QuoteWriteRejected) {
+      return failure(error.status, error.code, error.message);
     }
-    if (demand.data.id !== submission.demandId) throw new Error("需求查询返回了其他 ID。");
-    if (demand.data.status !== "published") {
-      return Response.json({ ok: false, error: { code: "INVALID_STATE", message: "只有已发布且未签约的需求可以提交报价。" } } satisfies ApiFailure, { status: 409 });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2034" || error.code === "P2002")) {
+      return failure(503, "DATABASE_UNAVAILABLE", "本次事务因冲突未完成，请保留原幂等键和原输入；这不表示此前的提交未保存。");
     }
-  } catch {
-    return Response.json({ ok: false, error: { code: "DATABASE_UNAVAILABLE", message: "需求数据暂时无法读取，请稍后重试。" } } satisfies ApiFailure, { status: 503 });
+    // 包括提交后连接中断：不能用 503 或“未保存”引导客户端直接修改内容重报。
+    return failure(500, "INTERNAL_ERROR", "暂时无法确认报价提交结果，请保留原幂等键和原输入并核实，勿换键重复提交。");
   }
+}
 
-  // 身份与需求状态通过仍不等于报价成功；细粒度授权、幂等及原子写入尚未接通。
-  return notImplemented();
+function failure(status: number, code: string, message: string) {
+  return Response.json({ ok: false, error: { code, message } } satisfies ApiFailure, { status });
 }

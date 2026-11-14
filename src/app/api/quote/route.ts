@@ -7,5 +7,6 @@ export function GET() {
 }
 
 export async function POST(request: Request) {
+  // handler 已连接事务内核；D 的默认会话读取器仍为空，实际未登录请求先返回 401。
   return handleQuoteSubmission(request);
 }
