@@ -1,4 +1,4 @@
-import { notImplemented } from "@/lib/api-response";
+import { handleScheduleCreate } from "@/lib/schedule-create";
 import { handleScheduleRead } from "@/lib/schedule-read";
 
 export const dynamic = "force-dynamic";
@@ -7,4 +7,6 @@ export function GET(request: Request) {
   return handleScheduleRead(request);
 }
 
-export const POST = notImplemented;
+export function POST(request: Request) {
+  return handleScheduleCreate(request);
+}

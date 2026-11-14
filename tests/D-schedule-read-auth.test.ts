@@ -260,7 +260,7 @@ test("排期读取：真实业主会话、隔离 SQLite 和公开登录路由", 
     await denied(await read("empty"), 401, "UNAUTHENTICATED");
   });
 
-  await t.test("默认公开 GET：真实密码登录、按版本读取、越权拒绝和退出失效；POST 仍 501", () => {
+  await t.test("默认公开 GET：真实密码登录、按版本读取、越权拒绝和退出失效；写入拒绝失效凭证", () => {
     const modulePath = (path: string) => JSON.stringify(resolve(path).replaceAll("\\", "/"));
     const script = join(fixture, "public-schedule.ts");
     writeFileSync(script, `
@@ -292,7 +292,8 @@ test("排期读取：真实业主会话、隔离 SQLite 和公开登录路由", 
         assert.equal((await logout(req('/api/auth/owner', 'DELETE', cookie))).status, 200);
         assert.equal((await GET(req('/api/schedule?demandId=one', 'GET', cookie))).status, 401);
         assert.equal((await GET(req('/api/schedule?demandId=demo-demand', 'GET', cookie))).status, 401);
-        const pending = await write(); assert.equal(pending.status, 501); assert.equal((await pending.json()).ok, false);
+        const denied = await write(req('/api/schedule', 'POST', cookie));
+        assert.equal(denied.status, 401); assert.equal((await denied.json()).ok, false);
         console.log('public-schedule-read-ok');
       }
       main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

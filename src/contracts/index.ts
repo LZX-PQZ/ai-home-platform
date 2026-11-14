@@ -133,6 +133,48 @@ export const ScheduleQuery = z.object({
   demandId: Id.refine(value => value.trim().length > 0),
   version: DatabaseInt.positive().optional(),
 }).strict();
+const ScheduleTaskId = Id.max(128).refine(value => value.trim().length > 0);
+export const ScheduleCreateTaskInput = ScheduleTask.pick({
+  id: true, name: true, startDay: true, durationDays: true, dependsOn: true,
+}).extend({
+  id: ScheduleTaskId, name: z.string().trim().min(1).max(200),
+  startDay: DatabaseInt.nonnegative(), durationDays: DatabaseInt.positive(),
+  dependsOn: z.array(ScheduleTaskId).max(99),
+}).strict();
+export const ScheduleCreateInput = z.object({
+  demandId: ScheduleQuery.shape.demandId,
+  tasks: z.array(ScheduleCreateTaskInput).min(1).max(100),
+}).strict().superRefine(({ tasks }, context) => {
+  if (tasks.length > 100) return; // The array limit already fails; keep graph traversal bounded.
+  const byId = new Map(tasks.map(task => [task.id, task]));
+  const seen = new Set<string>();
+  const issue = (index: number, field: string, message: string) =>
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["tasks", index, field], message });
+  tasks.forEach((task, index) => {
+    if (seen.has(task.id)) issue(index, "id", "工序 ID 必须唯一");
+    seen.add(task.id);
+    if (task.startDay + task.durationDays > SQLITE_INT_MAX) issue(index, "durationDays", "工序结束日超出范围");
+    const dependencies = new Set<string>();
+    for (const id of task.dependsOn) {
+      const dependency = byId.get(id);
+      if (dependencies.has(id) || id === task.id || !dependency) issue(index, "dependsOn", "依赖不能重复、自引用或缺失");
+      if (dependency && task.startDay < dependency.startDay + dependency.durationDays) issue(index, "startDay", "工序不能早于依赖完成");
+      dependencies.add(id);
+    }
+  });
+  // Explicit graph validation also rejects cycles independent of the submitted dates.
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  function acyclic(id: string): boolean {
+    if (visiting.has(id)) return false;
+    if (visited.has(id)) return true;
+    visiting.add(id);
+    const valid = (byId.get(id)?.dependsOn ?? []).every(acyclic);
+    visiting.delete(id); visited.add(id);
+    return valid;
+  }
+  if (tasks.some(task => !acyclic(task.id))) context.addIssue({ code: z.ZodIssueCode.custom, path: ["tasks"], message: "工序依赖不能成环" });
+});
 export const Payment = z.object({
   id: Id, demandId: Id, stage: z.string(), amountCents: Money,
   status: z.enum(["pending", "confirmed_demo"]), simulated: z.literal(true),
@@ -196,6 +238,7 @@ export type QuoteSubmissionItemInputDTO = z.infer<typeof QuoteSubmissionItemInpu
 export type QuoteSubmissionInputDTO = z.infer<typeof QuoteSubmissionInput>;
 export type ScheduleDTO = z.infer<typeof Schedule>;
 export type ScheduleQueryDTO = z.infer<typeof ScheduleQuery>;
+export type ScheduleCreateInputDTO = z.infer<typeof ScheduleCreateInput>;
 export type PaymentDTO = z.infer<typeof Payment>;
 export type PaymentActionInputDTO = z.infer<typeof PaymentActionInput>;
 export type PhotoInspectionInputDTO = z.infer<typeof PhotoInspectionInput>;
