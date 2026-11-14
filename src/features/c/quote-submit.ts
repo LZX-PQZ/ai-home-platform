@@ -45,3 +45,31 @@ export function quoteSubmissionFailure(error: unknown): Extract<QuoteSubmissionS
   // 网络中断、服务端异常或无效回执可能发生在写入之后，不能断言未保存或自动重发。
   return { status: "uncertain", retryable: true, message: "未取得可验证的报价回执，提交结果未知。请保持此页面，先联系平台核实，或使用同一标识重试；不会换标识重发。" };
 }
+
+/** 重试被拒绝只说明本次请求未成功，不能撤销先前结果未知的事实。 */
+export function quoteUncertainRetryFailure(error: unknown): Extract<QuoteSubmissionState, { status: "uncertain" }> {
+  const failure = quoteSubmissionFailure(error);
+  if (failure.status === "uncertain") return failure;
+
+  const status = error instanceof ApiClientError ? error.status : 0;
+  const reasons: Partial<Record<number, string>> = {
+    400: "本次重试未通过校验。",
+    401: "本次重试未通过服务方身份验证。",
+    403: "当前身份无权重试此报价。",
+    404: "关联需求不存在或当前不可访问。",
+    409: "需求状态已变化或发生冲突，本次未取得历史回执。",
+    501: "本次重试接口尚未开放（HTTP 501）。",
+    503: "本次重试服务暂时不可用（HTTP 503）。",
+  };
+  const retryable = status === 401 || status === 503;
+  const nextStep = status === 401
+    ? "请在保留此页面的情况下完成身份验证，再使用同一标识重试。"
+    : status === 503
+      ? "服务恢复后可使用同一标识重试。"
+      : "请保持此页面并联系平台核实，本页不再提供重试。";
+  return {
+    status: "uncertain",
+    retryable,
+    message: `${reasons[status] ?? "本次重试未成功。"}之前的报价仍可能已保存，提交结果仍未知。${nextStep}原填写内容继续锁定，不会换标识重发。`,
+  };
+}
