@@ -25,7 +25,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | DELETE /api/auth/owner | OwnerSessionState | D | 同源撤销当前会话，成功后清除 cookie，可重复退出 |
 | GET /api/demand | Demand[] | D | 无业主 cookie 可公开读取 published；有效业主仅本人所有状态；坏业主凭证 401，不接受查询参数 |
 | POST /api/demand | DemandInput → Demand | D | 验证业主会话后写入本人需求，published/live；无会话 401，存储故障 503 |
-| GET /api/demand/[id] | Demand | D | 精确 ID 查询；published 公开，非公开仅所属业主可读；不可访问/不存在统一 404 |
+| GET /api/demand/[id] | Demand | D | 精确 ID 查询；published 公开，非公开限所属业主或有效服务方的实际接单；不可访问/不存在统一 404 |
 | POST /api/demand/chat | ChatResult | D | 读取 ChatInput；`AI_MODE=mock` 返回 mock，`AI_MODE=live` 调用服务端 LLM 网关并返回 live |
 | GET /api/provider | Provider[] | D | 固定 mock |
 | GET /api/provider/quotes | Quote[] | D | 同一事务验证服务方会话并只查本人报价；当前演示身份整体标 mock，不代表接单 |
@@ -242,8 +242,8 @@ DELETE 无请求体，非空 ID 原样精确查找，错误顺序为路径 400 �
 
 不接受任何查询参数（包括 ownerId、providerId、role、status、分页和重复参数）；非法参数/空白 ID 返回 400/VALIDATION_ERROR。非空路径 ID 原样精确查找，不 trim。继续返回公共 Demand[] / Demand。
 
-在同一个 Serializable 事务中验证持久化会话、当前角色/绑定、执行受限 SQL 并校验输出。列表：有效业主 cookie 只返回本人全部状态；没有业主 cookie 时按 published 过滤，匿名无需服务方登录即可访问，包含已发布的 demo-demand。详情：published 对所有访问者可读，非 published 仅所属业主可读；其他人与不存在统一 404/DEMAND_NOT_FOUND。匿名响应仍使用公共 Demand，不包含 ownerId 等业主信息；管理员尚无全量入口。
+在同一个 Serializable 事务中验证持久化会话、当前角色/绑定、执行受限 SQL 并校验输出。列表：有效业主 cookie 只返回本人全部状态；没有业主 cookie 时按 published 过滤，匿名无需服务方登录即可访问，包含已发布的 demo-demand。详情：published 对所有访问者可读，非 published 限所属业主，或无业主 cookie 且当前有效服务方拥有实际 ServiceOrder 关系；后者须核验需求、接单状态、acceptedQuote、providerId 和来源一致，不能凭一份报价取得访问权。其他人与不存在统一 404/DEMAND_NOT_FOUND。响应仍使用公共 Demand，不包含 ownerId 等业主信息；管理员尚无全量入口。
 
-存在但伪造、重复、过期或撤销的业主凭证为 401/UNAUTHENTICATED；有效业主凭证对应当前角色不再是 owner 为 403/FORBIDDEN。这两条也适用于已发布详情。双 cookie 时业主优先，无效业主不能回退匿名或服务方。没有业主 cookie 时，演示服务方关闭/过期/撤销/绑定变化不妨碍访问 published 数据；它也不能授予非公开需求权限。角色导航及自报身份不能扩大权限，合法空结果才返回 200 空数组。
+存在但伪造、重复、过期或撤销的业主凭证为 401/UNAUTHENTICATED；有效业主凭证对应当前角色不再是 owner 为 403/FORBIDDEN。这两条也适用于已发布详情。双 cookie 时业主优先，无效业主不能回退匿名或服务方。没有业主 cookie 时，演示服务方关闭/过期/撤销/绑定变化不妨碍访问 published 数据，但会失去非公开接单详情权限。角色导航及自报身份不能扩大权限，合法空结果才返回 200 空数组。
 
-逐条 source 保持 demo-demand 为 mock、其他数据库需求为 live。普通匿名和业主整体含 demo-demand 时为 mock，否则 live（含空列表）；有效演示服务方会话整体仍为 mock，该会话只影响来源标识。所有响应 Cache-Control: private, no-store、Vary: Cookie；存储、坏 DTO 或越界查询结果统一 503/DATABASE_UNAVAILABLE，不回退 mock 或空成功。A/B/C 使用原 URL/DTO，C 大厅、管理页与匹配页可继续匿名获取 published 数据。完整交接与验证见 docs/requests/D-demand-read-auth.md。
+逐条 source 保持 demo-demand 为 mock、其他数据库需求为 live。普通匿名和业主整体含 demo-demand 时为 mock，否则 live（含空列表）；有效演示服务方会话整体仍为 mock，包括已接单需求详情。所有响应 Cache-Control: private, no-store、Vary: Cookie；存储、坏 DTO、异常接单关联或越界查询结果统一 503/DATABASE_UNAVAILABLE，不回退 mock 或空成功。A/B/C 使用原 URL/DTO，C 大厅、管理页与匹配页可继续匿名获取 published 数据。完整交接与验证见 docs/requests/D-demand-read-auth.md 及 docs/requests/D-provider-demand-access.md。后续状态推进必须在同一事务条件更新需求和接单；当前无推进 API。

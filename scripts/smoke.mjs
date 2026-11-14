@@ -38,6 +38,18 @@ for (const route of ['/api/demand', '/api/demand/demo-demand']) {
 }
 const missingDetail = await fetch(base + '/api/demand/missing-demand');
 assert.equal(missingDetail.status, 404);
+// A client-supplied provider identity never substitutes for an actual order and session.
+for (const [path, headers, status, code] of [
+ ['/api/demand/missing-demand', { Cookie: 'ai_home_demo_session=invalid', 'X-Provider-Id': 'provider-a' }, 404, 'DEMAND_NOT_FOUND'],
+ ['/api/demand/demo-demand?providerId=provider-a', {}, 400, 'VALIDATION_ERROR'],
+]) {
+ const response = await fetch(base + path, { headers });
+ assert.equal(response.status, status, 'provider demand detail authorization');
+ assert.equal(response.headers.get('cache-control'), 'private, no-store');
+ assert.match(response.headers.get('vary') ?? '', /Cookie/i);
+ const body = await response.json();
+ assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
+}
 for (const path of ['/api/schedule?demandId=demo-demand', '/api/schedule?demandId=demo-demand&version=1']) {
  const response = await fetch(base + path);
  assert.equal(response.status, 200, path);
@@ -163,4 +175,4 @@ const forbidden = await withoutOrigin.json();
 assert.equal(forbidden.ok, false);
 assert.equal(forbidden.error.code, 'FORBIDDEN');
 assert.equal('data' in forbidden, false);
-console.log('13 个页面、30 个 GET 场景和 13 个 POST 场景通过（固定演示公开、真实排期/工单/接单隔离、匿名与失效凭证写入拒绝）。');
+console.log('13 个页面、32 个 GET 场景和 13 个 POST 场景通过（固定演示公开、服务方身份不可自报、真实排期/工单/接单隔离、匿名与失效凭证写入拒绝）。');
