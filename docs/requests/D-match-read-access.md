@@ -4,7 +4,7 @@
 
 ## 具体变更申请
 
-审计发现 `src/app/api/match/route.ts` 调用 `src/lib/match/data.ts`，后者直接通过 `findDemand(id)` 按 ID 读取数据库。该链路不校验 cookie、需求发布状态或归属；匹配理由、分数和是否有候选可能透露未公开需求的属性。路由也未拒绝未知查询参数。页面本身调用该 API，不能靠页面先读需求详情来保护 API。
+审计发现 `src/app/api/match/route.ts` 调用 `src/lib/match/data.ts`，后者直接通过 `findDemand(id)` 按 ID 读取数据库。该链路不校验 cookie、需求发布状态或归属；匹配理由、分数和是否有候选可能透露未公开需求的属性。路由也未拒绝未知查询参数。当前页面通过 `/api/demand/[id]` 与 `/api/provider` 读取后计算匹配，已有需求读取权限检查；这不会保护独立的 `/api/match` 入口。
 
 本轮由 D 增加 `src/lib/matching-demand.ts` 服务端基础设施，复用 `DemandIdParams`、`Demand` 和统一信封，不新增 DTO、数据库字段、依赖或环境变量。仅允许匹配 API、`src/lib/match/` 和 D 服务端导入；客户端直接或间接导入仍拒绝。角色文件归属检查不变，B 的路由、数据加载器和页面保持由 B 维护。
 
