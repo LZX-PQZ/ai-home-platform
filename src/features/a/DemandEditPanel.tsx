@@ -109,7 +109,7 @@ export function DemandEditPanel({ demand, onChanged }: { demand: DemandDTO; onCh
           {outcome?.kind === "failed" ? (
             <Note tone={outcome.status === 401 ? "warn" : "danger"} title={outcome.status === 401 ? "请先完成业主登录" : "操作失败"}>
               <p>{outcome.message}</p>
-              {outcome.status === 401 ? <p>业主登录入口尚未开放，暂时无法保存修改。角色切换和演示服务方登录不能完成业主认证；本次填写的内容仍保留在表单中。</p> : null}
+              {outcome.status === 401 ? <p>请点击页面顶部的“业主登录”，完成登录后再保存本人需求。角色切换和演示服务方登录不能完成业主认证；本次填写的内容仍保留在表单中。</p> : null}
             </Note>
           ) : null}
           <div className="flex flex-wrap gap-2">
