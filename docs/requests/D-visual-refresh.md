@@ -49,3 +49,10 @@
 | `Explainer` | 折叠说明：数据来源、权限边界、演示限制等静态长文案；内容始终在 HTML 中，只是默认收起。动态状态、错误和 `aria-live` 内容不放进来 |
 
 精修规则：开屏统一用 `PageHeader`；静态长说明收进 `Explainer`；正文 15–16px、辅助信息 13px；按钮与卡片统一用共享组件和圆角 token，静态卡片无阴影；金额等数字加 `num`；链接末尾不加“→”，标题不用“ · ”拼接；被测试或冒烟脚本断言的文字保持不变。
+
+## 补充：盖章动画与全站出错页
+
+- `FulfillmentRuler` 新增 `animateFrom`，配合 `newlyStampedFrom(previous, next)` 只给刚完成的节点播放盖章动画；页面首次读取、状态不变或后退都不播放，播放后清除，重新加载不会重复盖章。
+- 施工进度页的“履约推进”卡片加入完整履约尺。接单状态由业主确认推进（已签约 → 施工中 → 已完工）后，新完成的节点盖章。状态记忆放在 `SchedulePanel` 外层，因为重新读取时 `OrderProgressPanel` 会被卸载。
+- 新增 `src/app/not-found.tsx`、`src/app/error.tsx`、`src/app/global-error.tsx`，与新视觉一致；出错页只显示错误编号，不展示内部错误详情。
+- 新增 `tests/D-fulfillment-ruler.test.ts` 覆盖盖章起点与动画范围。

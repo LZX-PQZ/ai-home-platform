@@ -4,7 +4,7 @@ import type { DemandStatus } from "@/contracts";
 /**
  * 履约尺 + 验收章（D 维护的共享组件）。
  * 五个节点是真实的先后顺序；已走过的节点盖“已确认”章，当前节点用圆点标出。
- * 印泥红只在这里使用。盖章动画只在 animateStamps 为 true 时播放（例如用户刚点完“确认完成”）。
+ * 印泥红只在这里使用。盖章动画只在用户刚确认完成某个节点后播放（animateFrom），页面初次加载不播放。
  */
 export const FULFILLMENT_STAGES: ReadonlyArray<{ status: DemandStatus; label: string }> = [
   { status: "draft", label: "需求澄清" },
@@ -16,6 +16,21 @@ export const FULFILLMENT_STAGES: ReadonlyArray<{ status: DemandStatus; label: st
 
 export function stageIndexOf(status: DemandStatus) {
   return Math.max(0, FULFILLMENT_STAGES.findIndex(stage => stage.status === status));
+}
+
+/** 已盖章（已完成）的节点数：已完工时五个节点全部完成。 */
+export function completedStageCount(status: DemandStatus) {
+  return status === "completed" ? FULFILLMENT_STAGES.length : stageIndexOf(status);
+}
+
+/**
+ * 状态前进后需要新盖章的第一个节点下标；没有前进（首次读取、后退或不变）返回 null。
+ * 用于只给“刚刚确认完成”的节点播放盖章动画。
+ */
+export function newlyStampedFrom(previous: DemandStatus | null | undefined, next: DemandStatus): number | null {
+  if (!previous) return null;
+  const before = completedStageCount(previous);
+  return completedStageCount(next) > before ? before : null;
 }
 
 const trackStyle: React.CSSProperties = {
@@ -40,12 +55,16 @@ export function SealStamp({ label = "已确认", animate = false, delayMs = 0, c
   );
 }
 
-export function FulfillmentRuler({ status, compact = false, animateStamps = false }: {
-  status: DemandStatus; compact?: boolean; animateStamps?: boolean;
+export function FulfillmentRuler({ status, compact = false, animateStamps = false, animateFrom = null }: {
+  status: DemandStatus; compact?: boolean;
+  /** 所有章都播放盖章动画。 */
+  animateStamps?: boolean;
+  /** 只给下标不小于该值的章播放盖章动画（例如刚确认完成的节点）。 */
+  animateFrom?: number | null;
 }) {
   const current = stageIndexOf(status);
   const finished = status === "completed";
-  const doneCount = finished ? FULFILLMENT_STAGES.length : current;
+  const doneCount = completedStageCount(status);
   const summary = finished
     ? "履约进度：五个节点均已完成"
     : `履约进度：已完成 ${doneCount} 步，当前第 ${current + 1} 步${FULFILLMENT_STAGES[current].label}`;
@@ -86,8 +105,8 @@ export function FulfillmentRuler({ status, compact = false, animateStamps = fals
             >
               {done && (
                 <SealStamp
-                  animate={animateStamps}
-                  delayMs={index * 180}
+                  animate={animateStamps || (animateFrom !== null && index >= animateFrom)}
+                  delayMs={(animateStamps ? index : Math.max(0, index - (animateFrom ?? 0))) * 180}
                   className="absolute -left-1 -top-[78px] sm:-top-[98px]"
                 />
               )}

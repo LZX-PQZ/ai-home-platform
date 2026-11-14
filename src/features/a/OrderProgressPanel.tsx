@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { OrderSummaryDTO, ScheduleDTO, SourceDTO } from "@/contracts";
+import { FulfillmentRuler } from "@/components/ui";
 import { Badge, Button, C, Card, Note, SectionHead } from "./ui";
 import {
   availableProgressActions,
@@ -26,6 +27,7 @@ export function OrderProgressPanel({
   source,
   reload,
   reloadOrder,
+  stampFrom = null,
 }: {
   demandId: string;
   order: OrderSummaryDTO | null;
@@ -36,6 +38,8 @@ export function OrderProgressPanel({
   source: SourceDTO | null;
   reload: () => void;
   reloadOrder?: () => void;
+  /** 刚确认完成的第一个节点下标；仅这些节点播放盖章动画。 */
+  stampFrom?: number | null;
 }) {
   const [pending, setPending] = useState<ProgressActionCandidate | null>(null);
   const [phase, setPhase] = useState<"idle" | "submitting" | "success" | "failed">("idle");
@@ -97,6 +101,9 @@ export function OrderProgressPanel({
     <Card className="mt-4">
       <SectionHead title="履约推进" aside={<Badge tone={order.source === "mock" ? "accent" : "brand"}>接单来源：{order.source}</Badge>} />
       <p className={`mb-3 ${C.meta}`}>订单 {order.id}，当前状态 {orderStatusLabel[order.status]}，排期版本 {schedule?.version ?? "无"}</p>
+      <div className="mb-5">
+        <FulfillmentRuler status={order.status} animateFrom={stampFrom} />
+      </div>
       {actions.length === 0 ? (
         <Note tone="info">当前没有满足前置条件的履约动作。工序完成只表示业主确认当前工序完成，不等于专业验收或付款完成。</Note>
       ) : (
