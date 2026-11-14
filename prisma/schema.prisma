@@ -65,6 +65,7 @@ model DemandOrder {
   payments Payment[]
   reviews Review[]
   tickets Ticket[]
+  serviceOrder ServiceOrder?
 }
 model ServiceProvider {
   id String @id @default(cuid())
@@ -76,6 +77,7 @@ model ServiceProvider {
   quotes Quote[]
   account User? @relation("ProviderAccount")
   quoteSubmissionReceipts QuoteSubmissionReceipt[]
+  serviceOrders ServiceOrder[]
 }
 model Quote {
   id String @id @default(cuid())
@@ -90,6 +92,19 @@ model Quote {
   estimatedDays Int
   status String @default("draft")
   submissionReceipt QuoteSubmissionReceipt?
+  serviceOrder ServiceOrder?
+}
+model ServiceOrder {
+  id String @id @default(cuid())
+  demandId String @unique
+  demand DemandOrder @relation(fields: [demandId], references: [id])
+  providerId String
+  provider ServiceProvider @relation(fields: [providerId], references: [id])
+  acceptedQuoteId String @unique
+  acceptedQuote Quote @relation(fields: [acceptedQuoteId], references: [id])
+  source String @default("mock")
+  status String @default("contracted")
+  @@index([providerId])
 }
 model QuoteSubmissionReceipt {
   id String @id @default(cuid())
