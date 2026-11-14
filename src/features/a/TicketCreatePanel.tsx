@@ -49,13 +49,13 @@ function TicketList({ response }: { response: TicketListResponse }) {
 
 function TicketRow({ ticket }: { ticket: TicketDTO }) {
   return (
-    <li className="rounded-[10px] border border-[#E2E9EB] bg-[#FAFCFC] p-3">
+    <li className="rounded-control border border-line bg-canvas/50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="break-all text-[13px] font-medium text-[#16242B]">工单编号：{ticket.id}</span>
+        <span className="break-all text-[14px] font-medium text-ink">工单编号：{ticket.id}</span>
         <Badge tone={ticket.status === "resolved" ? "brand" : "neutral"}>{statusLabel(ticket.status)}</Badge>
       </div>
-      <p className="mt-2 whitespace-pre-wrap break-words text-[13px] text-[#4A5A60]">{ticket.description}</p>
-      <p className={`!mb-0 mt-2 ${C.meta}`}>分类：{categoryLabel(ticket.category)} · 责任服务方：{ticket.responsibleProviderId ?? "暂未指定"}</p>
+      <p className="mt-2 whitespace-pre-wrap break-words text-[15px] text-ink-2">{ticket.description}</p>
+      <p className={`!mb-0 mt-2 ${C.meta}`}>分类：{categoryLabel(ticket.category)}，责任服务方：{ticket.responsibleProviderId ?? "暂未指定"}</p>
     </li>
   );
 }
@@ -147,7 +147,7 @@ export function TicketCreatePanel({ demand }: { demand: DemandDTO }) {
         <Field label="问题描述" hint="1–4000 字">
           <textarea className={`${C.input} min-h-28`} value={form.description} disabled={submitting} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="请描述需要售后处理的问题" />
         </Field>
-        {validationError ? <p className="!mb-0 text-[12.5px] text-[#B42318]" role="alert">{validationError}</p> : null}
+        {validationError ? <p className="!mb-0 text-[14px] text-danger" role="alert">{validationError}</p> : null}
         <Button type="submit" disabled={submitting}>{submitting ? "正在提交…" : "提交售后工单"}</Button>
       </form>
     </Card>

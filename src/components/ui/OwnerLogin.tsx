@@ -37,20 +37,20 @@ export function OwnerSessionView({ state, onAction }: {
     setInputError(null);
     onAction("POST", parsed.data);
   }
-  return <section aria-label="业主账号登录" className="border-b border-line bg-white px-6 py-3">
-    <div className="mx-auto max-w-[1080px]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-[12.5px] text-ink-2">
-          <div className="flex flex-wrap items-center gap-2">
+  return <section aria-label="业主账号登录">
+    <div>
+      <div className="grid gap-3">
+        <div className="text-[14px] leading-relaxed text-ink-2">
+          <div className="flex flex-wrap items-center gap-2 text-ink">
             <Badge tone={signedIn ? "brand" : "neutral"}>业主账号</Badge>
             <span role="status" aria-live="polite">{state.pending ? "正在确认业主登录状态…" : state.error ? "业主登录状态未确认"
               : signedIn ? "已通过账号密码登录" : "尚未登录业主账号"}</span>
           </div>
-          <p className="mt-1">新用户可先体验需求澄清；发布需求需登录。当前暂未开放注册，请向演示负责人领取业主账号。</p>
-          <p className="mt-1">角色切换仅切换导航和页面，不会自动登录。账号登录不代表实名认证。</p>
-          {signedIn && state.session?.status === "signed_in" && <p className="mt-1">有效至 <time dateTime={state.session.expiresAt}>
+          <p className="!mb-0 mt-1.5 text-[13px] text-ink-3">新用户可先体验需求澄清；发布需求需登录。当前暂未开放注册，请向演示负责人领取业主账号。</p>
+          <p className="!mb-0 mt-1 text-[13px] text-ink-3">角色切换仅切换导航和页面，不会自动登录。账号登录不代表实名认证。</p>
+          {signedIn && state.session?.status === "signed_in" && <p className="!mb-0 mt-1 text-[13px]">有效至 <time dateTime={state.session.expiresAt}>
             {new Date(state.session.expiresAt).toLocaleTimeString("zh-CN")}</time>，到期需重新登录。</p>}
-          {state.error && <p role="alert" className="mt-1 text-danger">{state.error}</p>}
+          {state.error && <p role="alert" className="!mb-0 mt-1 text-danger">{state.error}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           {signedIn ? <Button size="sm" variant="secondary" onClick={() => onAction("DELETE")}>退出业主登录</Button>
@@ -59,19 +59,19 @@ export function OwnerSessionView({ state, onAction }: {
           <Button size="sm" variant="ghost" disabled={state.pending} onClick={() => onAction("GET")}>刷新业主状态</Button>
         </div>
       </div>
-      {expanded && !signedIn && <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3" aria-label="业主登录表单">
+      {expanded && !signedIn && <form onSubmit={submit} className="mt-3 grid gap-3" aria-label="业主登录表单">
         <label className={C.label}><span className={C.labelText}>账号</span><input className={C.input} name="username" autoComplete="username"
           required minLength={3} maxLength={64} disabled={state.pending} value={login} onChange={e => setLogin(e.target.value)} /></label>
         <label className={C.label}><span className={C.labelText}>密码</span><input className={C.input} name="password" type="password" autoComplete="current-password"
           required minLength={15} maxLength={128} disabled={state.pending} value={password} onChange={e => setPassword(e.target.value)} /></label>
         <Button type="submit" disabled={state.pending}>登录业主账号</Button>
-        {inputError && <p role="alert" className="w-full text-sm text-danger">{inputError}</p>}
+        {inputError && <p role="alert" className="!mb-0 text-[14px] text-danger">{inputError}</p>}
       </form>}
     </div>
   </section>;
 }
 
-export function OwnerLogin() {
+export function OwnerLogin({ onStatusChange }: { onStatusChange?: (signedIn: boolean) => void } = {}) {
   const [state, setState] = useState<OwnerLoginState>({ session: null, pending: true, error: null });
   const requests = useRef({ active: true, busy: false, version: 0 });
   const run = useCallback(async (action: Action, input?: OwnerLoginInputDTO) => {
@@ -104,5 +104,7 @@ export function OwnerLogin() {
     const timer = window.setTimeout(() => { void run("GET"); }, Math.max(1000, Date.parse(state.session.expiresAt) - Date.now() + 50));
     return () => window.clearTimeout(timer);
   }, [state.session, run]);
+  const signedIn = !state.pending && !state.error && state.session?.status === "signed_in";
+  useEffect(() => { onStatusChange?.(signedIn); }, [signedIn, onStatusChange]);
   return <OwnerSessionView state={state} onAction={(action, input) => { void run(action, input); }} />;
 }

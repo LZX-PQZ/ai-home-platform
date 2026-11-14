@@ -118,7 +118,7 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
               {result.missingFields.map((field) => (
                 <span
                   key={field}
-                  className="rounded-full bg-white/70 px-2 py-0.5 text-[11.5px] font-medium"
+                  className="rounded-tag bg-white/70 px-2 py-0.5 text-[13px] font-medium"
                 >
                   {fieldLabel(field)}
                 </span>
@@ -146,17 +146,17 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
       )}
 
       {showForm && (
-        <fieldset className="grid min-w-0 gap-3.5" disabled={submitting || Boolean(created)} aria-label="结构化需求单" aria-busy={submitting}>
+        <fieldset className="grid min-w-0 gap-4" disabled={submitting || Boolean(created)} aria-label="结构化需求单" aria-busy={submitting}>
           <div className="flex items-center justify-between gap-2">
             <span className={C.sectionTitle}>需求信息</span>
             <span className={C.meta}>
-              已填 <b className="text-[#0C5A47]">{filled}</b> / 6 项
+              已填 <b className="num text-brand-hover">{filled}</b> / 6 项
             </span>
           </div>
 
           <Field label="需求描述" hint="必填">
             <textarea
-              className={`min-h-[76px] resize-y ${C.input}`}
+              className={`min-h-[96px] resize-y ${C.input}`}
               value={form.description}
               onChange={(event) => update("description", event.target.value)}
               placeholder="例如：老房适老化改造，卫生间加扶手、地面防滑、夜间照明"
@@ -302,12 +302,12 @@ export function DemandDraftPanel({ result, source, onSubmittingChange }: Props) 
         <div className="mt-3">
           <Note tone="ok" title={`需求已创建（来源：${outcome?.kind === "created" ? sourceLabel(outcome.source) : "尚未确认"}）`}>
             <p>
-              需求 ID：<code className="rounded bg-white/70 px-1.5 py-0.5">{created.id}</code> ·
-              状态：{created.status}
+              需求 ID：<code className="rounded-tag bg-white/70 px-1.5 py-0.5">{created.id}</code>
+              <span className="ml-3">状态：{created.status}</span>
             </p>
             <p>
               <Link href={demandPath(created.id)} className="font-medium">
-                打开需求详情 →
+                打开需求详情
               </Link>
             </p>
             <p>本需求单已锁定，避免重复创建。需要填写另一条需求时，请点击“清空对话”。</p>

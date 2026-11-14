@@ -64,12 +64,12 @@ export function OrderProgressHistoryPanel({
       ) : (
         <ol className="mt-3 grid gap-2" aria-label="履约记录列表">
           {state.events.map(event => (
-            <li key={event.id} className="break-words rounded-[10px] border border-[#E2E9EB] bg-white px-3 py-2.5">
+            <li key={event.id} className="break-words rounded-control border border-line bg-white px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[13.5px] font-medium text-[#16242B]">{actionLabel(event)}</span>
+                <span className="text-[15px] font-medium text-ink">{actionLabel(event)}</span>
                 <time className={C.meta} dateTime={event.createdAt}>记录时间：{event.createdAt.replace("T", " ")}</time>
               </div>
-              <p className={`!mb-0 mt-1 ${C.meta}`}>{statusLabel(event.fromStatus)} → {statusLabel(event.toStatus)} · 来源：{sourceLabel(event.source)}</p>
+              <p className={`!mb-0 mt-1 ${C.meta}`}>{statusLabel(event.fromStatus)} 变为 {statusLabel(event.toStatus)}，来源：{sourceLabel(event.source)}</p>
               {event.taskId !== null ? <p className={`!mb-0 mt-1 ${C.meta}`}>工序编号：{event.taskId}</p> : null}
               {event.scheduleVersion !== null ? <p className={`!mb-0 mt-1 ${C.meta}`}>关联排期：v{event.scheduleVersion}</p> : null}
             </li>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Explainer } from "@/components/ui";
 import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
 import {
   demandTitle,
@@ -36,9 +37,9 @@ export function DemandDetailContent({ id, state, reload }: {
         <PageHeader title="需求详情" subtitle={`正在读取需求 ${id}…`} />
         <p className={C.meta} role="status">本页数据可能包含模拟数据，加载完成后显示具体来源。</p>
         <Card className="animate-pulse">
-          <div className="mb-3 h-4 w-1/2 rounded bg-[#EDF2F3]" />
-          <div className="mb-2 h-3 w-full rounded bg-[#F4F7F8]" />
-          <div className="h-3 w-3/4 rounded bg-[#F4F7F8]" />
+          <div className="mb-3 h-4 w-1/2 rounded bg-mist" />
+          <div className="mb-2 h-3 w-full rounded bg-canvas" />
+          <div className="h-3 w-3/4 rounded bg-canvas" />
         </Card>
       </div>
     );
@@ -85,14 +86,14 @@ export function DemandDetailContent({ id, state, reload }: {
   return (
     <div>
       <div className="mb-3">
-        <Link href="/owner" className="text-[13px] font-medium text-[#0F6E56]">
+        <Link href="/owner" className="text-[14px] font-medium text-brand">
           ← 返回需求列表
         </Link>
       </div>
 
       <PageHeader
         title={demandTitle(demand)}
-        subtitle={`需求编号 ${demand.id} · 逐条来源 ${demandSource ?? "未确认"}`}
+        subtitle={`需求编号 ${demand.id}，逐条来源 ${demandSource ?? "未确认"}`}
         aside={
           <span className="flex items-center gap-2">
             {demandSourceBadge ? <Badge tone="accent">{demandSourceBadge}</Badge> : null}
@@ -112,9 +113,9 @@ export function DemandDetailContent({ id, state, reload }: {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <Card>
           <SectionHead title="需求描述" />
-          <p className="!mb-0 text-[13.5px] leading-relaxed text-[#16242B]">{demand.description}</p>
+          <p className="!mb-0 max-w-[38em] text-[16px] leading-relaxed text-ink">{demand.description}</p>
 
-          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[#EEF3F4] pt-4">
+          <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-line pt-5">
             {[
               ["城市", demand.city],
               ["面积", `${demand.areaM2} ㎡`],
@@ -125,7 +126,7 @@ export function DemandDetailContent({ id, state, reload }: {
             ].map(([label, value]) => (
               <div key={label}>
                 <div className={C.meta}>{label}</div>
-                <div className="text-[13.5px] font-medium text-[#16242B]">{value}</div>
+                <div className="num text-[16px] font-semibold text-ink">{value}</div>
               </div>
             ))}
           </div>
@@ -169,16 +170,13 @@ export function DemandDetailContent({ id, state, reload }: {
             ) : null}
           </Card>
 
-          <Card>
-            <SectionHead title="数据说明" />
-            <Note tone="info">
-              <p>
-                本页展示的是需求编号「{demand.id}」的查询结果，接口响应来源为 {source}；逐条来源为 {demandSource ?? "未确认"}。
-                如需确认最近的变更，可以重新加载。
-              </p>
-              <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
-            </Note>
-          </Card>
+          <Explainer summary="数据说明与重新加载" className="!my-0">
+            <p>
+              本页展示的是需求编号「{demand.id}」的查询结果，接口响应来源为 {source}；逐条来源为 {demandSource ?? "未确认"}。
+              如需确认最近的变更，可以重新加载。
+            </p>
+            <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
+          </Explainer>
         </div>
       </div>
     </div>

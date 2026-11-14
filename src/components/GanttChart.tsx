@@ -9,17 +9,17 @@ import type { GanttRow } from "@/features/a/schedule";
  */
 
 const BAR: Record<GanttRow["status"], string> = {
-  done: "border-[#A9D3C6] bg-[#E7F3EF] text-[#0C5A47]",
-  active: "border-[#0F6E56] bg-[#0F6E56] text-white",
-  pending: "border-[#DCE4E7] bg-[#F0F3F4] text-[#4A5A60]",
-  blocked: "border-[#EAC7C3] bg-[#FEF3F2] text-[#B42318]",
+  done: "border-brand/30 bg-brand-soft text-brand-hover",
+  active: "border-brand bg-brand text-white",
+  pending: "border-line bg-mist text-ink-2",
+  blocked: "border-danger/25 bg-danger-soft text-danger",
 };
 
 const DOT: Record<GanttRow["status"], string> = {
-  done: "bg-[#0F6E56]",
-  active: "bg-[#0F6E56] ring-2 ring-[#0F6E561F]",
-  pending: "bg-[#C7D2D6]",
-  blocked: "bg-[#B42318]",
+  done: "bg-brand",
+  active: "bg-brand ring-2 ring-brand/[0.12]",
+  pending: "bg-line-strong",
+  blocked: "bg-danger",
 };
 
 const LEGEND: { status: GanttRow["status"]; label: string }[] = [
@@ -41,7 +41,7 @@ export function GanttChart({
 }) {
   if (rows.length === 0 || totalDays <= 0) {
     return (
-      <div className="rounded-[12px] border border-dashed border-[#E2E9EB] bg-[#FAFCFC] px-4 py-8 text-center text-[13px] text-[#7A8A90]">
+      <div className="rounded-card border border-dashed border-line bg-canvas/50 px-4 py-8 text-center text-[14px] text-ink-3">
         没有可展示的工序，接口返回的排期为空。
       </div>
     );
@@ -59,14 +59,14 @@ export function GanttChart({
         <div className="min-w-[600px]">
           {/* 天数刻度 */}
           <div className="flex items-end gap-3">
-            <div className="w-[168px] shrink-0 pb-1 text-[11.5px] font-medium text-[#7A8A90]">
+            <div className="w-[168px] shrink-0 pb-1 text-[13px] font-medium text-ink-3">
               工序（共 {totalDays} 天）
             </div>
             <div className="relative h-5 flex-1">
               {ticks.map((day) => (
                 <span
                   key={day}
-                  className="absolute top-0 -translate-x-1/2 text-[11px] tabular-nums text-[#A8B4B8]"
+                  className="absolute top-0 -translate-x-1/2 text-[13px] tabular-nums text-ink-3"
                   style={{ left: `${day * dayPercent + dayPercent / 2}%` }}
                 >
                   {day + 1}
@@ -82,37 +82,37 @@ export function GanttChart({
                   <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[row.status]}`} />
                   <div className="min-w-0">
                     <div
-                      className="truncate text-[13px] font-medium text-[#16242B]"
+                      className="truncate text-[14px] font-medium text-ink"
                       title={row.name}
                     >
                       {row.name}
                     </div>
-                    <div className="truncate text-[11px] text-[#7A8A90]" title={row.rangeLabel}>
+                    <div className="truncate text-[13px] text-ink-3" title={row.rangeLabel}>
                       {row.rangeLabel}
                     </div>
                   </div>
                 </div>
 
-                <div className="relative h-11 flex-1 rounded-[6px] bg-[#FAFCFC]">
+                <div className="relative h-11 flex-1 rounded-tag bg-canvas/50">
                   {/* 每天一条竖向网格线 */}
                   <div
-                    className="absolute inset-0 rounded-[6px]"
+                    className="absolute inset-0 rounded-tag"
                     style={{
                       backgroundImage:
-                        "linear-gradient(to right, #EEF3F4 0 1px, transparent 1px)",
+                        "linear-gradient(to right, #EDF0EE 0 1px, transparent 1px)",
                       backgroundSize: `${dayPercent}% 100%`,
                     }}
                   />
                   {typeof currentDay === "number" ? (
                     <div
-                      className="absolute inset-y-0 w-px bg-[#C2681C]/45"
+                      className="absolute inset-y-0 w-px bg-wood/45"
                       style={{
                         left: `${Math.min(Math.max(currentDay, 0), totalDays) * dayPercent}%`,
                       }}
                     />
                   ) : null}
                   <div
-                    className={`absolute inset-y-[6px] overflow-hidden rounded-[5px] border px-2 text-[11.5px] font-medium leading-[26px] ${BAR[row.status]}`}
+                    className={`absolute inset-y-[6px] overflow-hidden rounded-[4px] border px-2 text-[13px] font-medium leading-[26px] ${BAR[row.status]}`}
                     style={{
                       left: `${row.startDay * dayPercent}%`,
                       width: `${row.durationDays * dayPercent}%`,
@@ -131,7 +131,7 @@ export function GanttChart({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[#EEF3F4] pt-3 text-[11.5px] text-[#7A8A90]">
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line pt-3 text-[13px] text-ink-3">
         {LEGEND.map((item) => (
           <span key={item.status} className="inline-flex items-center gap-1.5">
             <span className={`h-2 w-2 rounded-[2px] ${DOT[item.status]}`} />
@@ -140,7 +140,7 @@ export function GanttChart({
         ))}
         {typeof currentDay === "number" ? (
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-px bg-[#C2681C]/60" />
+            <span className="h-2.5 w-px bg-wood/60" />
             当前工序起点（按任务状态推算，非真实日期）
           </span>
         ) : null}

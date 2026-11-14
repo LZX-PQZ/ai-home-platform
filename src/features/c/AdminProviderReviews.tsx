@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Source, type SourceDTO } from "@/contracts";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Button, C, Empty } from "@/components/ui";
+import { Button, C, Empty, Explainer, PageHeader } from "@/components/ui";
 import {
   adminProviderReviewsFailure, defaultAdminProviderReviewFilters, filterAdminProviderReviews,
   loadAdminProviderReviews, reviewSampleLabels, reviewSampleOptions, reviewSourceLabels,
@@ -26,16 +26,13 @@ export function AdminProviderReviewsContent({ source, state, onSourceChange, onR
   const hasFilters = filters.keyword.length > 0 || filters.sampleState !== "all";
   return <section aria-labelledby="admin-provider-reviews-title" className="space-y-6">
     <nav aria-label="评价汇总返回导航">
-      <Link href="/admin" className="rounded-md text-sm font-medium underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">返回管理看板</Link>
+      <Link href="/admin" className="text-[15px] font-medium hover:underline">返回管理看板</Link>
     </nav>
-    <div>
-      <h1 id="admin-provider-reviews-title" className={C.pageTitle}>服务方评价汇总</h1>
-      <p className={C.pageSub}>查看公开目录中已完成接单的业主评价均分与样本数。</p>
-    </div>
-    <div className={`${C.note} ${C.noteWarn}`}>
+    <PageHeader id="admin-provider-reviews-title" title="服务方评价汇总" subtitle="查看公开目录中已完成接单的业主评价均分与样本数。" />
+    <Explainer summary="模拟服务方目录与评价口径说明">
       <p>当前公开目录的基础资料为固定模拟服务方，范围不代表平台全部服务方；角色导航不代表管理员登录。</p>
-      <p className="!mb-0">评价按 live / mock 分开查询，基础资料与评价来源分别标注。均分是业主评价，不代表准时率、质量认证或信用分；仅展示汇总，不提供评价明细。</p>
-    </div>
+      <p>评价按 live / mock 分开查询，基础资料与评价来源分别标注。均分是业主评价，不代表准时率、质量认证或信用分；仅展示汇总，不提供评价明细。</p>
+    </Explainer>
     <div className="flex flex-wrap items-end gap-3">
       <label className={`${C.label} min-w-0 max-w-full`} htmlFor="admin-review-source">
         <span className={C.labelText}>评价样本来源</span>
@@ -48,18 +45,18 @@ export function AdminProviderReviewsContent({ source, state, onSourceChange, onR
         </select>
       </label>
       <Button onClick={onReload} variant="secondary" disabled={state.status === "loading"}
-        className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+       >
         {state.status === "loading" ? "正在加载…" : state.status === "error" ? "重新加载" : "刷新汇总"}
       </Button>
     </div>
     {state.status === "loading" && <div className={C.card} role="status" aria-live="polite">正在读取{reviewSourceLabels[source]}的评价汇总…</div>}
     {state.status === "error" && <div className={`${C.card} border-danger/30`} role="alert">
-      <h2>暂时无法加载评价汇总</h2><p className="!mb-0">{state.message}</p>
+      <h2 className={C.sectionTitle}>暂时无法加载评价汇总</h2><p className="!mb-0">{state.message}</p>
     </div>}
     {response && <>
       <div role="status" aria-live="polite">
         <StatusBadge label={`目录响应来源：${reviewSourceLabels[response.meta.source]}`} />
-        <p className={`${C.pageSub} mt-2 !mb-0`}>本次目录 {response.data.length} 家服务方，所选评价口径：{reviewSourceLabels[source]}。目录整体来源不覆盖各服务方的基础资料及评价来源。</p>
+        <p className={`${C.meta} mt-2 !mb-0`}>本次目录 {response.data.length} 家服务方，所选评价口径：{reviewSourceLabels[source]}。目录整体来源不覆盖各服务方的基础资料及评价来源。</p>
       </div>
       <section aria-labelledby="admin-review-filters-title" className={`${C.card} space-y-4`}>
         <h2 id="admin-review-filters-title" className={C.sectionTitle}>筛选服务方评价汇总</h2>
@@ -87,7 +84,7 @@ export function AdminProviderReviewsContent({ source, state, onSourceChange, onR
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p role="status" aria-live="polite" className={`${C.pageSub} !mb-0`}>当前显示 {visibleProviders.length} / {response.data.length} 家服务方。</p>
           {hasFilters && <Button type="button" variant="secondary" size="sm" onClick={() => onFiltersChange(defaultAdminProviderReviewFilters)}
-            className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">清除筛选</Button>}
+           >清除筛选</Button>}
         </div>
       </section>
       {response.data.length === 0 ? <Empty title="本次目录暂无服务方" hint="接口本次返回空目录，不能据此判断平台没有服务方或评价。可刷新汇总重试。" /> : visibleProviders.length === 0 ? (
@@ -101,10 +98,10 @@ export function AdminProviderReviewsContent({ source, state, onSourceChange, onR
             <StatusBadge label={`基础资料来源：${provider.source ? reviewSourceLabels[provider.source] : "未知（未提供）"}`} />
             {provider.performance ? <div className="mt-4 space-y-3 border-t border-line pt-4">
               <StatusBadge label={`评价来源：${reviewSourceLabels[provider.performance.source]}`} />
-              <dl className="grid grid-cols-2 gap-3">
-                <div><dt className={C.meta}>业主评价均分（满分 5）</dt><dd className="mt-1 text-lg font-semibold">{provider.performance.averageRating === null ? "暂无均分" : provider.performance.averageRating.toFixed(2)}</dd></div>
-                <div><dt className={C.meta}>评价样本数</dt><dd className="mt-1 text-lg font-semibold">{provider.performance.reviewCount} 条</dd></div>
-                <div className="col-span-2 min-w-0"><dt className={C.meta}>统计计算时间（ISO 8601）</dt><dd className="mt-1 break-all text-sm"><time dateTime={provider.performance.calculatedAt}>{provider.performance.calculatedAt}</time></dd></div>
+              <dl className="num m-0 grid grid-cols-2 gap-3">
+                <div><dt className={C.meta}>业主评价均分（满分 5）</dt><dd className="m-0 mt-1 text-[20px] font-semibold">{provider.performance.averageRating === null ? "暂无均分" : provider.performance.averageRating.toFixed(2)}</dd></div>
+                <div><dt className={C.meta}>评价样本数</dt><dd className="m-0 mt-1 text-[20px] font-semibold">{provider.performance.reviewCount} 条</dd></div>
+                <div className="col-span-2 min-w-0"><dt className={C.meta}>统计计算时间（ISO 8601）</dt><dd className="m-0 mt-1 break-all text-sm"><time dateTime={provider.performance.calculatedAt}>{provider.performance.calculatedAt}</time></dd></div>
               </dl>
               {provider.performance.reviewCount === 0 && <p className={`${C.pageSub} !mb-0`}>暂无该来源样本，不能按 0 分解读，也不会使用另一来源或种子评分补齐。</p>}
               {provider.performance.reviewCount < 3 && <p className={`${C.note} ${C.noteInfo} !mb-0`}>样本少（少于 3 条），请谨慎参考。</p>}

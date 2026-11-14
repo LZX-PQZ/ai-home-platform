@@ -10,7 +10,7 @@ export type StatusTone = "brand" | "accent" | "neutral" | "danger";
 /** 契约里的 status 是英文枚举，页面上一律显示中文 */
 export const STATUS_LABELS: Record<DemandDTO["status"], { label: string; tone: StatusTone }> = {
   draft: { label: "草稿", tone: "neutral" },
-  published: { label: "已发布 · 待匹配", tone: "accent" },
+  published: { label: "待匹配", tone: "accent" },
   contracted: { label: "已签约", tone: "brand" },
   in_progress: { label: "施工中", tone: "brand" },
   completed: { label: "已完工", tone: "neutral" },
@@ -39,9 +39,9 @@ export function formatBudget(minCents: number, maxCents: number): string {
   return `${formatYuan(minCents)} – ${formatYuan(maxCents)}`;
 }
 
-/** 列表标题：契约里没有标题字段，用「城市 · 面积 · 改造类型」拼，避免出现无名卡片 */
+/** 列表标题：契约里没有标题字段，用「城市 面积 改造类型」拼，避免出现无名卡片 */
 export function demandTitle(demand: DemandDTO): string {
-  return `${demand.city} · ${demand.areaM2}㎡ · ${renovationLabel(demand.renovationType)}`;
+  return `${demand.city} ${demand.areaM2}㎡ ${renovationLabel(demand.renovationType)}`;
 }
 
 /** 按 ID 在列表里找需求；找不到返回 null，调用方必须如实提示而不是编数据 */

@@ -122,10 +122,10 @@ function ReviewFormPanel({ order, onSubmit }: { order: { order: OrderSummaryDTO;
         <Field label="评价内容" hint="可选，最多 2000 字">
           <textarea className={`${C.input} min-h-28`} value={form.comment} disabled={submitting || locked} onChange={(event) => setForm((current) => ({ ...current, comment: event.target.value }))} placeholder="可以留下对本次服务的具体评价" />
         </Field>
-        {validationError ? <p className="!mb-0 text-[12.5px] text-[#B42318]" role="alert">{validationError}</p> : null}
+        {validationError ? <p className="!mb-0 text-[14px] text-danger" role="alert">{validationError}</p> : null}
         <Button type="submit" disabled={submitting || locked}>{submitting ? "正在提交…" : "提交评价"}</Button>
       </form>
-      <p className={`mt-3 !mb-0 ${C.meta}`}>接单编号：{order.order.id} · 服务方：{order.order.providerId} · 来源：{reviewSourceLabel(order.source)}</p>
+      <p className={`mt-3 !mb-0 ${C.meta}`}>接单编号：{order.order.id}，服务方：{order.order.providerId}，来源：{reviewSourceLabel(order.source)}</p>
     </Card>
   );
 }

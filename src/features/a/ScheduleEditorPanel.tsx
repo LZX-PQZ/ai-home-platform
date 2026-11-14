@@ -91,7 +91,7 @@ export function ScheduleEditorPanel({
       <form className="space-y-3" onSubmit={submit} noValidate>
         <div className="grid gap-3">
           {rows.map((row, index) => (
-            <div key={`${row.id}-${index}`} className="rounded-[10px] border border-[#EEF3F4] bg-[#FCFDFD] p-3">
+            <div key={`${row.id}-${index}`} className="rounded-control border border-line bg-canvas/50 p-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <span className={C.meta}>工序 {index + 1}</span>
                 <Button type="button" variant="ghost" size="sm" disabled={saving || rows.length <= 1} onClick={() => removeRow(index)}>删除</Button>

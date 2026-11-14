@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { AccountMenu } from "@/components/ui/AccountMenu";
 
 const roles = {
   owner: {
@@ -46,49 +47,54 @@ export function RoleNavigation() {
 
   const current = roles[role];
   return (
-    <header className="border-b border-line bg-white px-6 py-4">
-      <div className="mx-auto flex max-w-[1080px] flex-wrap items-center justify-between gap-4">
-        <Link href="/" className="text-[17px] font-bold tracking-tight text-ink hover:text-brand">
-          智装 · AI 家装履约平台
-        </Link>
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
-            <span>身份切换</span>
-            <select
-              aria-label="身份切换"
-              className="rounded-input border border-line bg-white px-2.5 py-1.5 text-[12.5px] text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
-              value={role}
-              disabled={pending}
-              onChange={(event) => {
-                const nextRole = event.target.value as Role;
-                startTransition(() => router.push(roles[nextRole].links[0][1]));
-              }}
-            >
-              {Object.entries(roles).map(([value, item]) => (
-                <option key={value} value={value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span className="rounded-full bg-brand-soft px-3 py-1 text-[12px] font-medium text-brand-hover">
-            当前身份：{current.label}
-          </span>
-          {pending && <span role="status" className="text-[12px] text-ink-2">正在切换页面…</span>}
-        </div>
-      </div>
-      <nav className="mx-auto mt-3 flex max-w-[1080px] flex-wrap items-center gap-x-5 gap-y-2" aria-label="产品导航">
-        {current.links.map(([label, href]) => (
-          <Link
-            key={href}
-            href={href}
-            className={pathname === href ? "font-semibold text-brand" : "text-ink-2 hover:text-brand"}
-          >
-            {label}
+    <header className="border-b border-line bg-white">
+      <div className="mx-auto max-w-[1080px] px-5">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pt-4">
+          <Link href="/" className="flex items-baseline gap-2 text-ink no-underline hover:no-underline">
+            <strong className="text-[20px] tracking-[0.02em]">智装</strong>
+            <span className="text-[13px] text-ink-3">AI 家装履约平台</span>
           </Link>
-        ))}
-      </nav>
+          <div className="flex flex-wrap items-center gap-3">
+            {pending && <span role="status" className="text-[13px] text-ink-3">正在切换页面…</span>}
+            <div role="group" aria-label="身份切换" className="inline-flex rounded-control border border-line bg-canvas p-[3px]">
+              {Object.entries(roles).map(([value, item]) => {
+                const active = value === role;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={active}
+                    disabled={pending}
+                    onClick={() => {
+                      if (active) return;
+                      startTransition(() => router.push(roles[value as Role].links[0][1]));
+                    }}
+                    className={`rounded-[6px] px-3.5 py-1.5 text-[14px] font-medium disabled:cursor-wait ${active ? "bg-white text-brand shadow-[0_1px_2px_rgba(29,43,41,0.12)]" : "text-ink-2 hover:text-ink"}`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+            <AccountMenu />
+          </div>
+        </div>
+        <nav className="-mb-px mt-2 flex gap-7 overflow-x-auto" aria-label="产品导航">
+          {current.links.map(([label, href]) => {
+            const active = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-[15px] no-underline hover:no-underline ${active ? "border-brand font-semibold text-brand" : "border-transparent text-ink-2 hover:text-brand"}`}
+              >
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
     </header>
   );
 }
-

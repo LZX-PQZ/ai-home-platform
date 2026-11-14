@@ -1,60 +1,66 @@
 import React, { type ReactNode } from "react";
+import Link from "next/link";
 
 /** D 维护的跨角色共享 UI 出口；A/B/C 通过这里复用，避免跨 features 导入。 */
 
-/** 色板：与 app-preview 原型一致，墨绿主色 + 暖橙强调 + 中性灰 */
+/** 色板 v2：石灰白底、松绿主色、扶手木强调；与 tailwind.config.ts 保持一致 */
 export const T = {
-  brand: "#0F6E56",
-  brandHover: "#0C5A47",
-  brandSoft: "#E7F3EF",
-  accent: "#C2681C",
-  accentSoft: "#FDF0E2",
-  ink: "#16242B",
-  ink2: "#4A5A60",
-  muted: "#7A8A90",
-  line: "#E2E9EB",
+  brand: "#1A5E4A",
+  brandHover: "#134A3A",
+  brandSoft: "#E3EFEA",
+  accent: "#8F6234",
+  accentSoft: "#F3EBE0",
+  wood: "#8F6234",
+  woodSoft: "#F3EBE0",
+  seal: "#BF3A2B",
+  ink: "#1D2B29",
+  ink2: "#46544F",
+  muted: "#66736F",
+  line: "#DDE3DF",
   surface: "#FFFFFF",
-  canvas: "#F3F6F7",
-  danger: "#B42318",
-  dangerSoft: "#FEF3F2",
-  warn: "#8A5A06",
-  warnSoft: "#FEF6E7",
+  canvas: "#F3F5F2",
+  danger: "#A8261F",
+  dangerSoft: "#FBEDEB",
+  warn: "#7A5205",
+  warnSoft: "#FBF3E2",
 } as const;
 
-/* ---------- 类名常量：其他三位可直接复用 ---------- */
+/* ---------- 类名常量：其他三位可直接复用 ----------
+ * 字号阶梯：页面标题 30 / 区块标题 18 / 正文 16 / 标签与按钮 14 / 辅助信息 13（最小）。
+ * 静态卡片只用 1px 边线，不加阴影；阴影只留给浮层。 */
 export const C = {
-  card: "rounded-card border border-line bg-white p-5 shadow-sm",
-  cardFlush: "rounded-card border border-line bg-white shadow-sm",
-  sectionTitle: "text-[15px] font-semibold text-ink",
-  pageTitle: "text-[26px] font-bold tracking-tight text-ink",
-  pageSub: "text-[13.5px] leading-relaxed text-ink-2",
-  meta: "text-[12px] text-ink-3",
+  card: "rounded-card border border-line bg-white p-6",
+  cardFlush: "rounded-card border border-line bg-white",
+  sectionTitle: "text-[18px] font-semibold leading-[1.5] text-ink",
+  pageTitle: "text-[30px] font-bold leading-[1.3] text-ink",
+  pageSub: "max-w-[38em] text-[16px] leading-[1.75] text-ink-2",
+  meta: "text-[13px] leading-[1.5] text-ink-3",
 
   btnBase:
-    "inline-flex items-center justify-center gap-1.5 rounded-[10px] px-4 py-2 text-[13.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+    "inline-flex items-center justify-center gap-1.5 rounded-control border border-transparent px-5 py-2.5 text-[15px] font-medium leading-none no-underline transition-colors disabled:cursor-not-allowed disabled:opacity-45",
   btnPrimary: "bg-brand text-white hover:bg-brand-hover",
   btnSecondary:
-    "border border-line bg-white text-ink hover:border-brand hover:text-brand",
+    "border-line bg-white text-ink hover:border-brand hover:text-brand",
   btnGhost: "text-brand hover:bg-brand-soft",
-  btnDanger: "border border-danger/20 bg-white text-danger hover:bg-danger-soft",
-  btnSm: "px-3 py-1.5 text-[12.5px]",
+  btnDanger: "border-danger/25 bg-white text-danger hover:bg-danger-soft",
+  btnSm: "px-3.5 py-2 text-[14px]",
 
-  pill: "inline-flex items-center rounded-full border border-line bg-white px-3 py-1 text-[12px] text-ink-2 hover:border-brand hover:text-brand",
+  pill: "inline-flex items-center rounded-full border border-line bg-white px-3 py-1 text-[13px] text-ink-2 hover:border-brand hover:text-brand",
 
-  badge: "inline-flex items-center gap-1 rounded-[7px] px-2 py-0.5 text-[11.5px] font-medium",
+  badge: "inline-flex items-center gap-1 rounded-tag px-2 py-0.5 text-[13px] font-medium leading-[1.6]",
   badgeBrand: "bg-brand-soft text-brand-hover",
-  badgeAccent: "bg-accent-soft text-warn",
-  badgeNeutral: "bg-line/40 text-ink-2",
+  badgeAccent: "bg-wood-soft text-wood",
+  badgeNeutral: "bg-mist text-ink-2",
   badgeDanger: "bg-danger-soft text-danger",
 
-  label: "grid gap-1.5 text-[12.5px]",
+  label: "grid gap-1.5 text-[14px]",
   labelText: "font-medium text-ink-2",
   input:
-    "w-full rounded-input border border-line bg-white px-3 py-2 text-[13.5px] text-ink outline-none placeholder:text-ink-3 focus:border-brand focus:ring-2 focus:ring-brand/15",
+    "w-full rounded-input border border-line bg-white px-3 py-2.5 text-[16px] text-ink outline-none placeholder:text-ink-3 focus:border-brand focus:ring-2 focus:ring-brand/15",
 
-  note: "rounded-[10px] px-3 py-2.5 text-[12.5px] leading-relaxed",
+  note: "rounded-control px-4 py-3 text-[14px] leading-relaxed",
   noteWarn: "bg-warn-soft text-warn",
-  noteInfo: "bg-line/40 text-ink-2",
+  noteInfo: "bg-mist text-ink-2",
   noteDanger: "bg-danger-soft text-danger",
   noteOk: "bg-brand-soft text-brand-hover",
 } as const;
@@ -79,7 +85,7 @@ export function SectionHead({
   aside?: ReactNode;
 }) {
   return (
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
       <h2 className={`!mb-0 ${C.sectionTitle}`}>{title}</h2>
       {aside}
     </div>
@@ -193,10 +199,86 @@ export function Empty({
   action?: ReactNode;
 }) {
   return (
-    <div className="grid place-items-center gap-2 rounded-control border border-dashed border-line bg-white px-4 py-8 text-center">
-      <p className="!mb-0 text-[13.5px] font-medium text-ink-2">{title}</p>
+    <div className="grid place-items-center gap-2 rounded-card border border-dashed border-line bg-white px-4 py-10 text-center">
+      <p className="!mb-0 text-[16px] font-medium text-ink-2">{title}</p>
       {hint ? <p className={`!mb-0 ${C.meta}`}>{hint}</p> : null}
       {action}
     </div>
   );
 }
+/** 页面头部：标题 + 一句说明 + 右侧动作。所有业务页统一用它开屏。 */
+export function PageHeader({
+  title,
+  subtitle,
+  aside,
+  id,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  aside?: ReactNode;
+  id?: string;
+}) {
+  return (
+    <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h1 id={id} className={`!mb-1 ${C.pageTitle}`}>{title}</h1>
+        {subtitle ? <p className={`!mb-0 ${C.pageSub}`}>{subtitle}</p> : null}
+      </div>
+      {aside ? <div className="flex flex-wrap items-center gap-2">{aside}</div> : null}
+    </header>
+  );
+}
+
+/** 长得像按钮的链接（<a> 内不套 <button>）。 */
+export function LinkButton({
+  href,
+  children,
+  variant = "primary",
+  size = "md",
+  className = "",
+}: {
+  href: string;
+  children: ReactNode;
+  variant?: ButtonVariant;
+  size?: "md" | "sm";
+  className?: string;
+}) {
+  const map: Record<ButtonVariant, string> = {
+    primary: C.btnPrimary,
+    secondary: C.btnSecondary,
+    ghost: C.btnGhost,
+    danger: C.btnDanger,
+  };
+  return (
+    <Link href={href} className={`${C.btnBase} ${map[variant]} ${size === "sm" ? C.btnSm : ""} ${className}`}>
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * 折叠的说明：数据来源、权限边界、演示限制等静态长文案放这里。
+ * 内容始终在 HTML 中（不删信息，只降级显示）；summary 本身要一句话说清是什么。
+ * 会随加载状态变化、需要读屏播报的内容（role="status" / aria-live）不要放进来。
+ */
+export function Explainer({
+  summary = "数据来源与使用说明",
+  children,
+  className = "",
+}: {
+  summary?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <details className={`group my-4 rounded-control border border-line bg-white text-[14px] leading-relaxed text-ink-2 ${className}`}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 font-medium text-ink-2 hover:text-ink [&::-webkit-details-marker]:hidden">
+        <span aria-hidden="true" className="text-[11px] text-ink-3 transition-transform group-open:rotate-90">▶</span>
+        {summary}
+      </summary>
+      <div className="border-t border-line px-4 py-3 [&>p:last-child]:!mb-0 [&>p]:!mb-2">{children}</div>
+    </details>
+  );
+}
+
+export { FulfillmentRuler, SealStamp, FULFILLMENT_STAGES, stageIndexOf } from "./FulfillmentRuler";
