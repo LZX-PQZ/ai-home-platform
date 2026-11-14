@@ -72,6 +72,7 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 
 ## 接受报价与接单关系（2026-11-14）
 
+- [x] GET /api/order?demandId=…：所属业主在同一事务读取实际接单或明确 null，返回履约/评价所需编号，来源保留、错误不回退空态；无需重放接受报价。契约与 A 接线见 `docs/requests/D-owner-order-read.md`。
 - [x] POST /api/order：真实业主同源确认本人 published 需求的 submitted 报价，在事务内重验身份/归属/原始数据并原子签约、接受、建立 ServiceOrder。每需求单一关系，重复同报价返回原关系，竞争报价最多一个成功；保留来源、null 费用和原提交回执。见 `docs/requests/D-quote-acceptance.md`。
 - [x] GET /api/provider/orders：当前已验证服务方仅读取本人实际接单；历史 accepted 报价不自动补单。当前演示身份整体仍 mock，逐条保留来源，异常/坏数据不回退成功空态。
 - [x] 已接单服务方需求详情：有效会话及本人 ServiceOrder 关系在同一事务核验，签约后可读；匿名和其他服务方仍 404，列表不扩大。见 `docs/requests/D-provider-demand-access.md`。
