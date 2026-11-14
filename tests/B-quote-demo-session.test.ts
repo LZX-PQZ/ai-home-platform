@@ -84,6 +84,7 @@ test("默认报价 POST 使用真实演示 cookie 和隔离 SQLite，不注入�
     assert.equal(first.status, 201);
     const body = envelope(Quote).parse(await first.json());
     assert.equal(body.meta.source, "mock");
+    assert.equal(body.data.source, "mock");
     assert.equal(body.data.providerId, DEMO_PROVIDER_ID);
     assert.equal(body.data.knownTotalCents, 15);
     assert.deepEqual(body.data.items.map(row => row.amountCents), [15, null, 0]);
@@ -94,6 +95,7 @@ test("默认报价 POST 使用真实演示 cookie 和隔离 SQLite，不注入�
     assert.equal(replay.status, 200);
     assert.deepEqual(await replay.json(), body);
     assert.deepEqual(await counts(), [1, 1]);
+    assert.equal((await db.quote.findUniqueOrThrow({ where: { id: body.data.id } })).source, "mock");
     assert.equal((await db.quote.findUniqueOrThrow({ where: { id: body.data.id } })).knownTotalCents, 15);
   });
 

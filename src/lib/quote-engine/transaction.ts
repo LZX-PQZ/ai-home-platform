@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireProviderIdentity, type VerifiedSessionReader } from "@/lib/server-auth";
 import { calculateQuoteSubmission } from "@/lib/quote-engine/submission";
 import { hashQuoteSubmission, readIdempotencyKey } from "@/lib/idempotency";
-import { authorizeProviderAccount, authorizeProviderQuote } from "@/lib/quote-policy";
+import { authorizeProviderAccount, authorizeProviderQuote, parseStoredQuoteSource } from "@/lib/quote-policy";
 
 /** 服务端适配器必须重新验证会话，并通过本次 tx 核验账户绑定；不能返回预检缓存。 */
 export type QuoteTransactionSessionReader = (request: Request, tx: Prisma.TransactionClient) => ReturnType<VerifiedSessionReader>;
@@ -85,6 +85,8 @@ export async function createQuoteAtomically(
       pendingItemsJson: JSON.stringify(submission.pendingItems),
       estimatedDays: submission.estimatedDays,
       status: "submitted",
+      // 当前只开放演示认证；不能从客户端或服务方 ID 推断生产来源。
+      source: parseStoredQuoteSource("mock"),
     } });
     const quote = readQuote(row);
     await tx.quoteSubmissionReceipt.create({ data: {
@@ -106,6 +108,7 @@ function readQuote(row: StoredQuote): QuoteDTO {
   // 输出校验也在事务内；损坏数据不能变成成功回执。
   return Quote.parse({
       id: row.id, demandId: row.demandId, providerId: row.providerId,
+      source: parseStoredQuoteSource(row.source),
       items: JSON.parse(row.itemsJson), knownTotalCents: row.knownTotalCents,
       pendingItems: JSON.parse(row.pendingItemsJson), estimatedDays: row.estimatedDays, status: row.status,
   });

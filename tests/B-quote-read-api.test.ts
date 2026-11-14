@@ -149,7 +149,8 @@ test("公开报价 GET 在隔离 SQLite 中验证实际会话读取和业主授�
       assert.deepEqual(body.data.map(q => q.id), ["a-accepted", saved.quote.id]);
       assert.deepEqual(body.data[1], saved.quote);
       assert.deepEqual(body.data[1].items.map(item => item.amountCents), [15, null, 0]);
-      assert.equal(body.meta.source, "live"); // 按 D 当前需求来源规则；不代表生产身份已接通。
+      assert.equal(body.meta.source, "mock");
+      assert.ok(body.data.every(quote => quote.source === "mock"));
       assert.ok(!JSON.stringify(body).includes(cookie.split("=")[1]));
     }
   });
@@ -181,15 +182,47 @@ test("公开报价 GET 在隔离 SQLite 中验证实际会话读取和业主授�
     assert.equal((await GET(forDemand("owned", cookie))).status, 200);
   });
 
-  await t.test("坏 JSON/DTO/溢出导致整批 503，绝不返回部分报价或 mock", async () => {
+  await t.test("列表来源仅汇总返回报价，保留逐条来源；全 live、混合、演示需求及空列表遵循协议", async () => {
+    // 明确 live 仅为数据库合成夹具，不代表已提供生产认证。
+    await db.quote.updateMany({ where: { demandId: "owned", status: { in: ["submitted", "accepted"] } }, data: { source: "live" } });
+    // 被过滤的损坏来源不得影响可见列表。
+    await db.quote.update({ where: { id: "draft" }, data: { source: "invalid-hidden" } });
+    try {
+      const allLive = await GET(forDemand("owned", cookie));
+      privateResponse(allLive);
+      const liveBody = envelope(Quote.array()).parse(await allLive.json());
+      assert.equal(liveBody.meta.source, "live");
+      assert.ok(liveBody.data.every(quote => quote.source === "live"));
+      await db.quote.update({ where: { id: row.id }, data: { source: "mock" } });
+      const mixed = envelope(Quote.array()).parse(await (await GET(forDemand("owned", cookie))).json());
+      assert.equal(mixed.meta.source, "mock");
+      assert.deepEqual(mixed.data.map(quote => quote.source), ["live", "mock"]);
+      await db.quote.create({ data: { ...row, id: "demo-live-fixture", demandId: "demo-demand", source: "live" } });
+      const demo = envelope(Quote.array()).parse(await (await GET(forDemand("demo-demand", cookie))).json());
+      assert.equal(demo.meta.source, "mock");
+      assert.equal(demo.data[0].source, "live");
+    } finally {
+      await db.quote.updateMany({ where: { demandId: "owned" }, data: { source: "mock" } });
+      await db.quote.deleteMany({ where: { id: "demo-live-fixture" } });
+    }
+  });
+
+  await t.test("坏 JSON/DTO/溢出和非法库来源导致整批 503，绝不返回部分报价或 mock", async () => {
     for (const corrupt of [
       { itemsJson: "{" }, { pendingItemsJson: "{}" },
+      ...["", "LIVE", "invalid-source"].map(source => ({ source })),
       { itemsJson: JSON.stringify([{ ...saved.quote.items[0], amountCents: -1 }]) },
       { itemsJson: JSON.stringify([{ ...saved.quote.items[0], amountCents: Number.MAX_SAFE_INTEGER }, { ...saved.quote.items[0], amountCents: 1 }]) },
     ]) {
       await db.quote.update({ where: { id: row.id }, data: corrupt });
       try { await failure(await GET(forDemand("owned", cookie)), 503, "DATABASE_UNAVAILABLE"); }
-      finally { await db.quote.update({ where: { id: row.id }, data: { itemsJson: row.itemsJson, pendingItemsJson: row.pendingItemsJson } }); }
+      finally { await db.quote.update({ where: { id: row.id }, data: { itemsJson: row.itemsJson, pendingItemsJson: row.pendingItemsJson, source: row.source } }); }
+    }
+    for (const source of [undefined, null]) {
+      const missingSource = db.$extends({ query: { quote: { async findMany({ args, query }) {
+        return (await query(args)).map(quote => ({ ...quote, source })) as never;
+      } } } });
+      await failure(await handleQuoteRead(forDemand("owned", cookie), missingSource as unknown as Pick<PrismaClient, "$transaction">), 503, "DATABASE_UNAVAILABLE");
     }
   });
 

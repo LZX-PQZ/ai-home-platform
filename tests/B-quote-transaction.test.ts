@@ -65,6 +65,7 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
     assert.equal(result.status, "submitted");
     assert.equal(result.demandId, input.demandId);
     assert.equal(result.providerId, identity.providerId);
+    assert.equal(result.source, "mock");
     assert.equal(result.knownTotalCents, 30);
     assert.deepEqual(result.items.map((item) => item.amountCents), [15, 15, null, 0]);
     assert.deepEqual(result.pendingItems, ["未知费用"]);
@@ -72,6 +73,7 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
     assert.deepEqual(JSON.parse(row.itemsJson), result.items);
     assert.deepEqual(JSON.parse(row.pendingItemsJson), result.pendingItems);
     assert.equal(row.knownTotalCents, 30);
+    assert.equal(row.source, "mock");
     assert.equal(await db.quote.count(), 1);
     assert.equal(await db.quoteSubmissionReceipt.count(), 1);
     await clear();
@@ -345,6 +347,50 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
     assert.equal(await db.quote.count(), 1);
     assert.equal(await db.quoteSubmissionReceipt.count(), 1);
     assert.equal((await db.quote.findUniqueOrThrow({ where: { id: firstBody.data.id } })).knownTotalCents, 30);
+    await clear();
+  });
+
+  await t.test("reader 不能自行增加来源；合法重放使用原库来源，不升级 mock 或覆盖 live", async () => {
+    const first = envelope(Quote).parse(await (await http()).json());
+    const claimedAuth = {
+      readSession: async () => ({ ...identity, source: "live" }),
+      readTransactionSession: async () => ({ ...identity, source: "live" }),
+    };
+    await db.$disconnect();
+    await failure(await handleQuoteSubmission(request("test-http-key-0001"), claimedAuth, db), 401, "UNAUTHENTICATED");
+    const replay = await handleQuoteSubmission(request("test-http-key-0001"), { ...auth, readSession: async () => ({ ...identity }) }, db);
+    assert.equal(replay.status, 200);
+    assert.deepEqual(await replay.json(), first);
+    assert.equal(first.data.source, "mock");
+    // live 库记录仅用于测试历史来源透传，不能由当前演示认证创建。
+    await db.quote.update({ where: { id: first.data.id }, data: { source: "live" } });
+    const historical = await http();
+    assert.equal(historical.status, 200);
+    const body = envelope(Quote).parse(await historical.json());
+    assert.equal(body.meta.source, "live");
+    assert.deepEqual(body.data, { ...first.data, source: "live" });
+    assert.equal(await db.quote.count(), 1);
+    assert.equal(await db.quoteSubmissionReceipt.count(), 1);
+    await clear();
+  });
+
+  await t.test("创建明确写 mock；首次坏来源回滚，坏历史来源重放 500且不改原记录", async () => {
+    for (const source of [undefined, null, "", "invalid-source"]) {
+      const badOutput = db.$extends({ query: { quote: { async create({ args, query }) {
+        assert.equal(args.data.source, "mock");
+        return { ...await query(args), source } as never;
+      } } } });
+      await failure(await handleQuoteSubmission(request(), auth, badOutput as unknown as Pick<PrismaClient, "$transaction">), 500, "INTERNAL_ERROR");
+      await noQuotes();
+    }
+    const first = envelope(Quote).parse(await (await http()).json());
+    for (const source of ["", "LIVE", "invalid-source"]) {
+      await db.quote.update({ where: { id: first.data.id }, data: { source } });
+      await failure(await http(), 500, "INTERNAL_ERROR");
+      assert.equal((await db.quote.findUniqueOrThrow({ where: { id: first.data.id } })).source, source);
+      assert.equal(await db.quote.count(), 1);
+      assert.equal(await db.quoteSubmissionReceipt.count(), 1);
+    }
     await clear();
   });
 

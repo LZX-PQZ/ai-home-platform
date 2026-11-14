@@ -64,7 +64,7 @@ test("报价读取内核使用隔离 SQLite，授权适配器为测试夹具而�
     await db.$disconnect();
     const result = await read();
     assert.ok(result);
-    assert.deepEqual(result.response, { ok: true, data: [saved.quote], meta: { source: "live" } });
+    assert.deepEqual(result.response, { ok: true, data: [saved.quote], meta: { source: "mock" } });
     assert.equal(result.demand.source, "live");
     assert.equal(result.response.data[0].knownTotalCents, 30);
     assert.deepEqual(result.response.data[0].items.map((value) => value.amountCents), [15, 15, null, 0]);

@@ -3,6 +3,7 @@ import { DemandIdParams, Quote, envelope } from "@/contracts";
 import { findDemand } from "@/lib/demand";
 import { prisma } from "@/lib/prisma";
 import { prepareQuotes } from "@/lib/quote-engine";
+import { parseStoredQuoteSource, summarizeQuoteSources } from "@/lib/quote-policy";
 
 /** D 的服务端读取授权适配器须在当前事务核验会话、账户和需求归属，不能使用预检快照。 */
 export type QuoteReadAuthorization = (request: Request, demandId: string, tx: Prisma.TransactionClient) => boolean | Promise<boolean>;
@@ -41,14 +42,16 @@ export async function readStoredQuoteComparison(
       }
       return Quote.parse({
         id: row.id, demandId: row.demandId, providerId: row.providerId,
+        source: parseStoredQuoteSource(row.source),
         items: JSON.parse(row.itemsJson), pendingItems: JSON.parse(row.pendingItemsJson),
         knownTotalCents: row.knownTotalCents, estimatedDays: row.estimatedDays, status: row.status,
       });
     });
+    const returnedQuotes = prepareQuotes(id, quotes);
     return {
       demand: demand.data,
       response: envelope(Quote.array()).parse({
-        ok: true, data: prepareQuotes(id, quotes), meta: { source: demand.source },
+        ok: true, data: returnedQuotes, meta: { source: summarizeQuoteSources(demand.source, returnedQuotes) },
       }),
     };
   }, { isolationLevel: "Serializable" });
