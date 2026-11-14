@@ -4,13 +4,12 @@ import { ZodError } from "zod";
 import { QuoteItem, QuoteSubmissionInput } from "../src/contracts";
 import { calculateQuoteSubmission } from "../src/lib/quote-engine/submission";
 import { handleQuoteSubmission } from "../src/lib/quote-engine/submit-request";
-import { prisma } from "../src/lib/prisma";
-import { demoDemand } from "../src/lib/mock-data";
 
 const item = { code: "line-1", name: "防滑施工", unit: "m2", quantity: 12.5, unitPriceCents: 8000, note: "含人工" };
 const input = { demandId: "saved-demand", estimatedDays: 10, items: [item] };
 const readSession = async () => ({ userId: "test-user", role: "provider", providerId: "test-provider" });
-const post = (value: unknown) => handleQuoteSubmission(new Request("http://localhost/api/quote", { method: "POST", body: JSON.stringify(value) }), readSession);
+const auth = { readSession, readTransactionSession: readSession };
+const post = (value: unknown) => handleQuoteSubmission(new Request("http://localhost/api/quote", { method: "POST", headers: { "Idempotency-Key": "test-input-key-0001" }, body: JSON.stringify(value) }), auth);
 
 test("公共输入生成计价字段，金额来自服务端计算，不产生身份、提交状态或成功信封", () => {
   const before = structuredClone(input);
@@ -132,25 +131,10 @@ test("输入边界均由公共契约拦截，包括重复编号、非法数量�
   }
 });
 
-test("认证后坏 JSON 返回 400，已发布需求的合法报价仍返回 501，计算结果不冒充已提交", async (t) => {
-  const original = prisma.demandOrder.findUnique;
-  prisma.demandOrder.findUnique = (async () => ({ ...demoDemand, id: input.demandId })) as unknown as typeof original;
-  t.after(() => { prisma.demandOrder.findUnique = original; });
-  const badJson = await handleQuoteSubmission(new Request("http://localhost/api/quote", { method: "POST", body: "{" }), readSession);
+test("认证后坏 JSON 和计价溢出返回 400，不进入写入", async () => {
+  const badJson = await handleQuoteSubmission(new Request("http://localhost/api/quote", { method: "POST", headers: { "Idempotency-Key": "test-input-key-0001" }, body: "{" }), auth);
   assert.equal(badJson.status, 400);
   assert.equal((await badJson.json()).error.code, "INVALID_JSON");
-  for (const value of [input, { ...input, items: [{ ...item, unitPriceCents: null }] },
-    { ...input, items: [{ ...item, quantity: 0.145, unitPriceCents: 100 }] },
-    { ...input, items: [{ ...item, quantity: 1.005, unitPriceCents: 100 }] },
-  ]) {
-    const response = await post(value);
-    assert.equal(response.status, 501);
-    const body = await response.json();
-    assert.equal(body.ok, false);
-    assert.equal(body.error.code, "NOT_IMPLEMENTED");
-    assert.equal("data" in body, false);
-    assert.equal("meta" in body, false);
-  }
   for (const items of [
     [{ ...item, quantity: 2, unitPriceCents: Number.MAX_SAFE_INTEGER }],
     [{ ...item, quantity: 1, unitPriceCents: Number.MAX_SAFE_INTEGER }, { ...item, code: "b", quantity: 1, unitPriceCents: 1 }],
