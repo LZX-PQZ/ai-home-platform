@@ -7,6 +7,9 @@ import { GET } from "../src/app/api/match/route";
 
 // Prisma 的代理方法没有普通 value 描述符，使用可恢复的显式替换隔离真实数据库。
 function mockLookup(t: TestContext, implementation: (args: { where: { id: string } }) => Promise<unknown>) {
+  const transaction = prisma.$transaction;
+  prisma.$transaction = (async (run: (tx: unknown) => Promise<unknown>) => run({ review: { findMany: async () => [] } })) as typeof transaction;
+  t.after(() => { prisma.$transaction = transaction; });
   const original = prisma.demandOrder.findUnique;
   const lookup = t.mock.fn(implementation);
   prisma.demandOrder.findUnique = lookup as unknown as typeof original;

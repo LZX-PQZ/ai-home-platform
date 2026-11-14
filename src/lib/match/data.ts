@@ -1,6 +1,7 @@
 import { Match, envelope } from "@/contracts";
 import { findDemand } from "@/lib/demand";
-import { demoDemand, providers } from "@/lib/mock-data";
+import { demoDemand } from "@/lib/mock-data";
+import { readProviderDirectory } from "@/lib/provider-directory";
 import { matchProviders } from "@/lib/match";
 
 const MatchResponse = envelope(Match.array());
@@ -12,13 +13,14 @@ export async function loadMatchData(demandId?: string) {
   if (demandId !== undefined && result.data.id !== demandId) {
     throw new Error("需求查询返回的 ID 与请求不一致。");
   }
+  // 与浏览器 GET /api/provider 的缺省口径一致；没有 live 样本不改用 mock。
+  const directory = await readProviderDirectory();
   return {
     demand: result.data,
     response: MatchResponse.parse({
       ok: true,
-      data: matchProviders(result.data, providers),
-      // 需求可以来自数据库，但候选团队仍是固定模拟资料，整体不能标 live。
-      meta: { source: "mock" },
+      data: matchProviders(result.data, directory.data),
+      meta: { source: result.data.source === "live" && directory.meta.source === "live" ? "live" : "mock" },
     }),
   };
 }

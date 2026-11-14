@@ -1,5 +1,6 @@
 import { DemandIdParams, type ApiFailure } from "@/contracts";
 import { loadMatchData } from "@/lib/match/data";
+import { ProviderDirectoryError } from "@/lib/provider-directory";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +20,12 @@ export async function GET(request: Request) {
         error: { code: "DEMAND_NOT_FOUND", message: "这份需求不存在，请返回需求列表。" },
       } satisfies ApiFailure, { status: 404 });
     }
-    return Response.json(result.response);
-  } catch {
+    return Response.json(result.response, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    if (error instanceof ProviderDirectoryError) return Response.json({
+      ok: false,
+      error: { code: error.code, message: "服务方评价汇总暂时无法读取，请稍后重试。" },
+    } satisfies ApiFailure, { status: 503, headers: { "Cache-Control": "no-store" } });
     return Response.json({
       ok: false,
       error: { code: "DATABASE_UNAVAILABLE", message: "需求数据暂时无法读取，请稍后重试。" },

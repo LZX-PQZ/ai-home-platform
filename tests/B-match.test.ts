@@ -4,6 +4,7 @@ import { Match, envelope, type ProviderDTO } from "../src/contracts";
 import { demoDemand, providers } from "../src/lib/mock-data";
 import { matchProviders } from "../src/lib/match";
 import { GET } from "../src/app/api/match/route";
+import { prisma } from "../src/lib/prisma";
 
 const provider = (overrides: Partial<ProviderDTO> = {}): ProviderDTO => ({
   id: "test-provider", name: "测试施工团队", city: "深圳", kind: "construction",
@@ -73,7 +74,10 @@ test("最高评分输出符合公共 Match 契约，且不虚构预算与档期�
   assert.ok(result[0].reasons.every((reason) => !/满足预算|档期匹配|资质已验证/.test(reason)));
 });
 
-test("匹配 API 保留无参数演示入口，使用公共响应契约", async () => {
+test("匹配 API 保留无参数演示需求并读取目录汇总，使用公共响应契约", async (t) => {
+  const transaction = prisma.$transaction;
+  prisma.$transaction = (async (run: (tx: unknown) => Promise<unknown>) => run({ review: { findMany: async () => [] } })) as typeof transaction;
+  t.after(() => { prisma.$transaction = transaction; });
   const response = await GET(new Request("http://localhost/api/match"));
   assert.equal(response.status, 200);
   const body = envelope(Match.array()).parse(await response.json());

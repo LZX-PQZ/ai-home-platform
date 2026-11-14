@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { Match, type DemandDTO, type ProviderDTO } from "@/contracts";
+import { Match, ProviderPerformance, type DemandDTO, type ProviderDTO } from "@/contracts";
 
 export const renovationLabels: Record<DemandDTO["renovationType"], string> = {
   elderly: "适老化",
@@ -16,7 +16,7 @@ export function matchProviders(
   const specialty = renovationLabels[demand.renovationType];
   if (!city) return [];
 
-  return candidates
+  const matches = candidates
     .filter((provider) => provider.city.trim() === city && provider.kind === "construction")
     .map((provider) => {
       const hasSpecialty = provider.tags.some((tag) => tag.trim() === specialty);
@@ -33,11 +33,30 @@ export function matchProviders(
           `评分 ${provider.rating}/5：+${ratingPoints} 分（评分 × 8，四舍五入）`,
         ],
       };
-    })
-    .sort((a, b) => {
-      const difference = b.score - a.score;
-      if (difference !== 0) return difference;
-      // 同分时按稳定 ID 排序，避免候选数据顺序改变导致页面跳动。
+    });
+  const groups = new Map<number, typeof matches>();
+  for (const match of matches) {
+    const group = groups.get(match.score) ?? [];
+    group.push(match);
+    groups.set(match.score, group);
+  }
+  return [...groups.entries()].sort(([a], [b]) => b - a).flatMap(([, group]) => {
+    // 先按整个同分组决定是否启用，不能在比较两人时临时跳过未知值。
+    const performances = group.map(match => ProviderPerformance.safeParse(match.provider.performance));
+    const sources = new Set(performances.flatMap(value => value.success ? [value.data.source] : []));
+    const enabled = group.length > 1 && sources.size === 1
+      && performances.every(value => value.success && value.data.averageRating !== null && value.data.reviewCount > 0);
+    const reason = group.length === 1 ? "本基础分组仅一位候选，评价均分不改变跨组顺序。"
+      : enabled ? "同基础分组评价数据完整且来源一致，按已完成接单评价均分降序；均分相同按编号稳定展示。"
+        : "同基础分组有评价缺失、无样本或来源不一致，整组不使用评价细排，按编号稳定展示；未知不当零分。";
+    for (const match of group) match.reasons.push(reason);
+    return group.sort((a, b) => {
+      if (enabled) {
+        // 整组验证已保证均分非 null；不使用默认 0 补齐。
+        const difference = b.provider.performance!.averageRating! - a.provider.performance!.averageRating!;
+        if (difference !== 0) return difference;
+      }
       return a.provider.id < b.provider.id ? -1 : a.provider.id > b.provider.id ? 1 : 0;
     });
+  });
 }

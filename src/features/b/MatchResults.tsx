@@ -19,7 +19,7 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
           <span className="badge">{demandSource === undefined && providerSource === "live" ? "需求来源未知 · 规则匹配" : isMock ? "含模拟数据 · 规则匹配" : "规则匹配"}</span>
         </div>
         <h1>为这次改造，找到合适的施工团队</h1>
-        <p className="max-w-2xl text-slate-600">先确认服务城市与工种，再按改造经验和评分排序。每一项推荐都有可查看的依据。</p>
+        <p className="max-w-2xl text-slate-600">先确认服务城市与工种，再按改造经验和基础资料评分排序。基础分相同时，符合条件的整组再参考已完成接单评价均分。</p>
       </header>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6" aria-labelledby="demand-summary">
@@ -36,6 +36,7 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
 
       <section aria-labelledby="matches-heading">
         <p className="text-sm text-slate-500">服务方来源：{providerSource === "mock" ? "模拟资料和样例评分" : "服务方接口数据"}</p>
+        <p className="text-sm text-slate-500">基础资料与评价统计来源逐团队分别标注。当前默认查询 live 评价，不用 mock 评价补齐无样本结果。</p>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="mb-0" id="matches-heading">{matches.length ? `${matches.length} 家符合城市与工种的候选团队` : providerSource === "mock" ? "当前模拟资料中暂未找到符合条件的团队" : "本次返回的资料中暂未找到符合条件的团队"}</h2>
           {matches.length > 0 && <span className="text-sm text-slate-500">按匹配分从高到低排列</span>}
@@ -55,9 +56,10 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
 
       <aside className="rounded-2xl border border-amber-200 bg-amber-50 p-6" aria-labelledby="matching-notes">
         <h2 className="text-base" id="matching-notes">做决定前，还需要确认</h2>
-        <p className="text-sm text-amber-950">匹配分 = 改造标签匹配 60 分 + 服务方评分 × 8（四舍五入，最高 40 分）。同分团队按固定顺序展示，先后不代表优劣。分数仅用于候选排序，不代表施工质量保证。</p>
+        <p className="text-sm text-amber-950">匹配分 = 改造标签匹配 60 分 + 服务方评分 × 8（四舍五入，最高 40 分）。这是基础分，评价均分不加分，也不改变不同基础分组的顺序。同分组全部有有效且同来源的评价时，按均分降序；否则整组按编号展示。均分相同也按编号展示，不按样本数量加分。</p>
+        <p className="text-sm text-amber-950">null 表示没有均分，不当作 0 分；缺少评价不淘汰候选。少于 3 条显示“样本少”，请谨慎参考。评价反映业主反馈，不代表施工质量保证。</p>
         <p className="text-sm text-amber-950">服务方的报价、可接单日期和资质尚未核验。预算与期望工期只是你的需求，当前不作为已满足条件。</p>
-        {providerSource === "mock" && <p className="text-sm text-amber-950">当前团队资料和评分均为模拟数据，未使用真实履约记录。</p>}
+        {providerSource === "mock" && <p className="text-sm text-amber-950">目录整体含模拟资料；基础资料评分与已完成接单评价是不同指标，评价统计来源见每张卡片。</p>}
         <p className="mb-0 text-sm text-amber-950">匹配分由规则计算，未调用 AI 模型。</p>
       </aside>
 
