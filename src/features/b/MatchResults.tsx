@@ -37,7 +37,7 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
 
       <section aria-labelledby="matches-heading">
         <p className="text-sm text-slate-500">服务方来源：{providerSource === "mock" ? "模拟资料和样例评分" : "服务方接口数据"}</p>
-        <p className="text-sm text-slate-500">基础资料与评价统计来源逐团队分别标注。当前默认查询 live 评价，不用 mock 评价补齐无样本结果。</p>
+        <p className="text-sm text-slate-500">基础资料与评价统计来源逐团队分别标注。{data.performanceSource === "mock" ? "当前显式查询 mock 模拟接单评价，仅供演示，不代表真实口碑。" : "当前默认查询 live 评价，不用 mock 评价补齐无样本结果。"}</p>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="mb-0" id="matches-heading">{matches.length ? `${matches.length} 家符合城市与工种的候选团队` : providerSource === "mock" ? "当前模拟资料中暂未找到符合条件的团队" : "本次返回的资料中暂未找到符合条件的团队"}</h2>
           {matches.length > 0 && <span className="text-sm text-slate-500">按匹配分从高到低排列</span>}

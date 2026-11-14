@@ -13,7 +13,7 @@ function demand(minimum: number, maximum: number): DemandDTO {
 }
 function matching(value: DemandDTO) {
   return renderToStaticMarkup(createElement(MatchResults, { data: {
-    demand: value, demandSource: "mock", providerSource: "mock", readAt: Date.parse("2026-11-14T08:00:00Z"),
+    demand: value, demandSource: "mock", providerSource: "mock", performanceSource: "live", readAt: Date.parse("2026-11-14T08:00:00Z"),
     response: { ok: true, data: [], meta: { source: "mock" } },
   } }));
 }

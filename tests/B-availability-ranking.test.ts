@@ -107,7 +107,7 @@ test("全部输入排列均稳定、组合规则无循环比较且输入不变",
 
 test("页面显示窗口/剩余天数/覆盖范围/来源/有效期/读取时点及刷新限制", () => {
   const html = renderToStaticMarkup(createElement(MatchResults, { data: {
-    demand, demandSource: "mock", providerSource: "mock", readAt: now,
+    demand, demandSource: "mock", providerSource: "mock", performanceSource: "live", readAt: now,
     response: { ok: true, data: matchProviders(demand, [provider("a", availability()), provider("b", null), provider("c", availability(undefined, { validUntil: new Date(now).toISOString() })), provider("d", availability([]))], now), meta: { source: "mock" } },
   } }));
   for (const phrase of ["mock · 固定模拟窗口", "上海自然日", "2028-02-28T16:00:00.000Z", "2028-03-31T16:00:00Z", "2028-02-29", "档期未知", "档期待更新", "没有剩余可用窗口", "可容纳 3 天", "停留期间不会自动更新", "不是预约"]) assert.ok(html.includes(phrase), phrase);

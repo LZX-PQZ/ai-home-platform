@@ -1,4 +1,4 @@
-import { Demand, DemandIdParams, Match, Provider, envelope } from "@/contracts";
+import { Demand, DemandIdParams, Match, Provider, ProviderQuery, type ProviderDTO, envelope } from "@/contracts";
 import { apiGet, ApiClientError } from "@/lib/api-client";
 import { matchProviders } from "@/lib/match";
 
@@ -10,9 +10,11 @@ export class MatchDemandNotFound extends Error {
 }
 
 /** 浏览器通过 D 已开放的接口读数据；任何失败都不回退到固定需求。 */
-export async function loadMatches(demandId: string) {
+export async function loadMatches(demandId: string, performanceSource: NonNullable<ProviderDTO["source"]> = "live") {
   const params = DemandIdParams.safeParse({ id: demandId });
   if (!params.success) throw new ApiClientError("需求 ID 无效。", "VALIDATION_ERROR", 400);
+  const query = ProviderQuery.safeParse({ performanceSource });
+  if (!query.success) throw new ApiClientError("评价来源无效。", "VALIDATION_ERROR", 400);
 
   const demandResponse = await apiGet(`/api/demand/${encodeURIComponent(params.data.id)}`, Demand)
     .catch((error: unknown) => {
@@ -25,12 +27,16 @@ export async function loadMatches(demandId: string) {
     throw new ApiClientError("需求接口返回了其他需求，无法展示匹配结果。", "INVALID_RESPONSE", 200);
   }
 
-  const providerResponse = await apiGet("/api/provider", Provider.array());
+  const providerResponse = await apiGet(query.data.performanceSource === "mock" ? "/api/provider?performanceSource=mock" : "/api/provider", Provider.array());
+  if (providerResponse.data.some(provider => provider.performance && provider.performance.source !== performanceSource)) {
+    throw new ApiClientError("评价接口返回的来源与所选口径不一致。", "INVALID_RESPONSE", 200);
+  }
   const demandSource = demandResponse.data.source;
   const providerSource = providerResponse.meta.source;
   const readAt = Date.now();
   return {
     readAt,
+    performanceSource,
     demand: demandResponse.data,
     demandSource,
     providerSource,
