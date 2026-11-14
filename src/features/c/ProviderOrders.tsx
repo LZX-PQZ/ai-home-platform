@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
 import { formatQuoteMoney } from "./quote-form";
 import { QuoteSource } from "./QuoteSource";
+import { ProviderQuoteDetails } from "./ProviderQuoteDetails";
 import {
   loadProviderOrders,
   providerOrderStatusLabels,
@@ -112,6 +113,7 @@ export function ProviderOrdersContent({ state, onReload }: {
                       </div>
                     </dl>
                     <p className="mt-4 text-sm text-ink-2">已知小计不代表最终总价；未知费用不按零计算，预计工期不代表已确认开工安排。</p>
+                    <ProviderQuoteDetails quote={quote} />
                     <Link href={`/provider/demand/${encodeURIComponent(quote.demandId)}`} prefetch={false}
                       className="mt-3 inline-block rounded-md font-medium underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">
                       查看关联需求
