@@ -28,12 +28,21 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/demand/[id] | Demand | D | 按 ID 查询 Prisma；每条输出 `source`，不存在 404，不回退到 demo-demand |
 | POST /api/demand/chat | ChatResult | D | 读取 ChatInput；`AI_MODE=mock` 返回 mock，`AI_MODE=live` 调用服务端 LLM 网关并返回 live |
 | GET /api/provider | Provider[] | D | 固定 mock |
+| GET /api/provider/quotes | Quote[] | D | 同一事务验证服务方会话并只查本人报价；当前演示身份整体标 mock，不代表接单 |
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
 | GET /api/quote | Quote[] | B | 固定 mock |
 | POST /api/quote | QuoteSubmissionInput → Quote | B | 已接演示会话；合法首次提交 201/mock，同键同摘要重放 200/mock；无有效会话 401 |
 | GET /api/schedule[?demandId=<id>&version=<n>] | Schedule | D | 无参数为演示 mock；带 `demandId` 读取 Prisma 最新/指定版本 |
 | GET /api/payment | Payment[] | D | 模拟节点列表；simulated 必须 true |
 | GET /api/ticket | Ticket[] | D | 固定 mock |
+
+## GET /api/provider/quotes
+
+无参数的本人报价列表，任何查询参数为 400；不能传 providerId 指定身份。使用现有服务方演示登录，在同一事务核验会话、当前角色与绑定，只查询绑定 providerId 的持久化 Quote，逐条重验归属和公共契约。返回本人 draft/submitted/accepted/rejected 报价，按 id 升序（不表示提交时间或成交顺序），不暴露内部幂等字段及业主资料。
+
+匿名/失效/撤销/过期/重复凭证、演示关闭或账号绑定变化为 401；只有业主身份为 403。存储故障或 JSON/来源/DTO 损坏为 503，不回退固定 mock 或成功空数组；鉴权成功且确实无本人报价才返回空数组。所有成功与失败响应 private, no-store、Vary: Cookie。
+
+逐条 source 保留持久化来源且严格校验，null 费用不当作 0；当前会话为演示服务方，整体 meta.source 始终 mock（含空数组及单条 live 的情况）。这提供“本人报价”，不创建或证明接单关系；`GET /api/provider/orders` 和生产服务方登录尚未交付。C 接线说明见 `docs/requests/D-provider-own-quotes.md`，页面修改由 C 维护。
 
 ## POST /api/quote
 
