@@ -75,3 +75,21 @@ test("有排期时返回链接仍保留编码后的原需求 ID", () => {
   const html = render({ ...ready(), data: { ...schedule, demandId: id } }, id);
   assert.ok(html.includes(`/owner/demand/${encodeURIComponent(id)}`));
 });
+
+test("404 无排期单独显示可重试空态，不展示来源、图表或写入操作", () => {
+  const html = render({ phase: "missing", data: null, source: null, error: null });
+  assert.match(html, /尚未找到这条需求的排期/);
+  assert.match(html, /重新加载/);
+  assert.doesNotMatch(html, /接口请求失败|排期来源|模拟数据|progressbar|工序时间轴|申请排期变更/);
+});
+
+test("最新排期和空工序版本都展示接口版本，并提供刷新入口", () => {
+  const state = { ...ready("live"), data: { ...schedule, version: 7 } };
+  const html = render(state);
+  assert.match(html, /排期版本 v7/);
+  assert.match(html, /刷新最新排期/);
+  const empty = render({ ...state, data: { ...state.data, tasks: [] } });
+  assert.match(empty, /排期版本 v7/);
+  assert.match(empty, /重新加载/);
+  assert.doesNotMatch(empty, /固定演示数据|还没有排期|模拟数据/);
+});
