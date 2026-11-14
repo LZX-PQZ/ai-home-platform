@@ -29,7 +29,7 @@ test("混合报价按每条 source 展示，保留整份列表来源且不推断
     { ...baseQuote, id: "C-source-unknown" },
   ];
   const fetchMock = t.mock.method(globalThis, "fetch", async (path: string) => {
-    assert.equal(path, "/api/quote");
+    assert.equal(path, "/api/provider/quotes");
     return Response.json(payload(data, "mock"));
   });
   const response = await loadProviderOrders();
@@ -43,7 +43,7 @@ test("混合报价按每条 source 展示，保留整份列表来源且不推断
   }
   assert.match(html, /报价列表来源：模拟标识（mock）/);
   assert.match(html, /不代表每条报价都未保存/);
-  assert.match(html, /来源标识不代表真实业务身份、业主已收到报价或已履约/);
+  assert.match(html, /来源标识不代表真实业务身份、业主已阅读报价或已履约/);
   assert.equal(fetchMock.mock.callCount(), 1);
 });
 
@@ -72,7 +72,7 @@ test("非法逐条来源拒绝整份响应，不降级成未知或保留部分�
       assert.ok(error instanceof ApiClientError);
       assert.equal(error.code, "INVALID_RESPONSE");
       const html = render({ status: "error", message: providerOrdersErrorMessage(error) });
-      assert.match(html, /接单数据格式异常/);
+      assert.match(html, /本人报价数据格式异常/);
       assert.doesNotMatch(html, /报价来源：|报价列表来源：|<article/);
       return true;
     });
@@ -83,10 +83,10 @@ test("非法逐条来源拒绝整份响应，不降级成未知或保留部分�
 test("空列表与加载中不虚构逐条来源，mock 空态不声称已有模拟报价", () => {
   for (const source of ["mock", "live"] as const) {
     const html = render({ status: "ready", response: payload([], source) });
-    assert.match(html, /本次接口暂无报价记录/);
+    assert.match(html, /当前服务方暂无报价记录/);
     assert.doesNotMatch(html, /报价来源：|<article/);
     if (source === "mock") {
-      assert.match(html, /本次为空列表，接口来源标记为 mock；没有可展示的报价/);
+      assert.match(html, /本次为空列表，演示身份查询标记为 mock；当前服务方没有已保存的报价/);
       assert.doesNotMatch(html, /本次报价列表含模拟数据|本次列表标记为 mock，可能包含/);
     } else {
       assert.match(html, /报价列表来源：实时接口（live）/);
@@ -104,7 +104,7 @@ test("HTTP 501 即使带合法逐条 live 来源也不能展示成功记录", as
     assert.ok(error instanceof ApiClientError);
     assert.equal(error.status, 501);
     const html = render({ status: "error", message: providerOrdersErrorMessage(error) });
-    assert.match(html, /接单查询尚未实现/);
+    assert.match(html, /本人报价查询尚未实现/);
     assert.doesNotMatch(html, /报价来源：|报价列表来源：|C-source-quote/);
     return true;
   });
