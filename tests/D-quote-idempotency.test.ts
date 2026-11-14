@@ -60,6 +60,18 @@ test("报价授权只允许 live published 非演示需求，城市不是当前�
   assert.equal(authorizeProviderQuote(identity, { ...demand, status: "contracted" }).ok, false);
 });
 
+test("首次报价与同摘要回执重放共用当前授权，非 published 状态一律为 INVALID_STATE", () => {
+  for (const status of ["draft", "contracted", "in_progress", "completed"] as const) {
+    const result = authorizeProviderQuote(identity, { ...demand, status });
+    assert.equal(result.ok, false, status);
+    if (!result.ok) {
+      assert.equal(result.status, 409, status);
+      assert.equal(result.code, "INVALID_STATE", status);
+    }
+  }
+  assert.deepEqual(authorizeProviderQuote(identity, demand), { ok: true, identity });
+});
+
 test("数据库边界单独收紧，公共 Money 仍可表达安全整数", () => {
   assert.equal(DatabaseInt.safeParse(-2_147_483_648).success, true);
   assert.equal(DatabaseInt.safeParse(2_147_483_647).success, true);
