@@ -1,9 +1,11 @@
-import test, { type TestContext } from "node:test";
+import test, { beforeEach, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { Match, envelope, type DemandDTO } from "../src/contracts";
-import { demoDemand } from "../src/lib/mock-data";
+import { matchDemandFixture as demoDemand, installMatchProtocolFixture } from "./B-match-fixtures";
 import { prisma } from "../src/lib/prisma";
 import { GET } from "../src/app/api/match/route";
+
+beforeEach(installMatchProtocolFixture);
 
 // Prisma 的代理方法没有普通 value 描述符，使用可恢复的显式替换隔离真实数据库。
 function mockLookup(t: TestContext, implementation: (args: { where: { id: string; status: string } }) => Promise<unknown>) {
@@ -43,11 +45,11 @@ test("已保存需求按实际城市及改造类型匹配，真实需求配模�
     return rows.find((row) => row.id === where.id) ?? null;
   });
   const repair = await success(rows[0].id);
-  assert.deepEqual(repair.map((match) => match.provider.id), ["provider-b", "provider-a"]);
+  assert.deepEqual(repair.map((match) => match.provider.id), ["fixture-b", "fixture-a"]);
   assert.ok(repair[0].reasons.some((reason) => reason.includes("维修") && reason.includes("+60")));
   assert.ok(repair.every((match) => match.provider.city === "深圳" && match.provider.kind === "construction"));
   const partial = await success(rows[1].id);
-  assert.deepEqual(partial.map((match) => match.provider.id), ["provider-f"]);
+  assert.deepEqual(partial.map((match) => match.provider.id), ["fixture-remote"]);
   assert.ok(partial[0].reasons.some((reason) => reason.includes("局部改造") && reason.includes("+60")));
   assert.deepEqual(await success(rows[2].id), []);
   assert.deepEqual(queried, rows.map((row) => row.id));
@@ -56,9 +58,9 @@ test("已保存需求按实际城市及改造类型匹配，真实需求配模�
 test("每次请求重新读取需求，更新后改变匹配，删除后返回 404 而非缓存结果", async (t) => {
   let row: DemandDTO | null = { ...demoDemand, id: "saved-changing" };
   mockLookup(t, async () => row);
-  assert.deepEqual((await success("saved-changing")).map((match) => match.provider.id), ["provider-a", "provider-b"]);
+  assert.deepEqual((await success("saved-changing")).map((match) => match.provider.id), ["fixture-a", "fixture-b"]);
   row = { ...row, city: "广州", renovationType: "partial" };
-  assert.deepEqual((await success("saved-changing")).map((match) => match.provider.id), ["provider-f"]);
+  assert.deepEqual((await success("saved-changing")).map((match) => match.provider.id), ["fixture-remote"]);
   row = null;
   const response = await GET(request("saved-changing"));
   assert.equal(response.status, 404);
@@ -72,7 +74,9 @@ test("只有省略参数走固定演示入口，显式 demo-demand 必须存在�
   const lookup = mockLookup(t, async () => row);
   const demo = await GET(new Request("http://localhost/api/match"));
   assert.equal(demo.status, 200);
-  assert.equal(envelope(Match.array()).parse(await demo.json()).meta.source, "mock");
+  const demoBody = envelope(Match.array()).parse(await demo.json());
+  assert.equal(demoBody.meta.source, "mock");
+  assert.deepEqual(demoBody.data.map(match => match.provider.id), ["fixture-a", "fixture-b"]);
   assert.equal(lookup.mock.callCount(), 0);
   const explicit = await GET(request("demo-demand"));
   assert.equal(explicit.status, 404);
@@ -81,7 +85,7 @@ test("只有省略参数走固定演示入口，显式 demo-demand 必须存在�
   assert.equal("data" in missing, false);
   assert.equal(lookup.mock.callCount(), 1);
   row = demoDemand;
-  assert.deepEqual((await success("demo-demand")).map((match) => match.provider.id), ["provider-a", "provider-b"]);
+  assert.deepEqual((await success("demo-demand")).map((match) => match.provider.id), ["fixture-a", "fixture-b"]);
 });
 
 test("非法或重复参数在查询前被拒绝，合法特殊字符 ID 原样传入服务", async (t) => {

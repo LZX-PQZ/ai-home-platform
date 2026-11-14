@@ -1,10 +1,12 @@
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { Match, envelope, type ProviderDTO } from "../src/contracts";
-import { demoDemand, providers } from "../src/lib/mock-data";
+import { matchDemandFixture as demoDemand, matchProviderFixtures as providers, installMatchProtocolFixture } from "./B-match-fixtures";
 import { matchProviders } from "../src/lib/match";
 import { GET } from "../src/app/api/match/route";
 import { prisma } from "../src/lib/prisma";
+
+beforeEach(installMatchProtocolFixture);
 
 const provider = (overrides: Partial<ProviderDTO> = {}): ProviderDTO => ({
   id: "test-provider", name: "测试施工团队", city: "深圳", kind: "construction",
@@ -82,7 +84,8 @@ test("匹配 API 保留无参数演示需求并读取目录汇总，使用公共
   assert.equal(response.status, 200);
   const body = envelope(Match.array()).parse(await response.json());
   assert.equal(body.meta.source, "mock");
-  assert.deepEqual(body.data.map((row) => row.provider.id), ["provider-a", "provider-b"]);
+  assert.deepEqual(body.data.map((row) => row.provider.id), ["fixture-a", "fixture-b"]);
+  assert.ok(body.data.every(row => row.provider.source === "mock" && row.provider.performance?.source === "live"));
 });
 
 test("匹配 API 拒绝空、纯空白和重复 ID", async () => {
