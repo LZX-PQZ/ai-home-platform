@@ -30,7 +30,7 @@ import { PhotoInspectionPanel } from "./PhotoInspectionPanel";
  * 数据只有 /api/schedule 一处来源，接口没给的字段（真实日期、责任人姓名、验收单）一律不编。
  */
 export function SchedulePanel({ id }: { id: string }) {
-  const { reload, ...state } = useSchedule();
+  const { reload, ...state } = useSchedule(id);
   return <ScheduleContent id={id} state={state} reload={reload} />;
 }
 
@@ -81,7 +81,7 @@ export function ScheduleContent({ id, state, reload }: {
         <PageHeader title="施工进度" subtitle={`未取得需求 ${id} 的排期`} />
         <Note tone="warn" title="这条排期不属于当前需求">
           <p>接口返回的排期属于需求「{data.demandId}」（来源：{source ?? "未确认"}），并非当前需求「{id}」。本页已停止展示该排期。</p>
-          <p>当前接口尚不支持按需求查询；这不能证明当前需求没有排期。</p>
+          <p>返回数据与当前需求不一致；这不能证明当前需求没有排期，请重新加载。</p>
         </Note>
         <div className="mt-3 flex flex-wrap gap-2">
           <LinkButton href={demandHref(id)} variant="secondary" size="sm">返回需求详情</LinkButton>
@@ -91,18 +91,33 @@ export function ScheduleContent({ id, state, reload }: {
     );
   }
 
+  if (phase === "missing") {
+    return (
+      <div>
+        <PageHeader title="施工进度" subtitle={`需求 ${id} 暂无排期`} />
+        <Empty
+          title="尚未找到这条需求的排期"
+          hint="当前没有可读取的排期版本，请在负责人安排后重新加载。"
+          action={<LinkButton href={demandHref(id)} size="sm" variant="secondary">返回需求详情</LinkButton>}
+        />
+        <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
+      </div>
+    );
+  }
+
   if (!data || data.tasks.length === 0) {
     return (
       <div>
-        <PageHeader title="施工进度" subtitle="这条需求还没有排期" />
+        <PageHeader title="施工进度" subtitle={data ? `需求 ${id} · 排期版本 v${data.version}` : "未取得排期数据"} />
         <p className={C.meta}>排期来源：{source ?? "未确认"}{source === "mock" ? "（模拟数据）" : ""}</p>
         <Empty
           title="接口没有返回任何工序"
-          hint="排期由签约后生成（GET /api/schedule 目前返回固定演示数据）。本页不会凭空画一份计划出来。"
+          hint="当前排期版本尚未包含工序，请联系施工负责人确认。"
           action={
             <LinkButton href={demandHref(id)} size="sm" variant="secondary">返回需求详情</LinkButton>
           }
         />
+        <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
       </div>
     );
   }
@@ -129,9 +144,10 @@ export function ScheduleContent({ id, state, reload }: {
         title="施工进度"
         subtitle={`需求 ${data.demandId} · 排期版本 v${data.version} · 数据来源 ${source ?? "未知"}`}
         aside={
-          <Badge tone={status.tone}>
-            {status.label}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge tone={status.tone}>{status.label}</Badge>
+            <Button variant="secondary" size="sm" onClick={reload}>刷新最新排期</Button>
+          </div>
         }
       />
 

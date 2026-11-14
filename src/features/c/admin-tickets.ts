@@ -14,6 +14,28 @@ export const ticketStatusLabels: Record<ReturnType<typeof Ticket.parse>["status"
   resolved: "已解决",
 };
 
+export type TicketDTO = ReturnType<typeof Ticket.parse>;
+export type TicketCategoryFilter = "all" | TicketDTO["category"];
+export type TicketStatusFilter = "all" | TicketDTO["status"];
+
+export const ticketCategoryFilterOptions = ["all", ...Ticket.shape.category.options] as const;
+export const ticketStatusFilterOptions = ["all", ...Ticket.shape.status.options] as const;
+export const ticketCategoryFilterLabels: Record<TicketCategoryFilter, string> = {
+  all: "全部分类",
+  ...ticketCategoryLabels,
+};
+export const ticketStatusFilterLabels: Record<TicketStatusFilter, string> = {
+  all: "全部状态",
+  ...ticketStatusLabels,
+};
+
+export function filterTickets(tickets: TicketDTO[], category: TicketCategoryFilter, status: TicketStatusFilter) {
+  return tickets.filter((ticket) =>
+    (category === "all" || ticket.category === category) &&
+    (status === "all" || ticket.status === status),
+  );
+}
+
 export async function loadAdminTickets() {
   const response = await apiGet("/api/ticket", Ticket.array());
   if (new Set(response.data.map((ticket) => ticket.id)).size !== response.data.length) {

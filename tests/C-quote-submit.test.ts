@@ -25,7 +25,9 @@ const quote = Quote.parse({
   ...result.preview, id: "C-test-quote", demandId: input.demandId, providerId: "C-test-provider", status: "submitted",
 });
 function envelope(data: unknown = quote, source: SourceDTO = "live") { return { ok: true, data, meta: { source } }; }
-function render(state: QuoteSubmissionState) { return renderToStaticMarkup(createElement(QuoteSubmissionFeedback, { state })); }
+function render(state: QuoteSubmissionState, onRetry?: () => void) {
+  return renderToStaticMarkup(createElement(QuoteSubmissionFeedback, { state, onRetry }));
+}
 
 test("从预览构造公共输入只保留允许字段，分数金额留给服务端计算，0 与 null 分开", () => {
   assert.deepEqual(QuoteSubmissionInput.parse(input), input);
@@ -65,17 +67,18 @@ test("缺失或非法幂等键在网络前拒绝，不给请求体添加幂等�
   assert.equal(fetchMock.mock.callCount(), 0);
 });
 
-test("幂等冲突保留未知状态并阻止换键重发，不引导刷新丢掉原提交标识", async (t) => {
+test("幂等冲突保留未知状态并提供同键重试，不引导刷新丢掉原提交标识", async (t) => {
   t.mock.method(globalThis, "fetch", async () => Response.json({
     ok: false, error: { code: "IDEMPOTENCY_CONFLICT", message: "内部摘要与数据库内容" },
   }, { status: 409 }));
   await assert.rejects(submitQuote(input, key), (error: unknown) => {
     const state = quoteSubmissionFailure(error);
     assert.equal(state.status, "uncertain");
-    const html = render(state);
+    const html = render(state, () => {});
     assert.match(html, /已有报价需要核实/);
     assert.match(html, /不会换标识重发/);
-    assert.match(html, /暂不允许再次提交/);
+    assert.match(html, /使用同一标识重试/);
+    assert.match(html, /复用本次提交标识和内容/);
     assert.doesNotMatch(html, /先刷新需求详情|内部摘要|报价已提交|本次未提交成功/);
     return true;
   });
@@ -149,7 +152,7 @@ test("错位需求、非 submitted、缺来源、坏字段和 200 失败均不�
   }
 });
 
-test("网络中断、500 和坏 JSON 保持结果未知，不自动重试或断言未保存", async (t) => {
+test("网络中断、500 和坏 JSON 保持结果未知，显示同键重试且不自动重发", async (t) => {
   for (const failure of [
     async () => { throw new TypeError("网络中断"); },
     async () => Response.json(envelope(), { status: 500 }),
@@ -157,14 +160,20 @@ test("网络中断、500 和坏 JSON 保持结果未知，不自动重试或断�
   ]) {
     const mock = t.mock.method(globalThis, "fetch", failure);
     await assert.rejects(submitQuote(input, key), (error: unknown) => {
-      const html = render(quoteSubmissionFailure(error));
-      for (const text of ["提交结果未知", "先联系平台核实", "暂不允许再次提交", "填写内容仍保留"]) assert.ok(html.includes(text));
+      const html = render(quoteSubmissionFailure(error), () => {});
+      for (const text of ["提交结果未知", "先联系平台核实", "使用同一标识重试", "填写内容仍保留"]) assert.ok(html.includes(text));
       assert.doesNotMatch(html, /报价已提交|本次提交失败|本次未提交成功/);
       return true;
     });
     assert.equal(mock.mock.callCount(), 1);
     mock.mock.restore();
   }
+});
+
+test("未知状态没有重试回调时仍显示入口但禁用按钮", () => {
+  const html = render({ status: "uncertain", message: "结果未知" });
+  assert.match(html, /使用同一标识重试/);
+  assert.match(html, /disabled/);
 });
 
 test("live 回执展示服务端金额且不声称已接单或业主已查看，mock 明确不是实际保存", async (t) => {

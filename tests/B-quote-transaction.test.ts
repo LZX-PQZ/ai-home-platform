@@ -6,8 +6,9 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { ZodError } from "zod";
-import { ProviderIdentity, Quote, QuoteSubmissionInput } from "../src/contracts";
+import { ProviderIdentity, Quote, QuoteSubmissionInput, envelope } from "../src/contracts";
 import { createQuoteAtomically, QuoteWriteRejected, type QuoteTransactionSessionReader } from "../src/lib/quote-engine/transaction";
+import { handleQuoteSubmission } from "../src/lib/quote-engine/submit-request";
 import { POST } from "../src/app/api/quote/route";
 
 const identity = ProviderIdentity.parse({ userId: "test-provider-user", role: "provider", providerId: "test-provider" });
@@ -17,7 +18,7 @@ const input = QuoteSubmissionInput.parse({ demandId: "test-demand", estimatedDay
   { code: "c", name: "未知费用", unit: "piece", quantity: 1, unitPriceCents: null, note: "" },
   { code: "d", name: "零元明细", unit: "piece", quantity: 1, unitPriceCents: 0, note: "" },
 ] });
-const request = (key = "test-quote-key-0001") => new Request("http://localhost/api/quote", { method: "POST", headers: { "Idempotency-Key": key }, body: JSON.stringify(input) });
+const request = (key = "test-quote-key-0001", value: unknown = input) => new Request("http://localhost/api/quote", { method: "POST", headers: { "Idempotency-Key": key }, body: JSON.stringify(value) });
 const rejected = (status: number, code: string) => (error: unknown) => error instanceof QuoteWriteRejected && error.status === status && error.code === code;
 
 test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据库", async (t) => {
@@ -194,7 +195,7 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
     await clear();
   });
 
-  await t.test("公开 POST 不接入原子内核，客户端仍不能获得模拟登录或提交成功", async () => {
+  await t.test("公开 POST 的默认认证仍拒绝未登录，客户端不能获得模拟登录或提交成功", async () => {
     const response = await POST(request());
     assert.equal(response.status, 401);
     assert.equal((await response.json()).ok, false);
@@ -314,5 +315,107 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
       assert.equal(await db.quote.count(), 1);
       assert.equal(await db.quoteSubmissionReceipt.count(), 1);
     } finally { await otherDb.$disconnect(); await clear(); }
+  });
+
+  const auth = { readSession: async () => identity, readTransactionSession: readSession };
+  const http = (value: unknown = input, key = "test-http-key-0001") => handleQuoteSubmission(request(key, value), auth, db);
+  const failure = async (response: Response, status: number, code: string) => {
+    assert.equal(response.status, status);
+    const body = await response.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, code);
+    assert.equal("data" in body, false);
+    assert.equal("meta" in body, false);
+    return body;
+  };
+
+  await t.test("POST 处理器首次返回 201/live，重新连接后同键规范化重放 200，仅有一份持久化记录", async () => {
+    const first = await http();
+    assert.equal(first.status, 201);
+    const firstBody = envelope(Quote).parse(await first.json());
+    assert.equal(firstBody.meta.source, "live");
+    assert.equal(firstBody.data.status, "submitted");
+    assert.equal(firstBody.data.providerId, identity.providerId);
+    assert.equal(firstBody.data.knownTotalCents, 30);
+    assert.deepEqual(firstBody.data.items.map((row) => row.amountCents), [15, 15, null, 0]);
+    await db.$disconnect();
+    const replay = await http({ ...input, items: input.items.map((row) => ({ ...row, name: ` ${row.name} ` })) });
+    assert.equal(replay.status, 200);
+    assert.deepEqual(await replay.json(), firstBody);
+    assert.equal(await db.quote.count(), 1);
+    assert.equal(await db.quoteSubmissionReceipt.count(), 1);
+    assert.equal((await db.quote.findUniqueOrThrow({ where: { id: firstBody.data.id } })).knownTotalCents, 30);
+    await clear();
+  });
+
+  await t.test("POST 保留幂等冲突优先级：需求已签约时不同内容仍为冲突，同内容为状态拒绝，历史记录保留", async () => {
+    assert.equal((await http()).status, 201);
+    await db.demandOrder.update({ where: { id: input.demandId }, data: { status: "contracted" } });
+    const changed = { ...input, items: input.items.map((row) => row.unitPriceCents === null ? { ...row, unitPriceCents: 0 } : row) };
+    await failure(await http(changed), 409, "IDEMPOTENCY_CONFLICT");
+    await failure(await http(), 409, "INVALID_STATE");
+    assert.equal(await db.quote.count(), 1);
+    assert.equal(await db.quoteSubmissionReceipt.count(), 1);
+    await db.demandOrder.update({ where: { id: input.demandId }, data: { status: "published" } });
+    assert.equal((await http(input, "test-http-key-0002")).status, 201);
+    assert.equal(await db.quote.count(), 2);
+    await clear();
+  });
+
+  await t.test("POST 事务内会话失效、换绑、缺失需求、模拟需求和非 published 状态均返回失败且不写库", async () => {
+    await failure(await handleQuoteSubmission(request(), { ...auth, readTransactionSession: async () => null }, db), 401, "UNAUTHENTICATED");
+    await db.user.update({ where: { id: identity.userId }, data: { providerId: null } });
+    await failure(await http(), 403, "FORBIDDEN");
+    await db.user.update({ where: { id: identity.userId }, data: { providerId: identity.providerId } });
+    await failure(await http({ ...input, demandId: "absent-demand" }), 404, "DEMAND_NOT_FOUND");
+    await failure(await http({ ...input, demandId: "demo-demand" }), 409, "DEMO_DEMAND_READ_ONLY");
+    for (const status of ["draft", "contracted", "in_progress", "completed"]) {
+      await db.demandOrder.update({ where: { id: input.demandId }, data: { status } });
+      await failure(await http(), 409, "INVALID_STATE");
+    }
+    await db.demandOrder.update({ where: { id: input.demandId }, data: { status: "published" } });
+    await noQuotes();
+  });
+
+  await t.test("POST 坏需求数据或错位 ID 返回 500，坏报价输出不误归为输入 400且实际插入被回滚", async () => {
+    for (const wrong of [{ status: "invalid-status" }, { id: "wrong-demand" }]) {
+      const faultyDb = db.$extends({ query: { demandOrder: { async findUnique({ args, query }) {
+        const row = await query(args);
+        return row && { ...row, ...wrong };
+      } } } });
+      await failure(await handleQuoteSubmission(request(), auth, faultyDb as unknown as Pick<PrismaClient, "$transaction">), 500, "INTERNAL_ERROR");
+      await noQuotes();
+    }
+    let inserted = false;
+    const faultyDb = db.$extends({ query: { quote: { async create({ args, query }) {
+      const row = await query(args);
+      inserted = true;
+      return { ...row, status: "invalid-status" };
+    } } } });
+    await failure(await handleQuoteSubmission(request(), auth, faultyDb as unknown as Pick<PrismaClient, "$transaction">), 500, "INTERNAL_ERROR");
+    assert.equal(inserted, true);
+    await noQuotes();
+  });
+
+  await t.test("POST 提交后丢失确认返回结果未知，不能声称未保存，同键重试返回已落库的原报价", async () => {
+    let commits = 0;
+    const lostAckDb = { $transaction: async (work: (tx: Prisma.TransactionClient) => Promise<unknown>, options?: { isolationLevel?: Prisma.TransactionIsolationLevel }) => {
+      await db.$transaction(work, options);
+      commits++;
+      throw new Prisma.PrismaClientKnownRequestError("private commit acknowledgement lost", { code: "P1017", clientVersion: "test" });
+    } } as unknown as Pick<PrismaClient, "$transaction">;
+    const body = await failure(await handleQuoteSubmission(request("test-http-key-0001"), auth, lostAckDb), 500, "INTERNAL_ERROR");
+    assert.ok(body.error.message.includes("无法确认"));
+    assert.ok(!body.error.message.includes("未保存"));
+    assert.ok(!body.error.message.includes("private"));
+    assert.equal(commits, 1);
+    assert.equal(await db.quote.count(), 1);
+    assert.equal(await db.quoteSubmissionReceipt.count(), 1);
+    const stored = await db.quote.findFirstOrThrow();
+    const replay = await http();
+    assert.equal(replay.status, 200);
+    assert.equal((await replay.json()).data.id, stored.id);
+    assert.equal(await db.quote.count(), 1);
+    await clear();
   });
 });

@@ -95,7 +95,6 @@ test("401、501、503、网络和 500 后保留原键与内容，不自动重发
 });
 
 test("同一会话发送同键同体，201 首次回执和 200 重放回执均按公共契约读取", async (t) => {
-  // 低层协议测试；当前页面尚不开放未知结果重试，真实重放仍待 B 的接口接通。
   const session = createQuoteSubmissionSession();
   const first = session.prepare(input);
   const quote = {
@@ -112,5 +111,30 @@ test("同一会话发送同键同体，201 首次回执和 200 重放回执均�
   const receipt = await submitQuote(first.input, first.idempotencyKey);
   const repeat = session.prepare(input);
   assert.deepEqual(await submitQuote(repeat.input, repeat.idempotencyKey), receipt);
+  assert.equal(requests, 2);
+});
+
+test("未知结果后的显式重试复用原键和原请求体", async (t) => {
+  const session = createQuoteSubmissionSession();
+  const first = session.prepare(input);
+  const quote = {
+    id: "C-unknown-retry-receipt", demandId: input.demandId, providerId: "C-provider-test",
+    items: input.items.map((item) => ({ ...item, amountCents: item.unitPriceCents })),
+    knownTotalCents: 0, pendingItems: ["line-2"], estimatedDays: input.estimatedDays, status: "submitted",
+  };
+  let requests = 0;
+  t.mock.method(globalThis, "fetch", async (_path: string, init?: RequestInit) => {
+    assert.equal(new Headers(init?.headers).get(IDEMPOTENCY_KEY_HEADER), first.idempotencyKey);
+    assert.deepEqual(JSON.parse(String(init?.body)), input);
+    requests += 1;
+    if (requests === 1) return new Response("gateway timeout", { status: 500 });
+    return Response.json({ ok: true, data: quote, meta: { source: "live" } }, { status: 200 });
+  });
+
+  await assert.rejects(submitQuote(first.input, first.idempotencyKey));
+  const retry = session.prepare(input);
+  assert.deepEqual(retry, first);
+  const receipt = await submitQuote(retry.input, retry.idempotencyKey);
+  assert.equal(receipt.data.id, quote.id);
   assert.equal(requests, 2);
 });

@@ -18,7 +18,7 @@ export class QuoteWriteRejected extends Error {
 }
 
 /**
- * 尚未接入公开 POST；调用 D 的冻结协议完成幂等和事务授权，真实会话适配器仍待接入。
+ * 供公开 POST 使用；调用 D 的冻结协议完成幂等和事务授权，真实会话适配器仍待接入。
  * 不接收预检的需求快照；抛错让事务回滚，提交完成后才向调用方返回 DTO。
  */
 export async function createQuoteAtomically(
