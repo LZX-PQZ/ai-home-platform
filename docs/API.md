@@ -30,6 +30,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/provider | Provider[] | D | 固定 mock |
 | GET /api/provider/quotes | Quote[] | D | 同一事务验证服务方会话并只查本人报价；当前演示身份整体标 mock，不代表接单 |
 | POST /api/order | OrderAcceptInput → OrderSummary | D | 所属业主接受已提交报价，原子建立单一接单关系；首次 201，同报价重放 200，保留报价来源 |
+| POST /api/order/progress | OrderProgressInput → OrderProgressResult | D | 业主确认开工/工序/整单完成；需求、接单、排期版本及事件同事务保存，200，来源沿用接单 |
 | GET /api/provider/orders | OrderSummary[] | D | 同一事务验证服务方并只查本人接单关系；无参数，当前演示身份整体 mock |
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
 | GET /api/quote | Quote[] | B | 固定 mock |
@@ -51,13 +52,36 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 首次 201 `envelope(OrderSummary)`，相同需求和报价的当前授权重放 200 返回原关系，不重复写入；另一报价 409/ORDER_ALREADY_EXISTS。无接单关系时，非 published 需求为 409/INVALID_STATE；published 需求已有旧 accepted 报价为 409/ACCEPTED_QUOTE_CONFLICT，不自动补单。仅支持单需求单服务方；接单关系保存不表示签署法律合同、付款、开工或完成施工。未确定费用/null 原样保留，不能当作零或已确认最终总价。签约后原报价 POST 及原提交回执重放仍受 published 限制。
 
-`OrderSummary` 必含 id、demandId、providerId、acceptedQuoteId、status（contracted/in_progress/completed）及 source。当前只创建 contracted，不提供后续状态推进；一致的后续状态记录可重放读取。来源沿用被接受报价的持久化来源，POST 整体与逐条一致；mock 不因业主点击或落库升级为 live。
+`OrderSummary` 必含 id、demandId、providerId、acceptedQuoteId、status（contracted/in_progress/completed）及 source。接受报价只创建 contracted；后续通过下节 /api/order/progress 推进，一致的后续状态记录仍可重放读取。来源沿用被接受报价的持久化来源，POST 整体与逐条一致；mock 不因业主点击或落库升级为 live。
 
 `GET /api/provider/orders` 无参数，服务端在同一事务验证当前服务方会话及绑定，再按 providerId 查询实际关系并校验关联需求/accepted 报价；按 ID 升序，不表示时间排序。历史报价不会凭 accepted 状态进入接单列表，只有授权且实际无关系才返回成功空数组。当前固定演示服务方身份让列表整体（含空列表）为 mock，每条保留 source；它不等于生产服务方认证。有效服务方 cookie 优先，与 `/api/provider/quotes` 一致；只有业主会话 403，无/失效/重复/关闭演示或绑定失效为 401，不能靠身份参数或角色头选用户。
 
 写入无效业主会话或仅服务方 cookie 为 401；角色变化/跨源 403；非本人和不存在需求统一 404/DEMAND_NOT_FOUND，确认本人归属后其他需求的报价与不存在报价统一 404/QUOTE_NOT_FOUND。本人演示需求 409/DEMO_DEMAND_READ_ONLY，非法状态 409/INVALID_STATE。读写存储、事务、坏来源/DTO/关联不一致均 503/ORDER_UNAVAILABLE，提示结果暂时无法确认，可对同一报价重试核实。所有成功/失败 private, no-store、Vary: Cookie，不回退 mock 或空成功。
 
-B 接入 `apiPost('/api/order', input, OrderSummary)` 并在明确确认前展示报价、待定费用和来源，成功后刷新报价/需求；C 接入 `apiGet('/api/provider/orders', OrderSummary.array())`，区分本人报价和接单，展示来源及错误。此次未修改两方页面，按钮/接单 UI、生产服务方认证、改选/取消、多服务方拆单及履约推进未实现。数据库须先运行 `npm run db:setup` 同步新表，seed 不补造关系。详见 `docs/requests/D-quote-acceptance.md`。
+B 使用 `apiPost('/api/order', input, OrderSummary)` 并在明确确认前展示报价、待定费用和来源，成功后刷新报价/需求；C 使用 `apiGet('/api/provider/orders', OrderSummary.array())`，区分本人报价和接单，展示来源及错误。B 的接受按钮与 C 的接单页面已随 #121/#122/#125 合入，履约推进接口见下节；生产服务方认证、改选/取消、多服务方拆单仍未实现。数据库须先运行 `npm run db:setup` 同步新表，seed 不补造关系。详见 `docs/requests/D-quote-acceptance.md`。
+
+## POST /api/order/progress：业主确认履约推进
+
+公共 `OrderProgressInput` 为严格动作联合：所有动作必填 demandId、orderId、action、confirmed=true、scheduleVersion（最新排期正整数版本，确实没有排期时显式 null）；start_task / complete_task 另必填 taskId。ID 非空非纯空白、精确匹配；拒绝其他字段/查询参数及超过 8 KiB 的正文。不允许自报身份、状态、责任方或来源。
+
+只有所属业主可同源操作，预检及 Serializable 写事务内重验当前身份、角色、归属；必须有同需求的实际 ServiceOrder，需求/接单状态及 accepted 报价关联、服务方、来源一致。固定 demo-demand 只读；其他 mock 接单可由实际业主推进，来源仍 mock。动作规则：
+
+| action | 允许条件与效果 |
+|---|---|
+| start | contracted → in_progress，两侧同步；有排期须全部 pending，工序本身不自动开工 |
+| start_task | 接单 in_progress；目标 pending、前置全 done，目标改 active |
+| complete_task | 接单 in_progress；目标 active、前置全 done，目标改 done，表示业主确认完成 |
+| complete | in_progress → completed，两侧同步；有排期须最新工序全部 done，无排期仍须显式确认 |
+
+工序动作保留计划/责任方字段，仅追加下一版排期，旧版本不覆盖；最大数据库版本不可再追加。责任方须为空或当前接单服务方，blocked/返工不能借此绕过。程序校验原计划依赖图及 active/done 的前置完成状态；坏数据 503，不修复后伪装成功。
+
+最终写入再次限制归属、两侧旧状态、原报价内容和最新排期快照（包括无排期）；条件更新需求、接单，必要时追加排期，并保存 OrderProgressEvent。事件含当前 actorId、动作、前后状态、工序、结果版本及服务端时间；任何写入/输出校验失败全部回滚。返回 200 `envelope(OrderProgressResult)`：`{ order: OrderSummary, schedule: Schedule | null }`，meta.source 沿用接单，不返回内部操作者信息。不会改报价金额/待定费用、付款或服务方评分。业主确认不等于专业验收、照片 AI 判断或实际付款。
+
+scheduleVersion 必须与当前最新值一致，包括 null；旧值 409/SCHEDULE_VERSION_CONFLICT。当前授权与版本有效时，start 已处于 in_progress、complete 已处于 completed、工序已处于目标状态可返回当前 200，不重复事件。工序首次推进增加版本，原请求重放为 409；刷新核实后由用户重新决定动作，不能自动更新版本重发。已完成后不能退回施工中；并发最多一次实际变更，失败可能为 409 或中性 503。
+
+无/坏/重复/过期/撤销业主 cookie 或仅服务方 401/UNAUTHENTICATED，角色/同源失败 403/FORBIDDEN；他人与不存在需求统一 404/DEMAND_NOT_FOUND；本人需求缺目标关系或错误 orderId 为 404/ORDER_NOT_FOUND，未知工序 404/TASK_NOT_FOUND。跳级/回退 409/ORDER_PROGRESS_NOT_ALLOWED，计划状态/责任方/版本上限不支持 409/SCHEDULE_PROGRESS_NOT_ALLOWED，工序状态/依赖不支持 409/TASK_PROGRESS_NOT_ALLOWED，计划未全完成 409/SCHEDULE_NOT_COMPLETE。存储/关联/坏数据/竞争不确定结果为 503/ORDER_PROGRESS_UNAVAILABLE，需先刷新核实。所有响应 private, no-store、Vary: Cookie。
+
+A 用 `apiPost('/api/order/progress', input, OrderProgressResult)` 接线，展示动作、当前版本、来源并取得用户确认，之后刷新需求与排期；C 的接单列表/详情会读到一致的新状态。接受报价→开工→（有排期逐项推进）→确认完成→评价已可通过正常 API 走通，生产冒烟不再直接修改完成状态。前端按钮/评价表单、服务方申请/双方审批、专业验收材料、实际日期、阻塞/返工/施工中变更、付款联动和事件查询仍未交付。数据库先 `npm run db:setup` 同步操作记录表，见 `docs/requests/D-order-progress.md`。
 
 ## 已完成接单的评价
 
@@ -71,7 +95,7 @@ B 接入 `apiPost('/api/order', input, OrderSummary)` 并在明确确认前展�
 
 无/失效/撤销/重复/过期业主 cookie 或仅服务方 cookie 为 401/UNAUTHENTICATED，角色改变/跨源为 403/FORBIDDEN；他人与不存在需求统一 404/DEMAND_NOT_FOUND。本人固定演示需求 POST 为 409/DEMO_DEMAND_READ_ONLY；无接单或未完成为 409/REVIEW_NOT_ALLOWED，目标服务方不符为 409/REVIEW_PROVIDER_MISMATCH；存储、事务或坏数据为 503/REVIEW_UNAVAILABLE。所有成功失败 private, no-store、Vary: Cookie，失败无 data/meta。
 
-更新后运行 `npm run db:setup` 同步 Review.orderId 唯一可空关联及 source（默认 mock）；可空仅保留历史记录，新写入必有实际关联，不自动将旧行补造成真实评价。A/C 使用 `apiPost('/api/review', input, Review)` 和 `apiGet(..., Review.array())`，显示来源并对已存在/错误先核实。评价页面、完工流转、公开评价、聚合评分、审核与通知尚未实现；普通流程目前只能签约，测试 completed 状态由隔离夹具准备，不能描述成完整履约链路。详见 `docs/requests/D-review-create.md`。
+更新后运行 `npm run db:setup` 同步 Review.orderId 唯一可空关联及 source（默认 mock）；可空仅保留历史记录，新写入必有实际关联，不自动将旧行补造成真实评价。A/C 使用 `apiPost('/api/review', input, Review)` 和 `apiGet(..., Review.array())`，显示来源并对已存在/错误先核实。评价页面、公开评价、聚合评分、审核与通知尚未实现；正常 API 已可通过 /api/order/progress 达到 completed，不需要直接改库。详见 `docs/requests/D-review-create.md` 及本轮履约交接。
 
 ## 工单创建与读取
 
@@ -103,7 +127,7 @@ B 接入 `apiPost('/api/order', input, OrderSummary)` 并在明确确认前展�
 
 无/失效/撤销/重复/过期业主 cookie 为 401，只有演示服务方 cookie 同样 401，当前账户角色不符或同源失败为 403；非本人和不存在需求统一 404/DEMAND_NOT_FOUND。确认归属后，固定演示需求 409/DEMO_DEMAND_READ_ONLY，不可创建状态 409/INVALID_STATE，已有任何版本 409/SCHEDULE_ALREADY_EXISTS。重复请求不覆盖、不追加版本，应通过 GET 核实；事务/数据库冲突或坏输出为中性的 503/SCHEDULE_UNAVAILABLE，不宣称一定未保存。所有响应 private, no-store、Vary: Cookie；坏 JSON 400/INVALID_JSON，非法字段、正文超限或依赖 400/VALIDATION_ERROR。
 
-A 可用 `apiPost('/api/schedule', input, Schedule)` 保存后刷新现有 GET。未开工计划的确认修订与版本追加见下节 PUT；创建表单、施工中变更审批、任务状态推进、责任方分配与阶段验收尚未交付。现有变更/验收按钮不能当作创建入口。首版字段及接入说明见 `docs/requests/D-schedule-create.md`。
+A 可用 `apiPost('/api/schedule', input, Schedule)` 保存后刷新现有 GET。未开工计划的确认修订与版本追加见下节 PUT；工序状态推进由 `/api/order/progress` 提供。创建表单、施工中变更审批、责任方分配与专业阶段验收尚未交付。现有变更/验收按钮不能当作创建入口。首版字段及接入说明见 `docs/requests/D-schedule-create.md`。
 
 ## PUT /api/schedule：确认修订未开工计划
 
@@ -115,7 +139,7 @@ baseVersion 与最新版本不符返回 409/SCHEDULE_VERSION_CONFLICT；页面�
 
 无/坏/重复/过期/撤销业主 cookie 或仅服务方 cookie 返回 401；角色不符、身份中途变化或同源失败 403；他人与不存在需求统一 404/DEMAND_NOT_FOUND。本人需求无初版为 404/SCHEDULE_NOT_FOUND；本人演示需求 409/DEMO_DEMAND_READ_ONLY，非法需求状态 409/INVALID_STATE，最新计划已有施工状态/责任方 409/SCHEDULE_REVISION_NOT_ALLOWED。JSON/字段错误 400，数据库、事务竞争或坏输出为中性 503/SCHEDULE_UNAVAILABLE，需 GET 核实结果。所有响应 private, no-store、Vary: Cookie。
 
-调用使用 `apiPut('/api/schedule', input, Schedule)`，现有 GET 仍支持最新及指定历史版本。本次未实现 A 的修订表单/差异展示、变更原因/审批审计记录、施工中异常变更、服务方确认、任务状态推进或验收。完整字段和验收见 `docs/requests/D-schedule-revision.md`。
+调用使用 `apiPut('/api/schedule', input, Schedule)`，现有 GET 仍支持最新及指定历史版本。A 的修订表单/差异展示、变更原因/审批审计记录、施工中异常变更、服务方确认及专业验收仍未实现；工序状态推进由 `/api/order/progress` 提供。完整字段和验收见 `docs/requests/D-schedule-revision.md`。
 
 ## GET /api/provider/quotes
 
@@ -140,7 +164,7 @@ PR #74 已将 `handleQuoteSubmission` 的默认预检及事务会话 reader 接�
 完整决策见 `docs/requests/D-quote-idempotency.md`、`docs/requests/D-demo-provider-session.md`。已用真实演示 cookie 和隔离 SQLite 验证公开 POST；本次未做浏览器手工验收，业主公开 GET/页面读取仍未接通。
 
 ## 已预留、当前返回 501
-- POST /api/inspect 的真实分析由 D 后续完成：照片已可通过 /api/inspect/images 上传，但 /api/inspect 校验身份和引用后仍明确 501。POST/GET /api/review 已实现本人已完成接单的评价保存/读取，完工状态推进与页面仍未实现。POST /api/schedule 已实现首版计划创建，PUT /api/schedule 已实现未开工计划确认修订，POST /api/ticket 已实现业主创建工单，见上节；施工中变更与验收、工单派单与解决仍未实现。
+- POST /api/inspect 的真实分析由 D 后续完成：照片已可通过 /api/inspect/images 上传，但 /api/inspect 校验身份和引用后仍明确 501。POST/GET /api/review 已实现本人已完成接单的评价保存/读取，履约推进由 /api/order/progress 提供，页面待接线。POST /api/schedule 已实现首版计划创建，PUT /api/schedule 已实现未开工计划确认修订，POST /api/ticket 已实现业主创建工单，见上节；施工中变更、专业验收、工单派单与解决仍未实现。
 - POST /api/payment：已实现最小模拟确认动作，不做身份校验，任何调用方都可触发演示状态转换。输入为 `PaymentActionInput`，只允许 `pending → confirmed_demo` 一次转换；状态只保存在服务进程内，进程重启后恢复初始演示状态。成功返回 `Payment`，`meta.source` 为 `mock` 且 `simulated` 为 `true`；这不是支付接口，不代表真实付款、资金托管或数据库持久化。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
 
@@ -272,4 +296,4 @@ DELETE 无请求体，非空 ID 原样精确查找，错误顺序为路径 400 �
 
 存在但伪造、重复、过期或撤销的业主凭证为 401/UNAUTHENTICATED；有效业主凭证对应当前角色不再是 owner 为 403/FORBIDDEN。这两条也适用于已发布详情。双 cookie 时业主优先，无效业主不能回退匿名或服务方。没有业主 cookie 时，演示服务方关闭/过期/撤销/绑定变化不妨碍访问 published 数据，但会失去非公开接单详情权限。角色导航及自报身份不能扩大权限，合法空结果才返回 200 空数组。
 
-逐条 source 保持 demo-demand 为 mock、其他数据库需求为 live。普通匿名和业主整体含 demo-demand 时为 mock，否则 live（含空列表）；有效演示服务方会话整体仍为 mock，包括已接单需求详情。所有响应 Cache-Control: private, no-store、Vary: Cookie；存储、坏 DTO、异常接单关联或越界查询结果统一 503/DATABASE_UNAVAILABLE，不回退 mock 或空成功。A/B/C 使用原 URL/DTO，C 大厅、管理页与匹配页可继续匿名获取 published 数据。完整交接与验证见 docs/requests/D-demand-read-auth.md 及 docs/requests/D-provider-demand-access.md。后续状态推进必须在同一事务条件更新需求和接单；当前无推进 API。
+逐条 source 保持 demo-demand 为 mock、其他数据库需求为 live。普通匿名和业主整体含 demo-demand 时为 mock，否则 live（含空列表）；有效演示服务方会话整体仍为 mock，包括已接单需求详情。所有响应 Cache-Control: private, no-store、Vary: Cookie；存储、坏 DTO、异常接单关联或越界查询结果统一 503/DATABASE_UNAVAILABLE，不回退 mock 或空成功。A/B/C 使用原 URL/DTO，C 大厅、管理页与匹配页可继续匿名获取 published 数据。完整交接与验证见 docs/requests/D-demand-read-auth.md 及 docs/requests/D-provider-demand-access.md。状态推进由 `/api/order/progress` 在同一事务条件更新需求和接单，避免两侧状态不一致。

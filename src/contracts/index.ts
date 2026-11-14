@@ -191,6 +191,18 @@ export const ScheduleRevisionInput = SchedulePlanInput.extend({
   baseVersion: DatabaseInt.positive().max(SQLITE_INT_MAX - 1),
   confirmed: z.literal(true),
 }).strict().superRefine(validateSchedulePlan);
+const OrderProgressFields = {
+  demandId: OrderAcceptInput.shape.demandId, orderId: Id.refine(value => value.trim().length > 0),
+  confirmed: z.literal(true), scheduleVersion: DatabaseInt.positive().nullable(),
+};
+/** 业主手工确认履约；工序完成不等于专业质量验收、AI 判断或付款。 */
+export const OrderProgressInput = z.discriminatedUnion("action", [
+  z.object({ ...OrderProgressFields, action: z.literal("start") }).strict(),
+  z.object({ ...OrderProgressFields, action: z.literal("complete") }).strict(),
+  z.object({ ...OrderProgressFields, action: z.literal("start_task"), taskId: ScheduleTaskId }).strict(),
+  z.object({ ...OrderProgressFields, action: z.literal("complete_task"), taskId: ScheduleTaskId }).strict(),
+]);
+export const OrderProgressResult = z.object({ order: OrderSummary, schedule: Schedule.nullable() }).strict();
 export const Payment = z.object({
   id: Id, demandId: Id, stage: z.string(), amountCents: Money,
   status: z.enum(["pending", "confirmed_demo"]), simulated: z.literal(true),
@@ -287,6 +299,8 @@ export type ProviderIdentityDTO = z.infer<typeof ProviderIdentity>;
 export type QuoteDTO = z.infer<typeof Quote>;
 export type OrderAcceptInputDTO = z.infer<typeof OrderAcceptInput>;
 export type OrderSummaryDTO = z.infer<typeof OrderSummary>;
+export type OrderProgressInputDTO = z.infer<typeof OrderProgressInput>;
+export type OrderProgressResultDTO = z.infer<typeof OrderProgressResult>;
 export type QuoteSubmissionItemInputDTO = z.infer<typeof QuoteSubmissionItemInput>;
 export type QuoteSubmissionInputDTO = z.infer<typeof QuoteSubmissionInput>;
 export type ScheduleDTO = z.infer<typeof Schedule>;

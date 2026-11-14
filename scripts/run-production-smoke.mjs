@@ -77,11 +77,11 @@ export async function runProductionSmoke({
  const port = await freePort();
  signal?.throwIfAborted();
  const base = `http://127.0.0.1:${port}`;
- const childEnv = { ...env, AI_MODE: 'mock', NODE_ENV: 'production', SMOKE_BASE_URL: base };
+ const childEnv = { ...env, AI_MODE: 'mock', DEMO_AUTH_ENABLED: 'true', NODE_ENV: 'production', SMOKE_BASE_URL: base };
  let server;
  let smoke;
  try {
-  console.log(`Starting production smoke at ${base} (AI_MODE=mock).`);
+  console.log(`Starting production smoke at ${base} (AI_MODE=mock, DEMO_AUTH_ENABLED=true in test children).`);
   server = startChild([resolve(cwd, 'node_modules/next/dist/bin/next'), 'start', '--hostname', '127.0.0.1', '--port', String(port)], cwd, childEnv);
   await runPhase(async phaseSignal => {
    while (true) {
