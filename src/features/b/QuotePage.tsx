@@ -32,10 +32,10 @@ export function QuotePageContent({ state, retry }: { state: QuotePageState; retr
   return (
     <Card>
       <div aria-busy={state.status === "loading"}>
-        <Badge tone="accent">当前报价接口提供模拟数据</Badge>
+        <Badge tone="accent">本人需求 · 报价对比</Badge>
         <h1 className="mt-4">{state.status === "not-found" ? "需求未找到" : state.status === "error" ? "暂时无法展示报价" : "正在读取需求和报价"}</h1>
         {state.status === "loading" && <p role="status">正在核对这份需求及其报价，加载完成后将分别显示数据来源。</p>}
-        {state.status === "not-found" && <p role="status">这份需求不存在，请返回需求列表选择已有需求。</p>}
+        {state.status === "not-found" && <p role="status">这份需求不存在或不属于当前业主，请返回需求列表核对。</p>}
         {state.status === "error" && <p role="alert">{state.message}</p>}
         <div className="flex flex-wrap items-center gap-4">
           <Button disabled={state.status === "loading"} onClick={retry}>{state.status === "loading" ? "加载中…" : "重新加载"}</Button>

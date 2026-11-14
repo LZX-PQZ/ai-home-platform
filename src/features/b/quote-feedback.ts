@@ -4,12 +4,7 @@ import type { loadQuoteComparison } from "@/features/b/load-quotes";
 export function quoteReadFeedback(data: Awaited<ReturnType<typeof loadQuoteComparison>>): string {
   const count = data.response.data.length;
   const warning = data.providerWarning ? " 服务方资料未读取成功，名称待确认。" : "";
-  if (data.quoteSource === "mock") {
-    return (count > 0
-      ? `本次读取完成，展示 ${count} 份模拟报价；不代表真实报价已更新。`
-      : "本次读取完成，暂无属于这份需求的模拟报价；不能据此判断是否存在真实报价。") + warning;
-  }
   return (count > 0
-    ? `本次读取完成，展示 ${count} 份已提交或已接受的报价。`
+    ? `本次读取完成，展示 ${count} 份已提交或已接受的报价；来源逐份标注，模拟报价不代表真实市场报价。`
     : "本次读取完成，暂无可对比的已提交或已接受报价。") + warning;
 }

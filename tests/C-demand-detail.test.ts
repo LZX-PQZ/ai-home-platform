@@ -81,7 +81,7 @@ test("已发布详情展示公共字段、分转元、mock 来源和本地报价
   for (const text of [
     demand.id, demand.description, demand.city, "局部改造", "25.5 平方米", "0.00", "30,000.50", "15 天", "已发布",
     "接口来源：模拟标识（mock）", "需求来源：未知（接口未提供）", "不代表真实客户需求", "角色导航不代表登录鉴权",
-    "当前报价写入和接单功能仍待接通", "填写报价 · 预览与提交", "本地预览不代表保存或提交",
+    "报价已支持演示服务方登录后提交", "真实接单及业主报价页面接线仍待完成", "填写报价 · 预览与提交", "本地预览不代表保存或提交",
   ]) assert.ok(html.includes(text), text);
   assert.match(html, /href="\/provider"/);
   assert.match(html, /<form/);

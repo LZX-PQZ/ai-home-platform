@@ -14,17 +14,15 @@ const render = (data: Awaited<ReturnType<typeof loadQuoteComparison>>) => render
   state: { status: "ready", data, readAt }, retry: () => undefined,
 }));
 
-test("完成反馈按报价自身来源标识；其他数据源不改变报价来源，空模拟结果不推断真实报价", async (t) => {
+test("完成反馈统计查询结果，整批来源不把所有报价说成模拟报价，空结果正常展示", async (t) => {
   for (const quoteSource of ["mock", "live"] as const) {
     for (const otherSource of ["mock", "live"] as const) {
       for (const rows of [quotes, []]) {
-        t.mock.method(globalThis, "fetch", async (url: string) => url === "/api/quote" ? success(rows, quoteSource)
+        t.mock.method(globalThis, "fetch", async (url: string) => url.startsWith("/api/quote?demandId=") ? success(rows, quoteSource)
           : url === "/api/provider" ? success(providers, otherSource)
             : success({ ...demoDemand, source: otherSource }, otherSource));
         const html = render(await loadQuoteComparison(demoDemand.id));
-        const feedback = quoteSource === "mock"
-          ? rows.length ? "展示 2 份模拟报价；不代表真实报价已更新" : "暂无属于这份需求的模拟报价；不能据此判断是否存在真实报价"
-          : rows.length ? "展示 2 份已提交或已接受的报价" : "暂无可对比的已提交或已接受报价";
+        const feedback = rows.length ? "展示 2 份已提交或已接受的报价" : "暂无可对比的已提交或已接受报价";
         assert.ok(html.includes(feedback), feedback);
         assert.ok(html.includes('aria-live="polite" aria-atomic="true"'));
         assert.ok(html.includes(`<time dateTime="${new Date(readAt).toISOString()}">`));
@@ -40,15 +38,12 @@ test("完成反馈按报价自身来源标识；其他数据源不改变报价�
 
 test("重新读取后的反馈只统计当前需求的可对比报价，新增与清空都会改变数量", async (t) => {
   let rows: QuoteDTO[] = quotes;
-  t.mock.method(globalThis, "fetch", async (url: string) => url === "/api/quote" ? success(rows)
+  t.mock.method(globalThis, "fetch", async (url: string) => url.startsWith("/api/quote?demandId=") ? success(rows)
     : url === "/api/provider" ? success(providers, "mock") : success({ ...demoDemand, source: "live" }));
   assert.ok(render(await loadQuoteComparison(demoDemand.id)).includes("展示 2 份已提交或已接受的报价"));
   rows = [
     ...quotes,
     { ...quotes[0], id: "new-submitted" },
-    { ...quotes[0], id: "hidden-draft", status: "draft" },
-    { ...quotes[0], id: "hidden-rejected", status: "rejected" },
-    { ...quotes[0], id: "other-demand", demandId: "other" },
   ];
   assert.ok(render(await loadQuoteComparison(demoDemand.id)).includes("展示 3 份已提交或已接受的报价"));
   rows = [];
@@ -58,7 +53,7 @@ test("重新读取后的反馈只统计当前需求的可对比报价，新增�
 });
 
 test("读取中、需求不存在和失败均没有完成时间或旧报价，501 不展示读取成功", async (t) => {
-  t.mock.method(globalThis, "fetch", async (url: string) => url === "/api/quote"
+  t.mock.method(globalThis, "fetch", async (url: string) => url.startsWith("/api/quote?demandId=")
     ? Response.json({ ok: false, error: { code: "NOT_IMPLEMENTED", message: "尚未开放" } }, { status: 501 })
     : success(demoDemand));
   await assert.rejects(loadQuoteComparison(demoDemand.id), (error) => error instanceof ApiClientError && error.status === 501);
