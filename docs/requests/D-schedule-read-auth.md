@@ -26,6 +26,6 @@ URL 与返回 DTO 不变，沿用 `apiGet(..., Schedule)`。显式排期页需�
 
 交付前实际运行 `npm run check`、`npm run build`、`npm run scope -- --role D --base origin/main`，生产 `next start` 后再执行 `node scripts/smoke.mjs`。同步冒烟断言：匿名显式排期 401、未知参数 400、POST 501，均非成功信封。排期生成、POST 写入、依赖计算、异常变更确认和服务方履约查询不在本次范围；501 不能当作成功。
 
-按复审要求串行交付：本地以 #95 创建鉴权和 #101 公开需求读取修订进行组合验证，待这两项依序合入 main 后再同步本分支并建立排期 PR，避免多个开放 PR 同时修改共享接口文档或冒烟脚本。
+按复审要求串行交付：#95 和 #101 已依序合入，现有排期分支已普通合并同步 main b26b248，保留历史且不强推。同步后重新执行 `npm run db:setup`，现有本地数据库结构及 seed 准备成功，未重置现有记录。本次独立交付排期读取权限，不同时开展写入接口或其他角色的页面改动。
 
-实际验证：定向 13 项测试通过；组合版本 `npm run check` 587/587、`npm run build`、`npm run scope -- --role D --base origin/main` 及 diff 检查通过。scope 当前为 20 个 D 文件，包含尚待上游合入的 #95/#101；本功能相对 #101 仅 6 个文件。隔离 seed 数据库上的生产 `next start` + `node scripts/smoke.mjs` 通过 13 个页面、14 个 GET 场景及 5 个 POST 场景。没有额外浏览器手工验收；没有调用真实 AI 或连接生产数据库。固定演示数据与演示服务方保留 mock，密码认证、会话及数据库查询使用实际实现。排期写入仍未实现。
+同步 main b26b248 后的实际验证：现有本地库及隔离冒烟库均重新执行 `npm run db:setup` 成功；`npm run check` 590/590（含 13 项排期查询/鉴权测试）、`npm run build`、`npm run scope -- --role D --base origin/main` 及 `git diff --check` 通过。本功能共 7 个 D 文件，未包含其他任务改动。隔离 seed 数据库上的生产 `next start` + `node scripts/smoke.mjs` 通过 13 个页面、14 个 GET 场景及 5 个 POST 场景。没有额外浏览器手工验收；没有调用真实 AI 或连接生产数据库。冒烟使用 `AI_MODE=mock`，固定演示数据与演示服务方保留 mock，密码认证、会话及数据库查询使用实际实现。排期写入仍未实现。

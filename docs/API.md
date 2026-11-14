@@ -181,7 +181,7 @@ POST 先校验同源 Origin 和实际业主会话，在事务外读取/校验 De
 
 DELETE 无请求体，非空 ID 原样精确查找，错误顺序为路径 400 → 方法/同源 Origin 403 → 事务内业主会话 401/403/503 → 本人需求 404 → 只读/状态/关联约束 409 → 删除。凭证规则与 PUT 一致；他人和不存在统一 404。会话、当前账号、归属、状态、五类关联检查、删除及输出校验全部处于同一个 Serializable 事务；最后 DELETE SQL 也限制 ID、ownerId、可编辑状态和关联均为空，必须恰好删除一条。成功为 200/live，重复删除为 404；所有响应 private, no-store、Vary: Cookie。事务/存储故障为中性 503/DATABASE_UNAVAILABLE，提示刷新核实，不承诺之前一定未删除。详见 `docs/requests/D-demand-delete-auth.md`。
 
-需求 POST 当前业主归属沿用 #95，列表/详情的访问范围见下节。历史 demo-owner 需求不自动转移；match、schedule 等其他读取接口未由本次保护，不能宣称整个模块或平台已经完成权限隔离。
+需求 POST 当前业主归属沿用 #95，列表/详情的访问范围见下节。历史 demo-owner 需求不自动转移；显式排期查询的独立归属校验见 GET /api/schedule。match 等其他读取接口仍需审计，不能宣称整个模块或平台已经完成权限隔离。
 
 ## GET /api/demand 与 GET /api/demand/[id]：访问隔离
 
