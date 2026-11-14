@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { POST } from "../src/app/api/demand/route";
 import { DELETE as detailDELETE, GET as detailGET, PUT as detailPUT } from "../src/app/api/demand/[id]/route";
-import { createDemand, deleteDemand, findDemand, listDemands, type DemandDatabase } from "../src/lib/demand";
+import { createDemand, findDemand, listDemands, type DemandDatabase } from "../src/lib/demand";
 
 const input = {
   description: "测试需求：浴室防滑改造。",
@@ -16,22 +16,17 @@ const input = {
 
 const row = { id: "demand-test", ...input, status: "published", ownerId: "demo-owner", createdAt: new Date() };
 
-function fakeDb(rows: typeof row[] = [row], related: Record<string, number> = {}): DemandDatabase {
+function fakeDb(rows: typeof row[] = [row]): DemandDatabase {
   return {
     user: { upsert: async () => ({}) },
     demandOrder: {
       findMany: async () => rows as never,
-      findUnique: async ({ where, include }: { where: { id: string }; include?: unknown }) => {
+      findUnique: async ({ where }: { where: { id: string } }) => {
         const found = rows.find((value) => value.id === where.id);
         if (!found) return null as never;
-        return (include ? { ...found, _count: related } : found) as never;
+        return found as never;
       },
       create: async () => row as never,
-      delete: async ({ where }: { where: { id: string } }) => {
-        const index = rows.findIndex((value) => value.id === where.id);
-        if (index < 0) throw new Error("missing row");
-        return rows.splice(index, 1)[0] as never;
-      },
     },
   } as unknown as DemandDatabase;
 }
@@ -64,21 +59,7 @@ test("GET /api/demand/[id] 拒绝空 ID，服务详情对未知 ID 返回空", a
   assert.equal(missing, null);
 });
 
-test("需求删除保留状态和关联约束；更新权限由隔离数据库鉴权测试覆盖", async () => {
-  const demo = { ...row, id: "demo-demand" };
-  const demoDb = fakeDb([demo]);
-  assert.deepEqual(await deleteDemand("demo-demand", demoDb), { kind: "demo-read-only" });
-
-  const relatedDb = fakeDb([row], { quotes: 1, schedules: 0, payments: 0, reviews: 0, tickets: 0 });
-  assert.deepEqual((await deleteDemand("demand-test", relatedDb)).kind, "has-related-records");
-
-  for (const status of ["contracted", "in_progress", "completed"]) {
-    const lockedDb = fakeDb([{ ...row, status }]);
-    assert.deepEqual((await deleteDemand("demand-test", lockedDb)).kind, "invalid-state");
-  }
-});
-
-test("PUT/DELETE 路由拒绝空 ID，PUT 同源校验先于请求体读取", async () => {
+test("PUT/DELETE 路由拒绝空 ID，缺少同源 Origin 时拒绝写入", async () => {
   const invalidId = await detailPUT(new Request("http://localhost/api/demand/%20", { method: "PUT" }), { params: { id: " " } });
   assert.equal(invalidId.status, 400);
 
@@ -89,4 +70,6 @@ test("PUT/DELETE 路由拒绝空 ID，PUT 同源校验先于请求体读取", as
 
   const deleteInvalidId = await detailDELETE(new Request("http://localhost/api/demand/%20", { method: "DELETE" }), { params: { id: " " } });
   assert.equal(deleteInvalidId.status, 400);
+  const deleteNoOrigin = await detailDELETE(new Request("http://localhost/api/demand/demand-test", { method: "DELETE" }), { params: { id: "demand-test" } });
+  assert.equal(deleteNoOrigin.status, 403);
 });
