@@ -175,7 +175,7 @@ test("未知状态没有重试回调时仍显示入口但禁用按钮", () => {
   assert.match(html, /disabled/);
 });
 
-test("live 回执展示服务端金额且不声称已接单或业主已查看，mock 明确不是实际保存", async (t) => {
+test("回执展示服务端金额与来源，mock 说明演示身份报价已保存但不保证业主已收到", async (t) => {
   for (const source of ["mock", "live"] as const) {
     const mock = t.mock.method(globalThis, "fetch", async () => Response.json(envelope({ ...quote, id: "<script>test</script>", knownTotalCents: 250 }, source)));
     const html = render({ status: "received", response: await submitQuote(input, key) });
@@ -184,7 +184,7 @@ test("live 回执展示服务端金额且不声称已接单或业主已查看，
     if (source === "mock") {
       assert.match(html, /模拟报价回执（mock）/);
       assert.match(html, /演示身份报价已保存，不代表真实业务身份或业主已收到/);
-      assert.doesNotMatch(html, /报价已提交（live）/);
+      assert.doesNotMatch(html, /报价已提交（live）|模拟接口响应|不代表真实保存/);
     } else {
       assert.match(html, /报价已提交（live）/);
       assert.match(html, /提交不等于业主接受或已接单/);

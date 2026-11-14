@@ -71,7 +71,7 @@ export function QuoteSubmissionFeedback({ state, onRetry }: { state: QuoteSubmis
   return (
     <section role="status" className="mt-4 rounded-card border border-brand/20 bg-brand-soft p-4">
       <h3>{source === "mock" ? "模拟报价回执（mock）" : "报价已提交（live）"}</h3>
-      <p>{source === "mock" ? "来源：模拟接口响应，演示身份报价已保存，不代表真实业务身份或业主已收到。" : "来源：实时接口回执，服务端已确认提交；提交不等于业主接受或已接单。"}</p>
+      <p>{source === "mock" ? "演示身份报价已保存，不代表真实业务身份或业主已收到。" : "来源：实时接口回执，服务端已确认提交；提交不等于业主接受或已接单。"}</p>
       <p className="break-all">报价编号：{data.id}</p>
       <p className="break-all">关联需求：{data.demandId}</p>
       <p>接口返回的已知金额小计：{formatQuoteMoney(data.knownTotalCents)}</p>
