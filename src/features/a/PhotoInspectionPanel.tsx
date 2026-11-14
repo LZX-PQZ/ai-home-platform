@@ -10,27 +10,32 @@ import {
   photoInspectionSelectionError,
   photoInspectionStatus,
   submitPhotoInspection,
+  uploadInspectionImages,
   type PhotoInspectionPhase,
   type PhotoInspectionResponse,
+  type InspectionUploadResponse,
 } from "./photo-inspection";
 
 /**
- * 施工照片辅助检查入口。
- * /api/inspect 由 D 负责，接口未开放前只收集照片并给出人工复核提示，不伪造 AI 结论。
+ * 施工照片上传与辅助检查入口。
+ * 图片先由 D 的真实存储接口保存，再以短期引用请求检查；501 仍只表示分析未接通。
  */
 export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
-  const [files, setFiles] = useState<string[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [phase, setPhase] = useState<PhotoInspectionPhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PhotoInspectionResponse | null>(null);
+  const [uploaded, setUploaded] = useState<InspectionUploadResponse | null>(null);
 
   const onSelect = (event: ChangeEvent<HTMLInputElement>) => {
-    const names = Array.from(event.target.files ?? []).map((file) => file.name);
+    const selected = Array.from(event.target.files ?? []);
+    const names = selected.map((file) => file.name);
     const selectionError = photoInspectionSelectionError(names);
-    setFiles(names);
+    setFiles(selected);
     setPhase(selectionError ? "invalid" : names.length > 0 ? "selected" : "idle");
     setError(selectionError);
     setResult(null);
+    setUploaded(null);
   };
 
   const submit = async () => {
@@ -38,8 +43,11 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
     setPhase("submitting");
     setError(null);
     setResult(null);
+    setUploaded(null);
     try {
-      const response = await submitPhotoInspection(demandId, files);
+      const upload = await uploadInspectionImages(demandId, files);
+      setUploaded(upload);
+      const response = await submitPhotoInspection(demandId, upload.data.images.map(image => image.imageRef));
       setResult(response);
       setPhase("ready");
     } catch (cause) {
@@ -60,7 +68,7 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
         <input
           id="photo-inspection-files"
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg"
           multiple
           onChange={onSelect}
           className="block w-full rounded-[10px] border border-[#D7E2E4] bg-white px-3 py-2 text-[13px] file:mr-3 file:rounded-md file:border-0 file:bg-[#E7F3EF] file:px-2.5 file:py-1 file:text-[12px] file:font-medium file:text-[#0C5A47]"
@@ -71,8 +79,14 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
 
       {files.length > 0 ? (
         <ul className="mt-2 grid gap-1 text-[12px] text-[#4A5A60]" aria-label="已选择的照片">
-          {files.map((name, index) => <li key={`${name}-${index}`} className="truncate">{name}</li>)}
+          {files.map((file, index) => <li key={`${file.name}-${index}`} className="truncate">{file.name}</li>)}
         </ul>
+      ) : null}
+
+      {uploaded ? (
+        <Note tone="info" title={`照片已上传（来源：${inspectionSourceLabel(uploaded.source)}）`}>
+          <p className="!mb-0">已取得 {uploaded.data.images.length} 个短期图片引用，辅助检查将只使用这些引用。</p>
+        </Note>
       ) : null}
 
       <div className="mt-3 grid gap-2 sm:flex sm:items-center">
@@ -108,7 +122,7 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
       {phase === "unavailable" ? (
         <div className="mt-3">
           <Note tone="warn">
-            {error ?? "照片检查接口尚未开放（501）。"} 本页不会把照片或排期状态改成「已验收」，请由施工负责人现场确认。
+            {error ?? "照片检查接口尚未开放（501）。"} 图片已上传但未生成检查结论；本页不会把照片或排期状态改成「已验收」，请由施工负责人现场确认。
           </Note>
         </div>
       ) : null}

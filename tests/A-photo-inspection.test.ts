@@ -10,6 +10,7 @@ import {
   photoInspectionSelectionError,
   photoInspectionStatus,
   submitPhotoInspection,
+  uploadInspectionImages,
 } from "../src/features/a/photo-inspection";
 
 const previousReact = Object.getOwnPropertyDescriptor(globalThis, "React");
@@ -74,6 +75,58 @@ test("照片提交通过 apiPost 发送需求 ID 和图片引用，并展示实�
   });
   assert.match(formatInspectionResult(result.data), /画面有反光/);
   assert.equal(request.mock.callCount(), 1);
+});
+
+test("照片上传使用 multipart 契约并保留服务端来源与短期引用", async (t) => {
+  const imageRef = "inspect-image/123e4567-e89b-42d3-a456-426614174000";
+  const file = new File([new Uint8Array([1, 2, 3])], "现场.png", { type: "image/png" });
+  const request = t.mock.method(globalThis, "fetch", async (path: string, init?: RequestInit) => {
+    assert.equal(path, "/api/inspect/images");
+    assert.equal(init?.method, "POST");
+    assert.ok(init?.body instanceof FormData);
+    const body = init?.body as FormData;
+    assert.equal(body.get("demandId"), "d-1");
+    assert.equal((body.get("images") as File).name, "现场.png");
+    return Response.json({
+      ok: true,
+      data: {
+        demandId: "d-1",
+        images: [{ imageRef, contentType: "image/png", sizeBytes: 3, width: 1, height: 1, expiresAt: "2026-11-15T00:00:00.000Z" }],
+      },
+      meta: { source: "live" },
+    }, { status: 201 });
+  });
+  const result = await uploadInspectionImages("d-1", [file]);
+  assert.equal(result.source, "live");
+  assert.equal(result.data.images[0]?.imageRef, imageRef);
+  assert.equal(request.mock.callCount(), 1);
+});
+
+test("照片上传 401、501 和网络失败均保留真实失败，不产生图片引用", async (t) => {
+  const file = new File([new Uint8Array([1])], "现场.png", { type: "image/png" });
+  for (const [status, code, expected] of [
+    [401, "UNAUTHENTICATED", /HTTP 401/],
+    [403, "FORBIDDEN", /HTTP 403/],
+    [501, "NOT_IMPLEMENTED", /HTTP 501/],
+    [503, "IMAGE_STORAGE_UNAVAILABLE", /HTTP 503/],
+  ] as const) {
+    t.mock.method(globalThis, "fetch", async () => Response.json(
+      { ok: false, error: { code, message: "测试失败" } }, { status },
+    ));
+    await assert.rejects(uploadInspectionImages("d-1", [file]), (cause: unknown) => {
+      assert.ok(cause instanceof ApiClientError);
+      assert.equal(cause.status, status);
+      assert.match(cause.message, expected);
+      return true;
+    });
+    t.mock.restoreAll();
+  }
+  t.mock.method(globalThis, "fetch", async () => { throw new Error("offline"); });
+  await assert.rejects(uploadInspectionImages("d-1", [file]), (cause: unknown) => {
+    assert.ok(cause instanceof ApiClientError);
+    assert.equal(cause.code, "NETWORK_ERROR");
+    return true;
+  });
 });
 
 test("200 成功信封但结果不符合公共契约时失败，不展示半成品", async (t) => {
