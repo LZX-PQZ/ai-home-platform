@@ -6,6 +6,7 @@ import { Button, Card } from "@/components/ui";
 import { acceptQuote, acceptQuoteErrorMessage, acceptanceReadback, canAcceptQuote, type QuoteComparisonData } from "@/features/b/accept-quote";
 import { formatQuoteMoney } from "@/features/b/format-quote";
 import { summarizeQuote } from "@/lib/quote-engine";
+import { QuoteOrderVerification } from "@/features/b/QuoteOrderVerification";
 
 type Attempt = { quote: QuoteDTO; original: QuoteComparisonData; order?: OrderSummaryDTO; message?: string };
 
@@ -49,9 +50,10 @@ export function QuoteAcceptance({ data, onBusy, refresh }: {
     <div role="status" aria-live="polite" className="break-words text-sm">
       <p className="break-all">本次所选报价：{attempt.quote.id}；来源：{attempt.quote.source}</p>
       {busy ? <p>正在提交确认，请勿重复操作…</p> : <>
-        {attempt.order && <p className="break-all">接口已确认接单关系：{attempt.order.id}；来源：{attempt.order.source}。{attempt.order.source === "mock" && "模拟报价建立的关系，不代表真实市场报价或生产服务方认证。"}</p>}
+        {attempt.order && <p>本次提交已收到成功回执（来源：{attempt.order.source}）；最新接单关系以下方只读核实为准。</p>}
         {attempt.message && <p>{attempt.message}</p>}
         <p>{data && data !== attempt.original ? acceptanceReadback(data, attempt.quote) : "报价状态尚待重新读取核实，请等待加载；读取失败可点击重新加载。"}</p>
+        <QuoteOrderVerification data={data !== attempt.original ? data : null} selectedQuote={attempt.quote} />
         <p className="mb-0">本页不会再次发送接受请求。可使用“刷新报价”继续只读核实；不支持改选或取消。</p>
       </>}
     </div>
