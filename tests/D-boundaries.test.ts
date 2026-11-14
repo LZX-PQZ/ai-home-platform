@@ -7,6 +7,51 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { canReadAcrossOwner } from "../scripts/check-boundaries.mjs";
 
+test("匹配需求授权读取器仅供匹配服务端与 D 服务端调用", () => {
+  const target = "src/lib/matching-demand.ts";
+  for (const file of ["src/lib/match/data.ts", "src/app/api/match/route.ts", "src/lib/d-service.ts", "src/app/api/demand/route.ts"]) {
+    assert.equal(canReadAcrossOwner(file, target), true, file);
+    assert.equal(canReadAcrossOwner(file, target, true), false, file);
+  }
+  for (const file of ["src/lib/match.ts", "src/app/owner/matches/[id]/page.tsx", "src/features/b/MatchPage.tsx",
+    "src/components/ProviderCard.tsx", "src/lib/quote-engine/read.ts", "src/app/api/quote/route.ts", "src/app/layout.tsx", "src/components/ui/card.tsx"]) {
+    assert.equal(canReadAcrossOwner(file, target), false, file);
+  }
+});
+
+test("扫描器拒绝客户端经匹配加载器间接读取授权基础设施", () => {
+  const tempRoot = path.resolve(tmpdir());
+  const root = mkdtempSync(path.join(tempRoot, "d-matching-demand-boundaries-"));
+  const script = fileURLToPath(new URL("../scripts/check-boundaries.mjs", import.meta.url));
+  const put = (file: string, source: string) => {
+    const target = path.join(root, file);
+    mkdirSync(path.dirname(target), { recursive: true }); writeFileSync(target, source);
+  };
+  const scan = () => execFileSync(process.execPath, [script], { cwd: root, encoding: "utf8", stdio: "pipe" });
+  try {
+    put("src/lib/matching-demand.ts", "export const value = 1;");
+    for (const statement of ["import { value } from '@/lib/matching-demand';", "export { value } from '@/lib/matching-demand';",
+      "export const load = () => import('@/lib/matching-demand');"]) {
+      put("src/features/b/client.tsx", "export {};");
+      put("src/lib/match/data.ts", statement);
+      assert.match(scan(), /边界检查通过/);
+      put("src/features/b/client.tsx", "'use client'; export * from '@/lib/match/data';");
+      assert.throws(scan, (error: unknown) => {
+        assert.ok(error instanceof Error && "stderr" in error);
+        assert.match(String(error.stderr), /src\/lib\/match\/data\.ts -> src\/lib\/matching-demand\.ts/);
+        return true;
+      });
+      put("src/features/b/client.tsx", "export {};");
+      put("src/lib/match/data.ts", `'use client'; ${statement}`);
+      assert.throws(scan);
+    }
+  } finally {
+    assert.equal(path.dirname(path.resolve(root)), tempRoot);
+    assert.ok(path.basename(root).startsWith("d-matching-demand-boundaries-"));
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("匹配服务端可读取服务方目录，客户端可达路径与其他业务不能读取", () => {
   const target = "src/lib/provider-directory.ts";
   for (const file of [

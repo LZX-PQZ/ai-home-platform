@@ -18,6 +18,11 @@ export function canReadAcrossOwner(file, target, clientReachable = false) {
  }
  const matchCanReadDemand = (file.startsWith("src/lib/match/") || file.startsWith("src/app/api/match/")) && target === "src/lib/demand.ts";
  const matchCanReadProviderDirectory = (file.startsWith("src/lib/match/") || file.startsWith("src/app/api/match/")) && target === "src/lib/provider-directory.ts";
+ if (target === "src/lib/matching-demand.ts") {
+  const matchServer = file.startsWith("src/lib/match/") || file.startsWith("src/app/api/match/");
+  const dServer = ownerOf(file) === "D" && (file.startsWith("src/lib/") || file.startsWith("src/app/api/"));
+  return !clientReachable && (matchServer || dServer);
+ }
  if (target === "src/lib/provider-directory.ts") {
   const dServer = ownerOf(file) === "D" && (file.startsWith("src/lib/") || file.startsWith("src/app/api/"));
   return !clientReachable && (matchCanReadProviderDirectory || dServer);
