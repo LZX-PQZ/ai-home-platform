@@ -39,11 +39,11 @@ test("模拟工单披露整批来源、只读和鉴权边界，保留项目及�
   for (const text of [
     "工单列表来源：含模拟数据（mock）", "不能据此认定真实售后已受理或已解决", "来源标识针对整份列表",
     "本页仅供查看", "角色导航不代表登录鉴权", "本次返回 1 条工单", "工单编号：C-ticket-test",
-    "筛选当前列表", "当前显示 1 / 1 条工单", "问题分类", "当前状态", "全部分类", "全部状态",
+    "筛选当前列表", "当前显示 1 / 1 条工单", "关键词", "工单、需求或服务方编号", "问题分类", "当前状态", "全部分类", "全部状态",
     "测试墙面问题", "质量问题", "已分派", "C-provider-test", "关联需求编号：C-demand-test",
     'href="/admin/demand/C-demand-test"', "查看工单 C-ticket-test 的关联需求",
   ]) assert.ok(html.includes(text), text);
-  assert.doesNotMatch(html, /工单列表来源：实时接口|<form|<input|<textarea|提交成功|派单成功/);
+  assert.doesNotMatch(html, /工单列表来源：实时接口|<form|<textarea|提交成功|派单成功/);
   assert.match(html, /<select/);
   assert.equal((html.match(/<button\b/g) ?? []).length, 1); // 只有刷新，不提供写入动作。
 });
@@ -61,6 +61,20 @@ test("分类和状态筛选组合使用公共 Ticket 字段，不修改原始列
   assert.deepEqual(data, original);
   assert.equal(ticketCategoryFilterLabels.all, "全部分类");
   assert.equal(ticketStatusFilterLabels.all, "全部状态");
+});
+
+test("关键词筛选只匹配工单、需求和责任服务方编号，并可与分类状态组合", () => {
+  const data = [
+    ticket,
+    { ...ticket, id: "schedule-open", demandId: "another-demand", category: "schedule" as const, status: "open" as const, responsibleProviderId: "provider-b" },
+    { ...ticket, id: "quality-resolved", demandId: "third-demand", status: "resolved" as const, responsibleProviderId: null },
+  ];
+  const original = structuredClone(data);
+  assert.deepEqual(filterTickets(data, "all", "all", " C-PROVIDER-TEST ").map((item) => item.id), [ticket.id]);
+  assert.deepEqual(filterTickets(data, "all", "all", "another-demand").map((item) => item.id), ["schedule-open"]);
+  assert.deepEqual(filterTickets(data, "quality", "resolved", "third-demand").map((item) => item.id), ["quality-resolved"]);
+  assert.deepEqual(filterTickets(data, "all", "all", "not-found"), []);
+  assert.deepEqual(data, original);
 });
 
 test("四种分类与三种状态使用中文，状态不推导责任服务方", () => {
