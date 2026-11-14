@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { newlyStampedFrom } from "@/components/ui";
+import type { OrderSummaryDTO } from "@/contracts";
 import { Badge, Button, C, Card, Empty, LinkButton, Note, PageHeader, SectionHead } from "./ui";
 import { demandHref } from "./demand-list";
 import { GanttChart } from "@/components/GanttChart";
@@ -46,6 +48,7 @@ function DemandSchedulePanel({ id }: { id: string }) {
   const { reload, ...state } = useSchedule(id, version);
   const orderState = useOwnerOrder(id);
   const [historyRevision, setHistoryRevision] = useState(0);
+  const stampFrom = useNewStamps(orderState.phase === "ready" ? orderState.order?.status ?? null : null);
   const reloadAll = () => {
     reload();
     orderState.reload();
@@ -59,18 +62,38 @@ function DemandSchedulePanel({ id }: { id: string }) {
     {version !== undefined && state.phase === "ready" && state.data && state.source ? (
       <ScheduleComparison key={`comparison-${version}`} selected={state.data} source={state.source} />
     ) : null}
-    <ScheduleContent key={version ?? "latest"} id={id} version={version} state={state} reload={reloadAll} orderState={orderState} reloadOrder={orderState.reload} />
+    <ScheduleContent key={version ?? "latest"} id={id} version={version} state={state} reload={reloadAll} orderState={orderState} reloadOrder={orderState.reload} stampFrom={stampFrom} />
     {version === undefined && id !== "demo-demand" ? <OrderProgressHistory demandId={id} revision={historyRevision} /> : null}
   </>;
 }
 
-export function ScheduleContent({ id, version, state, reload, orderState = { phase: "loading" }, reloadOrder = () => {} }: {
+/**
+ * 记住上一次读到的接单状态；状态前进时返回刚完成的第一个节点下标，供履约尺只给新节点盖章。
+ * 页面首次读取不触发；动画播放后清除，之后的重新加载不会重复盖章。
+ */
+function useNewStamps(status: OrderSummaryDTO["status"] | null) {
+  const last = useRef<OrderSummaryDTO["status"] | null>(null);
+  const [from, setFrom] = useState<number | null>(null);
+  useEffect(() => {
+    if (!status) return;
+    const next = newlyStampedFrom(last.current, status);
+    last.current = status;
+    if (next === null) return;
+    setFrom(next);
+    const timer = window.setTimeout(() => setFrom(null), 2000);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+  return from;
+}
+
+export function ScheduleContent({ id, version, state, reload, orderState = { phase: "loading" }, reloadOrder = () => {}, stampFrom = null }: {
   id: string;
   version?: number;
   state: ScheduleState;
   reload: () => void;
   orderState?: OwnerOrderState;
   reloadOrder?: () => void;
+  stampFrom?: number | null;
 }) {
   const { phase, data, source, error } = state;
 
@@ -152,6 +175,7 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
             source={source}
             reload={reload}
             reloadOrder={reloadOrder}
+            stampFrom={stampFrom}
           />
         ) : null}
       </div>
@@ -360,6 +384,7 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
               source={source}
               reload={reload}
               reloadOrder={reloadOrder}
+              stampFrom={stampFrom}
             />
           )}
           <PhotoInspectionPanel demandId={id} />

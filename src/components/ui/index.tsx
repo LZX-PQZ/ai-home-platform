@@ -281,4 +281,4 @@ export function Explainer({
   );
 }
 
-export { FulfillmentRuler, SealStamp, FULFILLMENT_STAGES, stageIndexOf } from "./FulfillmentRuler";
+export { FulfillmentRuler, SealStamp, FULFILLMENT_STAGES, stageIndexOf, completedStageCount, newlyStampedFrom } from "./FulfillmentRuler";
