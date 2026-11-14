@@ -56,7 +56,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 服务端 `readProviderDirectory({ performanceSource: 'live' | 'mock' })` 在 Serializable 事务内生成同一快照时间并返回公共信封，默认参数为 live；HTTP 与 B 的 `/api/match` 已复用，抛错为 `ProviderDirectoryError`。浏览器使用 `apiGet('/api/provider?performanceSource=mock', Provider.array())`，不要导入服务端适配器。所有 HTTP 响应 no-store，不依赖 cookie、不写库或更新服务方 rating。`availability` 的窗口按 Asia/Shanghai 自然日解释，固定样例 source=mock；缺省/null 是未知，空窗口只表示覆盖区间内无窗口，过期后不参与排序。当前任一查询范围内的坏评价或坏关联会让整个目录返回 503：C 的需求页和 B 的匹配页会无法完成目录加载；B 的报价对比页会保留报价，但服务方名称与来源提示待确认。此指标是业主评价均分，不是准时率、质量认证或信用分；少于 3 个样本由调用方显示样本少。
 
-B 排序/来源展示与 `/api/match` 目录接线已随 #153 合入，C 档期展示 #152 已合入，#157 已提供固定演示页的 live/mock 评价选择器，#161 已接入匹配需求权限。固定 mock 档期、报价单位/列项差异样例与四组合成 completed 接单/评价已提供；运行 db:seed 补齐固定记录。仅种子样本时 mock 汇总为 provider-a 4.67/3、provider-b 4/1；默认 live 不回退这些样本。当前两候选基础分为 98/97，切换评价口径不会翻转排序；同分/互换窗口方案已采纳设计，但因 B 测试依赖旧顺序暂缓替换运行样例，见 `docs/requests/D-demo-integration.md`。操作脚本见 `docs/DEMO.md`，字段说明见 `docs/requests/D-provider-performance.md` 和 `docs/requests/D-provider-availability.md`。
+B 排序/来源展示与 `/api/match` 目录接线已随 #153 合入，C 档期展示 #152 已合入，#157 已提供固定演示页的 live/mock 评价选择器，#161 已接入匹配需求权限。固定 mock 档期、报价单位/列项差异样例与四组合成 completed 接单/评价已提供；运行 db:seed 补齐固定记录。仅种子样本时 mock 汇总为 provider-a 4.67/3、provider-b 4/1；默认 live 不回退这些样本。#165 固定 B 测试夹具后，D 已将两候选基础分统一为 98：a 两段 13/16 天，b 单段 31 天。在上海日期 2026-11-15 至 11-21、仅有上述种子评价时，固定演示页 live→mock→live 为 b→a、a→b、b→a；11-22 起 b 剩余不足 30 天，live 回到 a→b。实际浏览器验收见 `docs/requests/D-demo-browser-validation.md`。操作脚本见 `docs/DEMO.md`，字段说明见 `docs/requests/D-provider-performance.md` 和 `docs/requests/D-provider-availability.md`。本次无接口字段或查询参数变化。
 
 ## 接受报价与本人接单
 
@@ -298,7 +298,7 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 
 ## AI 接入
 
-AI 澄清默认是 mock。对 A-ai-live.md 的本轮决定为暂不启用真实供应商；已有 live 网关代码，真实供应商配置与外部调用验收尚未完成。受控供应商响应测试只证明协议处理，不能证明已接通真实模型。
+AI 澄清默认是 mock，已有服务端 live 网关，仓库不包含供应商凭据。本轮浏览器演示明确使用 mock；真实需求澄清完整业务验收仍待完成，本机配置、单次连通或受控响应测试不能代替完整草稿、缺失字段、非法 JSON、失败与来源验证。
 
 默认 `AI_MODE=mock`，会返回固定追问并标记 `meta.source: "mock"`。设为 `live` 后，服务端读取 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`，调用 OpenAI 兼容的 `/chat/completions` JSON 接口；响应必须通过 `ChatResult` 校验后才标记 `meta.source: "live"`。
 网关默认超时 5 秒、最多 2 次重试，可由服务端 `LLM_TIMEOUT_MS` 和 `LLM_MAX_RETRIES` 调整。缺少配置、超时、重试耗尽、非 JSON 或不符合契约的模型输出均返回 503 `AI_UNAVAILABLE`，不会伪装成成功或 mock。
