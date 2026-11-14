@@ -32,18 +32,20 @@ export async function loadDemandList(): Promise<DemandListState> {
 /** 每次刷新清空旧展示，只采用最新请求；卸载后忽略迟到的响应。 */
 export function useDemandList() {
   const [state, setState] = useState<DemandListState>(LOADING);
-  const requestVersion = useRef(0);
+  const requestVersion = useRef({ value: 0 });
 
   const load = useCallback(async () => {
-    const version = ++requestVersion.current;
+    const version = ++requestVersion.current.value;
     setState(LOADING);
     const next = await loadDemandList();
-    if (version === requestVersion.current) setState(next);
+    if (version === requestVersion.current.value) setState(next);
   }, []);
 
   useEffect(() => {
+    // 捕获稳定的计数对象；清理时仍递增最新值，使所有未完成请求失效。
+    const requests = requestVersion.current;
     void load();
-    return () => { requestVersion.current++; };
+    return () => { requests.value++; };
   }, [load]);
 
   return { ...state, reload: load };
