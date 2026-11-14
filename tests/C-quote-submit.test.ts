@@ -67,7 +67,7 @@ test("缺失或非法幂等键在网络前拒绝，不给请求体添加幂等�
   assert.equal(fetchMock.mock.callCount(), 0);
 });
 
-test("幂等冲突保留未知状态并提供同键重试，不引导刷新丢掉原提交标识", async (t) => {
+test("幂等冲突保留未知状态但不提供重试，不引导换键或丢掉原提交标识", async (t) => {
   t.mock.method(globalThis, "fetch", async () => Response.json({
     ok: false, error: { code: "IDEMPOTENCY_CONFLICT", message: "内部摘要与数据库内容" },
   }, { status: 409 }));
@@ -77,9 +77,8 @@ test("幂等冲突保留未知状态并提供同键重试，不引导刷新丢�
     const html = render(state, () => {});
     assert.match(html, /已有报价需要核实/);
     assert.match(html, /不会换标识重发/);
-    assert.match(html, /使用同一标识重试/);
-    assert.match(html, /复用本次提交标识和内容/);
-    assert.doesNotMatch(html, /先刷新需求详情|内部摘要|报价已提交|本次未提交成功/);
+    assert.equal(state.retryable, false);
+    assert.doesNotMatch(html, /先刷新需求详情|内部摘要|报价已提交|本次未提交成功|使用同一标识重试|复用本次提交标识和内容|重试/);
     return true;
   });
 });
