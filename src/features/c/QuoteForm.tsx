@@ -56,7 +56,7 @@ export function QuoteSubmissionFeedback({ state, onRetry }: { state: QuoteSubmis
         <h3>{state.status === "uncertain" ? "提交结果未知" : "报价未提交成功"}</h3>
         <p>{state.message}</p>
         <p className="!mb-0">填写内容仍保留在当前页面；刷新或离开页面会丢失。</p>
-        {state.status === "uncertain" && (
+        {state.status === "uncertain" && state.retryable !== false && (
           <div className="mt-4">
             <button type="button" onClick={onRetry} disabled={!onRetry} className={buttonClass}>
               使用同一标识重试
