@@ -32,9 +32,19 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
 | GET /api/quote | Quote[] | B | 固定 mock |
 | POST /api/quote | QuoteSubmissionInput → Quote | B | 已接演示会话；合法首次提交 201/mock，同键同摘要重放 200/mock；无有效会话 401 |
-| GET /api/schedule[?demandId=<id>&version=<n>] | Schedule | D | 无参数为演示 mock；带 `demandId` 读取 Prisma 最新/指定版本 |
+| GET /api/schedule[?demandId=<id>&version=<n>] | Schedule | D | 无参数或固定 demo-demand 为公开种子排期 mock；其他需求验证业主会话及归属后读取最新/指定版本 |
 | GET /api/payment | Payment[] | D | 模拟节点列表；simulated 必须 true |
 | GET /api/ticket | Ticket[] | D | 固定 mock |
+
+## GET /api/schedule
+
+无查询参数或 demandId 精确等于已有 DEMO_DEMAND_ID（demo-demand）时返回与 seed 共用的固定演示排期并标 mock，不读取数据库内同 ID 的可变排期。带不带 version 均无需登录；固定排期当前版本为 1，指定其他合法版本返回 404/SCHEDULE_NOT_FOUND。不能按需求 published 状态或来源 mock 放开其他 ID。显式查询使用公共 ScheduleQuery：恰好一个非空 demandId、至多一个十进制正整数 version；拒绝未知/重复/身份参数和超出数据库整数范围的版本，非空 ID 原样精确匹配。
+
+演示入口没有业主 cookie 时直接返回固定数据，服务方身份不限制演示访问；只要带业主 cookie，仍先验证持久化会话，伪造/重复/过期/撤销返回 401，当前账号不再是业主返回 403，不回退匿名。这同时适用于无参数及显式 demo-demand。有效业主无需拥有演示需求。
+
+其他需求在同一 Serializable 事务核验实际业主 cookie、有效期/撤销、当前角色及需求归属，再读取最新或指定版本。缺失/失效业主凭证为 401；当前非业主角色或只有有效演示服务方凭证为 403。有效业主 cookie 优先，失效或重复业主凭证不回退其他身份。本人需求各状态均可读取；真实需求详情公开不代表排期也公开。
+
+他人与不存在的非演示需求统一 404/DEMAND_NOT_FOUND；确认本人需求后，缺少排期或指定版本才返回 404/SCHEDULE_NOT_FOUND。存储、事务、DTO 或返回归属/版本校验失败为 503/SCHEDULE_UNAVAILABLE，不回退演示。所有读取响应 private, no-store、Vary: Cookie。普通数据库排期沿用 live，不代表真实施工或 AI 排期。POST 继续返回 501。A 可沿用 apiGet(..., Schedule)，真实需求在共享业主登录后刷新/重试，演示排期始终显示 mock；接口与验证见 `docs/requests/D-schedule-read-auth.md`。
 
 ## GET /api/provider/quotes
 
@@ -173,7 +183,7 @@ POST 先校验同源 Origin 和实际业主会话，在事务外读取/校验 De
 
 DELETE 无请求体，非空 ID 原样精确查找，错误顺序为路径 400 → 方法/同源 Origin 403 → 事务内业主会话 401/403/503 → 本人需求 404 → 只读/状态/关联约束 409 → 删除。凭证规则与 PUT 一致；他人和不存在统一 404。会话、当前账号、归属、状态、五类关联检查、删除及输出校验全部处于同一个 Serializable 事务；最后 DELETE SQL 也限制 ID、ownerId、可编辑状态和关联均为空，必须恰好删除一条。成功为 200/live，重复删除为 404；所有响应 private, no-store、Vary: Cookie。事务/存储故障为中性 503/DATABASE_UNAVAILABLE，提示刷新核实，不承诺之前一定未删除。详见 `docs/requests/D-demand-delete-auth.md`。
 
-需求 POST 当前业主归属沿用 #95，列表/详情的访问范围见下节。历史 demo-owner 需求不自动转移；match、schedule 等其他读取接口未由本次保护，不能宣称整个模块或平台已经完成权限隔离。
+需求 POST 当前业主归属沿用 #95，列表/详情的访问范围见下节。历史 demo-owner 需求不自动转移；显式排期查询的独立归属校验见 GET /api/schedule。match 等其他读取接口仍需审计，不能宣称整个模块或平台已经完成权限隔离。
 
 ## GET /api/demand 与 GET /api/demand/[id]：访问隔离
 
