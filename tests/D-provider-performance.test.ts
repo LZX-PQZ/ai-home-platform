@@ -74,7 +74,7 @@ test("公开服务方评价汇总：隔离 SQLite，快照、真实关联校验�
     env: { ...process.env, DATABASE_URL: url }, stdio: "pipe", timeout: 30000,
   });
   await db.user.createMany({ data: ["private-owner", "private-other"].map(id => ({ id, name: "Synthetic", role: "owner" })) });
-  await db.serviceProvider.createMany({ data: [...providers, { ...providers[0], id: "outside-directory" }].map(({ tags, ...provider }) => ({ ...provider, tagsJson: JSON.stringify(tags) })) });
+  await db.serviceProvider.createMany({ data: [...providers, { ...providers[0], id: "outside-directory" }].map(({ tags, availability: _availability, ...provider }) => ({ ...provider, tagsJson: JSON.stringify(tags) })) });
   const cookie = (await db.$transaction(tx => issueOwnerSession({ userId: "private-owner", role: "owner", providerId: null }, tx))).cookie.split(";")[0];
   t.beforeEach(async () => {
     await db.review.deleteMany(); await db.serviceOrder.deleteMany(); await db.quote.deleteMany(); await db.demandOrder.deleteMany();

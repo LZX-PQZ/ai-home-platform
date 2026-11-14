@@ -176,6 +176,7 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
   const rows = toGanttRows(data);
   const currentDay = running.length > 0 ? Math.min(...running.map((task) => task.startDay)) : null;
   const status = scheduleStatus(data);
+  const orderInProgress = orderState.phase === "ready" && orderState.order?.status === "in_progress";
 
   return (
     <div>
@@ -319,10 +320,10 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
             )}
           </Card>
 
-          {version === undefined && source === "live" && canReviseSchedule(data) ? <ScheduleEditorPanel demandId={id} mode="revision" schedule={data} onSaved={reload} /> : null}
-          {version === undefined && source === "live" && !canReviseSchedule(data) ? <Card>
+          {version === undefined && source === "live" && canReviseSchedule(data) && !orderInProgress ? <ScheduleEditorPanel demandId={id} mode="revision" schedule={data} onSaved={reload} /> : null}
+          {version === undefined && source === "live" && (orderInProgress || !canReviseSchedule(data)) ? <Card>
             <SectionHead title="变更与验收" />
-            <Note tone="info"><p>排期仅能在全部工序尚未开工且未分配责任方时修订；当前版本请联系施工负责人处理。</p></Note>
+            <Note tone="info"><p>{orderInProgress ? "当前需求已进入施工中，排期修订入口已关闭；如现场发生变化，请联系施工负责人处理。" : "排期仅能在全部工序尚未开工且未分配责任方时修订；当前版本请联系施工负责人处理。"}</p></Note>
           </Card> : null}
           {version === undefined && source === "mock" ? <Card>
             <SectionHead title="变更与验收" />

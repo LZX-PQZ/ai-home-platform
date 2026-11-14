@@ -84,14 +84,14 @@ async function readDemands(request: Request, id: string | undefined, db: Pick<Pr
         const providerLinked = identity?.role === "provider" && row.status !== "published";
         if (providerLinked) checkProviderOrder(row, identity.providerId);
         const data = checkedDemand(row, identity, id, providerLinked);
-        const source = identity?.role === "provider" || row.id === DEMO_DEMAND_ID ? "mock" : "live";
+        const source = identity?.role === "provider" ? "mock" : data.source;
         return envelope(Demand).parse({ ok: true, data, meta: { source } });
       }
       const where: Prisma.DemandOrderWhereInput = identity?.role === "owner"
         ? { ownerId: identity.userId } : { status: "published" };
       const rows = await tx.demandOrder.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "asc" }] });
       const data = rows.map(row => checkedDemand(row, identity));
-      const source = identity?.role === "provider" || rows.some(row => row.id === DEMO_DEMAND_ID) ? "mock" : "live";
+      const source = identity?.role === "provider" || data.some(row => row.source === "mock") ? "mock" : "live";
       return envelope(Demand.array()).parse({ ok: true, data, meta: { source } });
     }, { isolationLevel: "Serializable" });
     return Response.json(body, { headers });

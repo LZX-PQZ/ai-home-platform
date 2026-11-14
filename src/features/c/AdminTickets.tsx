@@ -156,7 +156,16 @@ export function AdminTicketsContent({ state, onReload }: {
                           </div>
                           <div className="min-w-0">
                             <dt className={C.meta}>责任服务方编号</dt>
-                            <dd className="mt-1 break-all text-sm">{ticket.responsibleProviderId ?? "暂未指定责任服务方"}</dd>
+                            <dd className="mt-1 break-all text-sm">
+                              {ticket.responsibleProviderId ?? "暂未指定责任服务方"}
+                              {ticket.responsibleProviderId !== null && (
+                                <Link href={`/admin/provider/${encodeURIComponent(ticket.responsibleProviderId)}`} prefetch={false}
+                                  aria-label={`查看工单 ${ticket.id} 的责任服务方资料`}
+                                  className="mt-2 block w-fit rounded-md font-medium underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+                                  查看责任服务方资料
+                                </Link>
+                              )}
+                            </dd>
                           </div>
                         </dl>
                         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">

@@ -133,6 +133,6 @@ test("来源说明在列表前展示，全部链接保留对应 ID；live 不标
 test("列表标题和说明不再把公开需求称为我的装修", () => {
   const html = render(ready([demand]));
   assert.match(html, />需求列表</);
-  assert.match(html, /当前展示平台公开需求/);
+  assert.match(html, /未登录时展示平台公开需求；登录后展示本人全部需求/);
   assert.doesNotMatch(html, /我的装修/);
 });
