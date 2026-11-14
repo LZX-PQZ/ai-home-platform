@@ -63,16 +63,30 @@ export async function smokeInspectionImages(base: string) {
     const duplicate = form(); duplicate.append("images", new Blob([new Uint8Array(jpeg)], { type: "image/jpeg" }), "same.jpg");
     assert.equal((await http("/api/inspect/images", "POST", cookie, duplicate)).response.status, 400);
     assert.equal(await db.inspectionImage.count({ where: { demandId } }), 1);
+    const otherRefs: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const uploaded = await http("/api/inspect/images", "POST", otherCookie, form(otherDemandId));
+      assert.equal(uploaded.response.status, 201);
+      otherRefs.push(envelope(InspectionUploadResult).parse(uploaded.payload).data.images[0].imageRef);
+    }
+    const retained = await db.inspectionImage.findUniqueOrThrow({ where: { id: otherRefs[1] } });
+    await db.inspectionImage.update({ where: { id: otherRefs[0] }, data: { expiresAt: new Date(0) } });
     await db.inspectionImage.update({ where: { id: imageRef }, data: { expiresAt: new Date(0) } });
     const expired = await http("/api/inspect", "POST", cookie, { demandId, imageRefs: [imageRef] });
     assert.equal(expired.response.status, 404); assert.equal(expired.payload.error.code, "IMAGE_NOT_FOUND");
     assert.equal((await http("/api/inspect/images", "POST", cookie, form())).response.status, 201);
     assert.equal(await db.inspectionImage.count({ where: { id: imageRef } }), 0);
+    assert.equal(await db.inspectionImage.count({ where: { id: otherRefs[0] } }), 0);
+    assert.deepEqual(await db.inspectionImage.findUniqueOrThrow({ where: { id: otherRefs[1] } }), retained);
+    const activeOther = await http("/api/inspect", "POST", otherCookie, { demandId: otherDemandId, imageRefs: [otherRefs[1]] });
+    assert.equal(activeOther.response.status, 501); assert.equal(activeOther.payload.error.code, "NOT_IMPLEMENTED");
+    const removedOther = await http("/api/inspect", "POST", otherCookie, { demandId: otherDemandId, imageRefs: [otherRefs[0]] });
+    assert.equal(removedOther.response.status, 404); assert.equal(removedOther.payload.error.code, "IMAGE_NOT_FOUND");
     assert.equal((await http("/api/auth/owner", "DELETE", cookie)).response.status, 200);
     assert.equal((await http("/api/inspect/images", "POST", cookie, form())).response.status, 401);
     assert.equal((await http("/api/inspect", "POST", cookie, { demandId, imageRefs: [imageRef] })).response.status, 401);
     assert.equal((await http("/api/auth/owner", "DELETE", otherCookie)).response.status, 200);
-    console.log("照片生产 HTTP 链路通过：真实登录/上传/去元数据/live、有效引用 501、跨归属与过期拒绝、重复批次回滚、注销后拒绝。");
+    console.log("照片生产 HTTP 链路通过：真实登录/上传/去元数据/live、有效引用 501、跨归属与过期拒绝、跨业主过期清理且保留有效照片、重复批次回滚、注销后拒绝。");
   } finally {
     try {
       if (owners.length) {

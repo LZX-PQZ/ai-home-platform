@@ -171,7 +171,8 @@ export async function handleInspectionUpload(request: Request, db: Database = pr
         const current = await requireOwner(request, tx, expected.userId);
         const demand = await ownedDemand(tx, input.demandId, current.userId);
         const now = new Date();
-        await tx.inspectionImage.deleteMany({ where: { ownerId: current.userId, expiresAt: { lte: now } } });
+        // Reclaim expired bytes across owners before counting global storage; rollback with the upload on any failure.
+        await tx.inspectionImage.deleteMany({ where: { expiresAt: { lte: now } } });
         await quota(tx, current.userId, now, normalized.length, total);
         const expiresAt = new Date(now.getTime() + limits.ttlSeconds * 1000);
         const images = normalized.map(image => ({ id: `inspect-image/${randomUUID()}`, ownerId: current.userId, expiresAt,

@@ -174,7 +174,7 @@ PR #74 已将 `handleQuoteSubmission` 的默认预检及事务会话 reader 接�
 
 仅 JPEG/PNG，MIME 与实际格式必须一致；拒绝空、损坏、动画/多页、SVG 及批内原内容或标准化后重复的图片。每张输入/输出最多 2 MiB，整批各最多 10 MiB，整个 multipart 正文最多 11 MiB；单边 4096，像素 1600 万。按照 EXIF 方向旋转、重编码并移除元数据，不保存原图/文件名。进程最多两个上传在处理，单图原生处理设 5 秒超时（不含等待线程的时间）。
 
-成功 201 `envelope(InspectionUploadResult)`/live，data 为 `{ demandId, images: [{ imageRef, contentType, sizeBytes, width, height, expiresAt }] }`。随机 `inspect-image/<UUID>` 引用 24 小时有效，不是公开 URL；大小/尺寸对应实际保存的照片。二进制、SHA-256、ownerId 和 demandId 存 SQLite；live 仅表示保存成功，不表示分析或验收。每业主最多 50 张/50 MiB 有效照片，数据库最多 5000 条/500 MiB 记录。过期引用立即拒绝；本人的后续成功上传清理其过期记录，无后台清理或到期物理擦除保证。需求删除级联删除临时照片，原有业务关联仍限制删除。无上传幂等键，重传产生新引用并计入配额。
+成功 201 `envelope(InspectionUploadResult)`/live，data 为 `{ demandId, images: [{ imageRef, contentType, sizeBytes, width, height, expiresAt }] }`。随机 `inspect-image/<UUID>` 引用 24 小时有效，不是公开 URL；大小/尺寸对应实际保存的照片。二进制、SHA-256、ownerId 和 demandId 存 SQLite；live 仅表示保存成功，不表示分析或验收。每业主最多 50 张/50 MiB 有效照片，数据库最多 5000 条/500 MiB 记录。过期引用立即拒绝；后续上传在最终授权通过的同一事务先删除全库 expiresAt <= 服务端 now 的记录，再统计实际剩余配额并保存，失败时清理与新增全部回滚，有效照片保留。不返回其他业主引用或清理计数，无后台清理、文件立即缩小或到期物理擦除保证。需求删除级联删除临时照片，原有业务关联仍限制删除。无上传幂等键，重传产生新引用并计入配额。见 `docs/requests/D-photo-expiry-quota.md`。
 
 检查继续使用公共 `PhotoInspectionInput`：demandId 加 1–10 个不重复 imageRefs，JSON 最多 32 KiB，不接二进制、身份或业务状态。必须使用上传回执中的引用；同一事务校验当前业主、需求、每个引用的归属/有效期/存储摘要，不下载客户端 URL。文件名、未知/过期/跨需求/跨业主引用统一 404/IMAGE_NOT_FOUND；非本人/不存在需求统一 404/DEMAND_NOT_FOUND。全部引用有效后仍 501/NOT_IMPLEMENTED，没有 findings、data 或 meta，也不更新任何业务状态。
 

@@ -82,6 +82,7 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 ## 施工照片上传基础（2026-11-14）
 
 - [x] POST /api/inspect/images：当前业主、同源及事务内归属重验，JPEG/PNG 实际解码、旋转去元数据，数量/大小/配额限制，整批原子保存 SQLite，返回 24 小时有效随机引用和 live 来源。
+- [x] 过期照片全局配额修复：成功上传事务先回收全库过期行再计数，有效照片保留，失败全部回滚，并发不超额。无公共字段/schema/依赖变更；见 `docs/requests/D-photo-expiry-quota.md`。
 - [x] POST /api/inspect：当前业主及需求/引用归属、有效期、摘要校验；未知/跨归属/过期引用 404，有效引用仍明确 501。来源标记不代表 AI 或验收结论。见 `docs/requests/D-photo-image-upload.md`。
 - [ ] A 上传表单接线、真实照片分析、预览/删除管理、后台清理、对象存储与人工复核未实现；评价后端见下节。
 
@@ -97,4 +98,4 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] 有排期时按依赖 start_task/complete_task，追加版本并保留历史；全部 done 才能整单完成。实际操作与当前操作者、状态、结果版本同事务记录。见 `docs/requests/D-order-progress.md`。
 - [x] 生产 HTTP 链路改为通过接口开工/逐项完成/整单完成/评价，并读取服务方接单列表和详情，不再直接改数据库模拟 completed。
 - [ ] A/C 动作按钮、评价表单、双方审批、专业验收材料、实际日期、阻塞/返工/施工中变更、付款联动、操作记录查询待后续。
-- [ ] 图中照片两项已核对：照片检查 mock AI 结果尚未提供；全局配额统计仍包括其他业主过期照片，后续单独修复并设计存储回收，不与履约 PR 混合。
+- [ ] 照片检查 mock AI 结果尚未提供；过期照片全局配额修复已独立交付，见上方照片存储记录。

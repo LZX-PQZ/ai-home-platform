@@ -229,11 +229,14 @@ test("照片存储：隔离 SQLite、真实解码、归属、引用和事务回�
 
   await t.test("持久化输出错误回滚整批及过期清理；存储故障不伪装 mock 或 501", async () => {
     const ref = await saved(); await db.inspectionImage.update({ where: { id: ref }, data: { expiresAt: new Date(0) } });
+    const otherRef = `inspect-image/${randomUUID()}`;
+    await db.inspectionImage.create({ data: { ...await db.inspectionImage.findUniqueOrThrow({ where: { id: ref } }),
+      id: otherRef, ownerId: "two", demandId: "other" } });
     const corrupt = decorate(db, async (tx, count) => count !== 3 ? tx : ({ ...tx, inspectionImage: { ...tx.inspectionImage,
       findMany: async (args: Prisma.InspectionImageFindManyArgs) => (await tx.inspectionImage.findMany(args)).map(row => ({ ...row, width: 0 })),
     } }) as unknown as Prisma.TransactionClient);
     await checked(await upload([png, jpeg], "one", cookie, corrupt), 503, "IMAGE_STORAGE_UNAVAILABLE");
-    assert.deepEqual((await db.inspectionImage.findMany()).map(row => row.id), [ref]);
+    assert.deepEqual((await db.inspectionImage.findMany()).map(row => row.id).sort(), [ref, otherRef].sort());
     const broken = { $transaction: async () => { throw new Error("private database"); } } as unknown as Database;
     await checked(await upload([png], "one", cookie, broken), 503, "IMAGE_STORAGE_UNAVAILABLE");
     await checked(await inspect([ref], "one", cookie, broken), 503, "IMAGE_STORAGE_UNAVAILABLE");
@@ -261,16 +264,82 @@ test("照片存储：隔离 SQLite、真实解码、归属、引用和事务回�
     await checked(await inspect([ref]), 501, "NOT_IMPLEMENTED");
   });
 
-  await t.test("到期仅引用失效，后续成功上传清理本人过期行；删除需求级联照片", async () => {
+  await t.test("到期仅引用失效，成功上传清理所有过期行并保留其他业主有效照片；删除需求级联照片", async () => {
     const ref = await saved(); const row = await db.inspectionImage.findUniqueOrThrow({ where: { id: ref } });
     await db.inspectionImage.update({ where: { id: ref }, data: { expiresAt: new Date(0) } });
     const otherRef = `inspect-image/${randomUUID()}`;
     await db.inspectionImage.create({ data: { ...row, id: otherRef, ownerId: "two", demandId: "other", expiresAt: new Date(0) } });
-    await checked(await inspect([ref]), 404, "IMAGE_NOT_FOUND"); assert.equal(await db.inspectionImage.count(), 2);
+    const active = await db.inspectionImage.create({ data: { ...row, id: `inspect-image/${randomUUID()}`, ownerId: "two", demandId: "other" } });
+    await checked(await inspect([ref]), 404, "IMAGE_NOT_FOUND"); assert.equal(await db.inspectionImage.count(), 3);
     await checked(await upload(), 201);
-    assert.equal(await db.inspectionImage.count({ where: { id: ref } }), 0); assert.equal(await db.inspectionImage.count({ where: { id: otherRef } }), 1);
+    assert.equal(await db.inspectionImage.count({ where: { id: ref } }), 0); assert.equal(await db.inspectionImage.count({ where: { id: otherRef } }), 0);
+    assert.deepEqual(await db.inspectionImage.findUniqueOrThrow({ where: { id: active.id } }), active);
+    await checked(await inspect([active.id], "other", otherCookie), 501, "NOT_IMPLEMENTED");
     const deleted = await handleDemandDelete(new Request(`${origin}/api/demand/one`, { method: "DELETE", headers: { origin, cookie } }), "one", db);
     assert.equal(deleted.status, 200); assert.equal(await db.inspectionImage.count({ where: { demandId: "one" } }), 0);
+  });
+
+  await t.test("其他业主过期照片填满全局数量后，上传实际清除内容并释放额度", async () => {
+    const ref = await saved(); const active = await db.inspectionImage.findUniqueOrThrow({ where: { id: ref } });
+    await db.inspectionImage.createMany({ data: Array.from({ length: limits.globalFiles - 1 }, () => ({ ...active,
+      id: `inspect-image/${randomUUID()}`, ownerId: "two", demandId: "other", expiresAt: new Date(0) })) });
+    assert.equal(await db.inspectionImage.count(), limits.globalFiles);
+    const result = await checked(await upload(), 201);
+    assert.equal(result.meta.source, "live"); assert.equal(await db.inspectionImage.count(), 2);
+    assert.equal(await db.inspectionImage.count({ where: { ownerId: "two" } }), 0);
+    assert.deepEqual(await db.inspectionImage.findUniqueOrThrow({ where: { id: ref } }), active);
+    const remaining = await db.inspectionImage.aggregate({ _sum: { sizeBytes: true } });
+    assert.equal(remaining._sum.sizeBytes, active.sizeBytes + result.data.images[0].sizeBytes);
+  });
+
+  await t.test("服务端同一时刻的过期边界：等于 now 清理，大于 now 保留", async () => {
+    const ref = await saved(); const row = await db.inspectionImage.findUniqueOrThrow({ where: { id: ref } });
+    const ids = Array.from({ length: 3 }, () => `inspect-image/${randomUUID()}`);
+    await db.inspectionImage.createMany({ data: ids.map(id => ({ ...row, id, ownerId: "two", demandId: "other" })) });
+    const atBoundary = decorate(db, async (tx, count) => count !== 3 ? tx : ({ ...tx, inspectionImage: { ...tx.inspectionImage,
+      deleteMany: async (args: Prisma.InspectionImageDeleteManyArgs) => {
+        const now = (args.where?.expiresAt as Prisma.DateTimeFilter).lte; assert.ok(now instanceof Date);
+        for (const [i, offset] of [-1, 0, 1].entries()) await tx.inspectionImage.update({ where: { id: ids[i] }, data: { expiresAt: new Date(now.getTime() + offset) } });
+        return tx.inspectionImage.deleteMany(args);
+      },
+    } }) as unknown as Prisma.TransactionClient);
+    await checked(await upload([png], "one", cookie, atBoundary), 201);
+    assert.deepEqual((await db.inspectionImage.findMany({ where: { ownerId: "two" } })).map(entry => entry.id), [ids[2]]);
+  });
+
+  await t.test("非法或越权上传不触发清理，额度不足和清理故障全部回滚", async () => {
+    const ref = await saved(); const row = await db.inspectionImage.findUniqueOrThrow({ where: { id: ref } });
+    const expired = await db.inspectionImage.create({ data: { ...row, id: `inspect-image/${randomUUID()}`, ownerId: "two", demandId: "other", expiresAt: new Date(0) } });
+    await checked(await upload([png], "one", ""), 401, "UNAUTHENTICATED");
+    await checked(await upload([png], "one", otherCookie), 404, "DEMAND_NOT_FOUND");
+    await checked(await upload([{ ...png, bytes: Buffer.from("broken") }]), 400, "VALIDATION_ERROR");
+    assert.deepEqual(await db.inspectionImage.findUniqueOrThrow({ where: { id: expired.id } }), expired);
+    const brokenCleanup = decorate(db, async (tx, count) => count !== 3 ? tx : ({ ...tx, inspectionImage: { ...tx.inspectionImage,
+      deleteMany: async (args: Prisma.InspectionImageDeleteManyArgs) => { await tx.inspectionImage.deleteMany(args); throw new Error("private database"); },
+    } }) as unknown as Prisma.TransactionClient);
+    await checked(await upload([png], "one", cookie, brokenCleanup), 503, "IMAGE_STORAGE_UNAVAILABLE");
+    assert.equal(await db.inspectionImage.count(), 2);
+    await db.inspectionImage.createMany({ data: Array.from({ length: limits.ownerFiles - 1 }, () => ({ ...row, id: `inspect-image/${randomUUID()}` })) });
+    await checked(await upload(), 409, "IMAGE_QUOTA_EXCEEDED");
+    assert.deepEqual(await db.inspectionImage.findUniqueOrThrow({ where: { id: expired.id } }), expired);
+    assert.equal(await db.inspectionImage.count(), limits.ownerFiles + 1);
+  });
+
+  await t.test("两连接并发回收及上传仍共同受全局数量约束", async () => {
+    const ref = await saved(); const row = await db.inspectionImage.findUniqueOrThrow({ where: { id: ref } });
+    await db.inspectionImage.createMany({ data: Array.from({ length: limits.globalFiles - 2 }, () => ({ ...row,
+      id: `inspect-image/${randomUUID()}`, ownerId: "two", demandId: "other" })) });
+    const expiredId = `inspect-image/${randomUUID()}`;
+    await db.inspectionImage.create({ data: { ...row, id: expiredId, ownerId: "two", demandId: "other", expiresAt: new Date(0) } });
+    const second = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+    try {
+      const responses = await Promise.all([upload(), upload([jpeg], "one", cookie, second)]);
+      assert.equal(responses.filter(response => response.status === 201).length, 1);
+      assert.ok(responses.every(response => [201, 409, 503].includes(response.status)));
+      assert.equal(await db.inspectionImage.count(), limits.globalFiles);
+      assert.equal(await db.inspectionImage.count({ where: { id: expiredId } }), 0);
+      await checked(await upload(), 409, "IMAGE_QUOTA_EXCEEDED");
+    } finally { await second.$disconnect(); }
   });
 
   await t.test("业主数量配额并发不超额；全局数量/字节及业主字节均限制", async () => {
