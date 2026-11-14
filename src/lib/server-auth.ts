@@ -1,6 +1,10 @@
 import { ProviderIdentity, VerifiedSession, type ProviderIdentityDTO, type VerifiedSessionDTO } from "@/contracts";
 import { readDemoVerifiedSession } from "@/lib/demo-provider-session";
 export { readDemoVerifiedSession } from "@/lib/demo-provider-session";
+export {
+  readOwnerVerifiedSession, authorizeOwnerQuoteRead, parseQuoteQuery,
+  OwnerAccessError, ownerAccessFailureResponse, QUOTE_READ_RESPONSE_HEADERS,
+} from "@/lib/owner-auth";
 
 /**
  * 认证适配器必须在服务端验证会话凭证、过期时间、撤销和账号绑定后再返回此对象。

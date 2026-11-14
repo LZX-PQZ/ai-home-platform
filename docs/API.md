@@ -65,7 +65,7 @@ PR #67 已将处理器接上事务内核，移除了固定的未实现响应。�
 
 ## GET /api/quote?demandId=：已冻结规则，尚未开放
 
-现有 GET 仍返回固定演示报价，尚不解析或执行 demandId 查询。公共 `QuoteQuery`/DTO、D 的事务授权适配器、真实业主会话，以及 B 的公开 GET/页面接线均待后续实现；调用方目前不能把带参数的响应当作该需求的数据库报价。
+现有 GET 仍返回固定演示报价，尚不解析或执行 demandId 查询。D 已提供公共 `QuoteQuery`/DTO、持久化业主会话读取及事务授权器；B 的公开 GET/页面接线和业主身份验证登录入口仍未实现，调用方目前不能把带参数的响应当作该需求的数据库报价。
 
 冻结的目标协议：无参数保留固定 mock；显式查询仅接受单一非空 demandId，拒绝纯空白、重复和未知参数，非空 ID 原样精确查找。仅当前已验证的业主可读取数据库 `DemandOrder.ownerId === session.userId` 的需求；服务方（含演示 provider-a）和管理员均返回 403，此接口不给跨业主或跨服务方的比较权限。
 
@@ -74,6 +74,14 @@ PR #67 已将处理器接上事务内核，移除了固定的未实现响应。�
 业主可读取本人需求在 draft、published、contracted、in_progress、completed 各状态下的 submitted/accepted 报价；不返回 draft/rejected 报价。存在且无可比报价为 `200 envelope(Quote[])` 空数组，不能把查询失败变成空数组。数据库或数据校验失败为 `503 DATABASE_UNAVAILABLE`，不回退 mock。显式查询所有成功和失败响应均须 `Cache-Control: private, no-store`、`Vary: Cookie`，禁止共享缓存。来源按需求的 mock/live 规则；服务方资料仍须独立标识来源。
 
 参数细节、错误优先级、服务端适配器约束和 D/B 后续交付见 `docs/requests/D-quote-read-protocol.md`。
+
+### B 可调用的业主读取入口
+
+从 `@/lib/server-auth` 导入 `parseQuoteQuery`、`readOwnerVerifiedSession`、`authorizeOwnerQuoteRead`、`OwnerAccessError`、`ownerAccessFailureResponse`、`QUOTE_READ_RESPONSE_HEADERS`。`parseQuoteQuery(URLSearchParams)` 仅在无参数时返回 null；非法显式查询抛 400，不回退演示数据。显式查询把 `authorizeOwnerQuoteRead` 直接传给 B 的 `readStoredQuoteComparison`，由 B 内核传入当前 tx；授权器成功返回 true，拒绝抛出带 status/code 的 OwnerAccessError。禁止注入预检身份快照。
+
+`readOwnerVerifiedSession(request, tx)` 必须接收事务客户端。它读取 `__Host-ai_home_owner_session` 的随机凭证，在 OwnerSession 表比对 SHA-256 摘要、到期与撤销状态，再检查当前账户。无效凭证返回 null；当前角色不符抛 403，数据库异常抛 503。授权器将 null 映射为 401；只有有效服务方演示 cookie 时返回 403，不转换为业主。有效业主 cookie 优先，存在但无效/重复的业主 cookie 不回退其他身份。授权器只允许 GET/HEAD，不能用于需求修改/删除。
+
+OwnerSession 的服务端签发/撤销函数仅由 D 内部认证代码使用，不从 server-auth 暴露，也无公开签发路由。签发要求上游已完成身份验证，并检查当前账户仍为 owner；随机 256 位令牌只经 HTTPS 的 Set-Cookie 交付，HttpOnly、Secure、SameSite=Strict、Path=/，绝对有效期 30 分钟。数据库只存摘要。当前密码/外部身份验证与登录/注销路由尚未交付，因此不能宣称已提供可用的业主登录流程。测试中的身份是临时数据库合成夹具，不是生产认证。具体接线和限制见 `docs/requests/D-owner-quote-read-auth.md`。
 
 ## 服务端身份基础设施
 
@@ -134,3 +142,5 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 PUT 完整替换可编辑字段，全部必填，不提供 PATCH。创建/更新禁止客户端设置 id、status 或未知字段；description/city 去除首尾空白后不可为空，面积为有限正数，预算为非负安全整数分且下限不超过上限。更新/删除允许 draft 或尚未签约的 published 需求；进入 contracted、in_progress 或 completed 后返回 409/INVALID_STATE。`demo-demand` 是只读演示数据，更新或删除返回 409/DEMO_DEMAND_READ_ONLY。不存在返回 404/DEMAND_NOT_FOUND，非法输入返回 400/VALIDATION_ERROR。删除前会检查报价、排期、付款、评价和工单关联；存在关联时返回 409/DEMAND_HAS_RELATED_RECORDS。删除结果为 {id,deleted:true}，仍须包含来源信封。
 
 需求路由必须实现鉴权与数据隔离，不得将查询失败回退成 mock。当前需求列表、创建、详情、更新和删除均访问 Prisma；聊天仍为 mock；状态流转仍由后续业务层负责。当前 `PUT /api/demand/[id]` 和 `DELETE /api/demand/[id]` 尚未校验已验证会话或 `ownerId`，因此任何能访问接口的调用方都可能修改或删除非本人真实需求；这是一项已知的答辩前安全缺口，不能视为生产权限边界。后续必须由服务端会话确定业主身份，并在查询、更新、删除中同时执行所有者过滤。`POST /api/demand` 当前也使用固定演示业主归属，接入真实会话前只能作为本地演示能力。
+
+需求修改、删除、创建和查询隔离已登记在 `docs/tasks/D.md` 的高优先级鉴权待办。本次业主报价读取授权不修复这些写入接口，不能将 GET 的读取权限直接用于修改或删除。

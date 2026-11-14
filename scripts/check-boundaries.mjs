@@ -8,7 +8,7 @@ function walk(dir){for(const e of fs.readdirSync(dir,{withFileTypes:true})){cons
 walk("src");
 const failures=[];
 export function canReadAcrossOwner(file, target, clientReachable = false) {
- const sessionInfrastructure = target === "src/lib/demo-provider-session.ts" || target === "src/lib/demo-session-handlers.ts";
+ const sessionInfrastructure = target === "src/lib/demo-provider-session.ts" || target === "src/lib/demo-session-handlers.ts" || target === "src/lib/owner-auth.ts";
  if (sessionInfrastructure) return !clientReachable && ownerOf(file) === "D" && (file.startsWith("src/lib/") || file.startsWith("src/app/api/"));
  const quoteInfrastructure = target === "src/lib/idempotency.ts" || target === "src/lib/quote-policy.ts" || target === "src/lib/server-auth.ts";
  if (quoteInfrastructure) {

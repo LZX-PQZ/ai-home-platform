@@ -36,6 +36,8 @@ export const VerifiedSession = z.object({
   role: UserRole,
   providerId: Id.nullable(),
 }).strict();
+export const OwnerIdentity = VerifiedSession.extend({ role: z.literal("owner"), providerId: z.null() });
+export type OwnerIdentityDTO = z.infer<typeof OwnerIdentity>;
 export const ProviderIdentity = z.object({
   userId: Id,
   role: z.literal("provider"),
@@ -191,6 +193,8 @@ export type ApiFailure = { ok: false; error: { code: string; message: string } }
 // PUT replaces all editable fields; status transitions are a separate server concern.
 export const DemandUpdateInput = DemandInput;
 export const DemandIdParams = z.object({ id: Id.refine(value => value.trim().length > 0) }).strict();
+export const QuoteQuery = z.object({ demandId: DemandIdParams.shape.id }).strict();
+export type QuoteQueryDTO = z.infer<typeof QuoteQuery>;
 export const DemandDeleteResult = z.object({ id: DemandIdParams.shape.id, deleted: z.literal(true) }).strict();
 export type DemandUpdateInputDTO = z.infer<typeof DemandUpdateInput>;
 export type DemandIdParamsDTO = z.infer<typeof DemandIdParams>;
