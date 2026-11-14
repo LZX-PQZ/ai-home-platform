@@ -10,6 +10,12 @@ import {
   type ProgressActionCandidate,
 } from "./order-progress";
 
+const orderStatusLabel: Record<OrderSummaryDTO["status"], string> = {
+  contracted: "已签约",
+  in_progress: "施工中",
+  completed: "已完工",
+};
+
 export function OrderProgressPanel({
   demandId,
   order,
@@ -90,7 +96,7 @@ export function OrderProgressPanel({
   return (
     <Card className="mt-4">
       <SectionHead title="履约推进" aside={<Badge tone={order.source === "mock" ? "accent" : "brand"}>接单来源：{order.source}</Badge>} />
-      <p className={`mb-3 ${C.meta}`}>订单 {order.id} · 当前状态 {order.status} · 排期版本 {schedule?.version ?? "无"}</p>
+      <p className={`mb-3 ${C.meta}`}>订单 {order.id} · 当前状态 {orderStatusLabel[order.status]} · 排期版本 {schedule?.version ?? "无"}</p>
       {actions.length === 0 ? (
         <Note tone="info">当前没有满足前置条件的履约动作。工序完成只表示业主确认当前工序完成，不等于专业验收或付款完成。</Note>
       ) : (

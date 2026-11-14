@@ -133,6 +133,19 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
         />
         <Button variant="secondary" size="sm" onClick={reload}>重新加载</Button>
         {version === undefined ? <div className="mt-4"><ScheduleEditorPanel demandId={id} mode="create" onSaved={reload} /></div> : null}
+        {version === undefined && id !== "demo-demand" ? (
+          <OrderProgressPanel
+            demandId={id}
+            order={orderState.phase === "ready" ? orderState.order : null}
+            orderPhase={orderState.phase}
+            orderError={orderState.phase === "failed" ? orderState.error : null}
+            orderSource={orderState.phase === "ready" ? orderState.source : null}
+            schedule={null}
+            source={source}
+            reload={reload}
+            reloadOrder={reloadOrder}
+          />
+        ) : null}
       </div>
     );
   }
@@ -320,17 +333,26 @@ export function ScheduleContent({ id, version, state, reload, orderState = { pha
 
       {version === undefined ? (
         <>
-          <OrderProgressPanel
-            demandId={id}
-            order={orderState.phase === "ready" ? orderState.order : null}
-            orderPhase={orderState.phase}
-            orderError={orderState.phase === "failed" ? orderState.error : null}
-            orderSource={orderState.phase === "ready" ? orderState.source : null}
-            schedule={data}
-            source={source}
-            reload={reload}
-            reloadOrder={reloadOrder}
-          />
+          {id === "demo-demand" || source === "mock" ? (
+            <Card className="mt-4">
+              <SectionHead title="履约推进" aside={<Badge tone="accent">演示只读</Badge>} />
+              <Note tone="info">
+                <p>当前页面使用模拟排期，仅供查看；不会读取或操作真实接单，也不会产生履约推进请求。</p>
+              </Note>
+            </Card>
+          ) : (
+            <OrderProgressPanel
+              demandId={id}
+              order={orderState.phase === "ready" ? orderState.order : null}
+              orderPhase={orderState.phase}
+              orderError={orderState.phase === "failed" ? orderState.error : null}
+              orderSource={orderState.phase === "ready" ? orderState.source : null}
+              schedule={data}
+              source={source}
+              reload={reload}
+              reloadOrder={reloadOrder}
+            />
+          )}
           <PhotoInspectionPanel demandId={id} />
         </>
       ) : null}
