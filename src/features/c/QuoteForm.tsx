@@ -9,6 +9,7 @@ import {
 } from "./quote-form";
 import { quoteSubmissionFailure, quoteUncertainRetryFailure, submitQuote, type QuoteSubmissionState } from "./quote-submit";
 import { createQuoteSubmissionSession } from "./quote-idempotency";
+import { QuoteReceipt } from "./QuoteReceipt";
 
 const inputClass = `${C.input} mt-1 block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:bg-line/40`;
 const buttonClass = `${C.btnBase} ${C.btnSecondary} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`;
@@ -68,18 +69,7 @@ export function QuoteSubmissionFeedback({ state, onRetry }: { state: QuoteSubmis
     );
   }
   const { data, source } = state.response;
-  return (
-    <section role="status" className="mt-4 rounded-card border border-brand/20 bg-brand-soft p-4">
-      <h3>{source === "mock" ? "模拟报价回执（mock）" : "报价已提交（live）"}</h3>
-      <p>{source === "mock" ? "演示身份报价已保存，不代表真实业务身份或业主已收到。" : "来源：实时接口回执，服务端已确认提交；提交不等于业主接受或已接单。"}</p>
-      <p className="break-all">报价编号：{data.id}</p>
-      <p className="break-all">关联需求：{data.demandId}</p>
-      <p>接口返回的已知金额小计：{formatQuoteMoney(data.knownTotalCents)}</p>
-      <p>预计工期：{data.estimatedDays} 天</p>
-      {data.pendingItems.length > 0 && <p>待确认费用：{data.pendingItems.length} 项，未计入小计，完整总价仍未确定。</p>}
-      <p className="!mb-0">业主端读取新报价的链路尚未验收，本页不确认业主已可查看。已锁定本次表单，避免重复提交。</p>
-    </section>
-  );
+  return <QuoteReceipt quote={data} source={source} />;
 }
 
 export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
@@ -168,7 +158,7 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
       <h2 id="quote-form-title">填写报价 · 预览与提交</h2>
       <p className="break-all text-sm text-slate-600">关联需求：{demandId}</p>
       <div id="quote-local-notice" className={`${C.note} ${C.noteWarn} mb-6`}>
-        <p>当前报价写入和接单功能仍待接通。可先预览，再尝试提交；接口返回 501 表示尚未开放，不能视为提交成功。</p>
+        <p>报价已支持演示服务方登录后提交到已发布的非演示需求；演示身份回执标记为 mock。真实接单及业主报价页面接线仍待完成。接口返回 501 表示尚未开放，不能视为提交成功。</p>
         <p className="mb-0">填写内容仅保留在当前页面内存，刷新页面、刷新详情或离开页面会丢失；本地预览不代表保存或提交。</p>
       </div>
       <form
