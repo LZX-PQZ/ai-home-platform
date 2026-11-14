@@ -145,6 +145,7 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
   }
 
   async function retry() {
+    if (submission.status !== "uncertain" || submission.retryable === false) return;
     await attemptSubmit(true);
   }
 

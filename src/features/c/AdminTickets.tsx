@@ -17,12 +17,14 @@ export function AdminTicketsContent({ state, onReload }: {
   const response = state.status === "ready" ? state.response : null;
   const [categoryFilter, setCategoryFilter] = useState<TicketCategoryFilter>("all");
   const [statusFilter, setStatusFilter] = useState<TicketStatusFilter>("all");
-  const filteredTickets = response ? filterTickets(response.data, categoryFilter, statusFilter) : [];
-  const hasActiveFilter = categoryFilter !== "all" || statusFilter !== "all";
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredTickets = response ? filterTickets(response.data, categoryFilter, statusFilter, searchQuery) : [];
+  const hasActiveFilter = categoryFilter !== "all" || statusFilter !== "all" || searchQuery.trim().length > 0;
 
   function clearFilters() {
     setCategoryFilter("all");
     setStatusFilter("all");
+    setSearchQuery("");
   }
 
   return (
@@ -76,7 +78,18 @@ export function AdminTicketsContent({ state, onReload }: {
                   <h2 id="admin-ticket-filters-title" className={C.sectionTitle}>筛选当前列表</h2>
                   <p className={`!mb-0 ${C.pageSub}`}>筛选只作用于本次已经读取的工单，不会重新请求接口或改变服务端数据。</p>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <label className="text-sm font-medium" htmlFor="admin-ticket-search">
+                    关键词
+                    <input
+                      id="admin-ticket-search"
+                      type="search"
+                      className={`${C.input} mt-1 block`}
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="工单、需求或服务方编号"
+                    />
+                  </label>
                   <label className="text-sm font-medium" htmlFor="admin-ticket-category-filter">
                     问题分类
                     <select
@@ -114,7 +127,7 @@ export function AdminTicketsContent({ state, onReload }: {
               {filteredTickets.length === 0 ? (
                 <div className={`${C.card} border-line`} role="status">
                   <h2>当前筛选没有工单</h2>
-                  <p>本次接口已返回 {response.data.length} 条工单，但没有符合当前分类和状态的记录。</p>
+                  <p>本次接口已返回 {response.data.length} 条工单，但没有符合当前关键词、分类和状态的记录。</p>
                   <Button onClick={clearFilters} variant="secondary">清除筛选并显示全部</Button>
                 </div>
               ) : (

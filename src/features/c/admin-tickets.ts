@@ -29,10 +29,13 @@ export const ticketStatusFilterLabels: Record<TicketStatusFilter, string> = {
   ...ticketStatusLabels,
 };
 
-export function filterTickets(tickets: TicketDTO[], category: TicketCategoryFilter, status: TicketStatusFilter) {
+export function filterTickets(tickets: TicketDTO[], category: TicketCategoryFilter, status: TicketStatusFilter, query = "") {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
   return tickets.filter((ticket) =>
     (category === "all" || ticket.category === category) &&
-    (status === "all" || ticket.status === status),
+    (status === "all" || ticket.status === status) &&
+    (!normalizedQuery || [ticket.id, ticket.demandId, ticket.responsibleProviderId ?? ""]
+      .some((value) => value.toLocaleLowerCase().includes(normalizedQuery))),
   );
 }
 
