@@ -10,7 +10,7 @@
 ```
 HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实现；503 AI 不可用。
 金额人民币分；未知金额 null；不得把含未定费用的报价称作最终总价最低。
-契约变更必须同步调用方、mock、测试。浏览器读取可使用 `apiGet(path, Schema)`，提交 JSON 可使用 `apiPost(path, body, Schema)`；失败时客户端保留 `ApiClientError.code/status`。
+契约变更必须同步调用方、mock、测试。浏览器读取可使用 `apiGet(path, Schema)`，提交 JSON 可使用 `apiPost(path, body, Schema)` 或 `apiPut(path, body, Schema)`，无请求体删除可使用 `apiDelete(path, Schema)`；失败时客户端保留 `ApiClientError.code/status`。
 
 ## 已提供的接口
 未特别说明的接口仍返回固定演示数据；需求接口读取 Prisma，匹配接口支持显式 `demandId` 校验。只有文档已记录并通过测试的查询参数才可在调用方使用。
@@ -89,9 +89,9 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 |---|---|---|---|
 | POST /api/demand | DemandInput | 201 envelope(Demand)，初始 published | 已实现；写入 Prisma，返回 live |
 | GET /api/demand/[id] | DemandIdParams | 200 envelope(Demand) | 已实现；按 ID 查询 Prisma，不存在 404 |
-| PUT /api/demand/[id] | DemandIdParams + DemandUpdateInput | 200 envelope(Demand) | 已实现；仅允许 draft/未签约 published |
-| DELETE /api/demand/[id] | DemandIdParams | 200 envelope(DemandDeleteResult) | 已实现；仅允许 draft/未签约 published |
+| PUT /api/demand/[id] | DemandIdParams + DemandUpdateInput | 200 envelope(Demand) | 已实现状态/关联检查；鉴权待接入 |
+| DELETE /api/demand/[id] | DemandIdParams | 200 envelope(DemandDeleteResult) | 已实现状态/关联检查；鉴权待接入 |
 
 PUT 完整替换可编辑字段，全部必填，不提供 PATCH。创建/更新禁止客户端设置 id、status 或未知字段；description/city 去除首尾空白后不可为空，面积为有限正数，预算为非负安全整数分且下限不超过上限。更新/删除允许 draft 或尚未签约的 published 需求；进入 contracted、in_progress 或 completed 后返回 409/INVALID_STATE。`demo-demand` 是只读演示数据，更新或删除返回 409/DEMO_DEMAND_READ_ONLY。不存在返回 404/DEMAND_NOT_FOUND，非法输入返回 400/VALIDATION_ERROR。删除前会检查报价、排期、付款、评价和工单关联；存在关联时返回 409/DEMAND_HAS_RELATED_RECORDS。删除结果为 {id,deleted:true}，仍须包含来源信封。
 
-需求路由必须实现鉴权与数据隔离，不得将查询失败回退成 mock。当前需求列表、创建、详情、更新和删除均访问 Prisma；聊天仍为 mock；状态流转仍由后续业务层负责。
+需求路由必须实现鉴权与数据隔离，不得将查询失败回退成 mock。当前需求列表、创建、详情、更新和删除均访问 Prisma；聊天仍为 mock；状态流转仍由后续业务层负责。当前 `PUT /api/demand/[id]` 和 `DELETE /api/demand/[id]` 尚未校验已验证会话或 `ownerId`，因此任何能访问接口的调用方都可能修改或删除非本人真实需求；这是一项已知的答辩前安全缺口，不能视为生产权限边界。后续必须由服务端会话确定业主身份，并在查询、更新、删除中同时执行所有者过滤。`POST /api/demand` 当前也使用固定演示业主归属，接入真实会话前只能作为本地演示能力。
