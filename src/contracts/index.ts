@@ -210,6 +210,27 @@ export const TicketCreateInput = TicketQuery.extend({
   category: Ticket.shape.category,
 }).strict();
 export const PHOTO_INSPECTION_DISCLAIMER = "照片只能辅助提示疑点，不能替代现场检测或证明施工合格。";
+/** 输入与标准化后的照片共用大小限制；有效期与配额由服务端执行。 */
+export const INSPECTION_UPLOAD_LIMITS = {
+  maxFiles: 10, maxFileBytes: 2 * 1024 * 1024, maxBatchBytes: 10 * 1024 * 1024,
+  maxBodyBytes: 11 * 1024 * 1024, maxDimension: 4096, maxPixels: 16_000_000,
+  ttlSeconds: 24 * 60 * 60, ownerFiles: 50, ownerBytes: 50 * 1024 * 1024,
+  globalFiles: 5000, globalBytes: 500 * 1024 * 1024,
+} as const;
+export const InspectionImageRef = z.string().regex(/^inspect-image\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+export const InspectionUploadFields = z.object({ demandId: Id.refine(value => value.trim().length > 0) }).strict();
+export const InspectionUploadedImage = z.object({
+  imageRef: InspectionImageRef,
+  contentType: z.enum(["image/jpeg", "image/png"]),
+  sizeBytes: z.number().int().positive().max(INSPECTION_UPLOAD_LIMITS.maxFileBytes),
+  width: z.number().int().positive().max(INSPECTION_UPLOAD_LIMITS.maxDimension),
+  height: z.number().int().positive().max(INSPECTION_UPLOAD_LIMITS.maxDimension),
+  expiresAt: z.string().datetime(),
+}).strict().refine(value => value.width * value.height <= INSPECTION_UPLOAD_LIMITS.maxPixels);
+export const InspectionUploadResult = InspectionUploadFields.extend({
+  images: InspectionUploadedImage.array().min(1).max(INSPECTION_UPLOAD_LIMITS.maxFiles),
+}).strict().refine(value => new Set(value.images.map(image => image.imageRef)).size === value.images.length
+  && value.images.reduce((sum, image) => sum + image.sizeBytes, 0) <= INSPECTION_UPLOAD_LIMITS.maxBatchBytes);
 export const PhotoInspectionImageRef = z.string().trim().min(1).max(2048);
 export const PhotoInspectionInput = z.object({
   demandId: Id.refine(value => value.trim().length > 0),
@@ -269,6 +290,9 @@ export type TicketDTO = z.infer<typeof Ticket>;
 export type TicketQueryDTO = z.infer<typeof TicketQuery>;
 export type TicketCreateInputDTO = z.infer<typeof TicketCreateInput>;
 export type PhotoInspectionInputDTO = z.infer<typeof PhotoInspectionInput>;
+export type InspectionUploadFieldsDTO = z.infer<typeof InspectionUploadFields>;
+export type InspectionUploadedImageDTO = z.infer<typeof InspectionUploadedImage>;
+export type InspectionUploadResultDTO = z.infer<typeof InspectionUploadResult>;
 export type PhotoInspectionFindingDTO = z.infer<typeof PhotoInspectionFinding>;
 export type PhotoInspectionResultDTO = z.infer<typeof PhotoInspectionResult>;
 export type ChatInputDTO = z.infer<typeof ChatInput>;

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { require as tsRequire } from 'tsx/cjs/api';
 const base = process.env.SMOKE_BASE_URL ?? 'http://127.0.0.1:3000';
 let demoSchedule;
 let demoTickets;
@@ -90,7 +91,7 @@ for (const [path, cookie, status, code] of [
  assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
 }
 // Implemented owner-only writes: anonymous smoke must never create fixtures.
-for (const path of ['/api/schedule', '/api/ticket', '/api/order']) {
+for (const path of ['/api/schedule', '/api/ticket', '/api/order', '/api/inspect', '/api/inspect/images']) {
 for (const [headers, status, code] of [
  [{}, 403, 'FORBIDDEN'],
  [{ Origin: new URL(base).origin }, 401, 'UNAUTHENTICATED'],
@@ -137,6 +138,9 @@ for (const [headers, status, code] of [
  assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
 }
 console.log('3 个 PUT 排期修订鉴权场景通过（无同源、匿名与失效凭证均拒绝）。');
+console.log('另增 6 个照片 POST 鉴权场景通过（无同源、匿名与失效凭证均拒绝）。');
+const { smokeInspectionImages } = tsRequire('./smoke-inspection-images.ts', import.meta.url);
+await smokeInspectionImages(base);
 const demandBody = JSON.stringify({
  description: '冒烟测试需求', city: '深圳', areaM2: 60,
  budgetMinCents: 3000000, budgetMaxCents: 5000000,

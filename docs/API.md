@@ -40,6 +40,8 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/payment | Payment[] | D | 模拟节点列表；simulated 必须 true |
 | GET /api/ticket[?demandId=<id>] | Ticket[] | D | 无参数/精确 demo-demand 返回固定 mock；其他需求仅所属业主可读 |
 | POST /api/ticket | TicketCreateInput → Ticket | D | 当前业主为本人已发布及后续状态需求创建 open 工单，责任方 null；201/live |
+| POST /api/inspect/images | multipart InspectionUploadFields + images → InspectionUploadResult | D | 当前业主上传本人需求的 JPEG/PNG，真实解码去元数据并原子保存，201/live，引用 24 小时有效 |
+| POST /api/inspect | PhotoInspectionInput → 失败信封 | D | 同源、业主及已上传引用校验；全部有效后仍 501，AI 分析未接通 |
 
 ## 接受报价与本人接单
 
@@ -122,15 +124,23 @@ PR #74 已将 `handleQuoteSubmission` 的默认预检及事务会话 reader 接�
 完整决策见 `docs/requests/D-quote-idempotency.md`、`docs/requests/D-demo-provider-session.md`。已用真实演示 cookie 和隔离 SQLite 验证公开 POST；本次未做浏览器手工验收，业主公开 GET/页面读取仍未接通。
 
 ## 已预留、当前返回 501
-- POST /api/inspect、/api/review：由 D 完成。ReviewInput 已预留；写入契约先补齐再让页面提交。POST /api/schedule 已实现首版计划创建，PUT /api/schedule 已实现未开工计划确认修订，POST /api/ticket 已实现业主创建工单，见上节；施工中变更与验收、工单派单与解决仍未实现。
+- POST /api/inspect 的真实分析、POST /api/review：由 D 后续完成。照片已可通过 /api/inspect/images 上传，但 /api/inspect 校验身份和引用后仍明确 501。ReviewInput 已预留；写入契约先补齐再让页面提交。POST /api/schedule 已实现首版计划创建，PUT /api/schedule 已实现未开工计划确认修订，POST /api/ticket 已实现业主创建工单，见上节；施工中变更与验收、工单派单与解决仍未实现。
 - POST /api/payment：已实现最小模拟确认动作，不做身份校验，任何调用方都可触发演示状态转换。输入为 `PaymentActionInput`，只允许 `pending → confirmed_demo` 一次转换；状态只保存在服务进程内，进程重启后恢复初始演示状态。成功返回 `Payment`，`meta.source` 为 `mock` 且 `simulated` 为 `true`；这不是支付接口，不代表真实付款、资金托管或数据库持久化。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
 
-### POST /api/inspect
+### POST /api/inspect/images 与 POST /api/inspect
 
-输入使用公共 `PhotoInspectionInput`：`demandId` 加 1–10 个不重复的 `imageRefs`。客户端不上传二进制、不传入验收状态或排期状态；图片引用由后续服务端图片存储/会话链路解释。
+上传使用同源 multipart/form-data，恰好一个文本 demandId 和同名 images 的 1–10 个 File，不接受其他字段及查询参数。公共 `InspectionUploadFields`、`InspectionUploadedImage`、`InspectionUploadResult` 与 `INSPECTION_UPLOAD_LIMITS` 是字段/限制唯一来源。真实业主会话预检后限长读取正文，事务内验证本人非演示、非 draft 需求，事务外解码，最终事务重验身份/角色/归属/状态和配额，再条件嵌套保存整批照片；任一失败不保留部分结果。
 
-接通真实分析后使用 `envelope(PhotoInspectionResult)`，结果包含 `demandId`、`findings[]`（`imageRef`、`severity`、`message`）、可选服务端 `reviewedAt` 和固定免责声明。当前真实分析尚未接通，合法输入返回 HTTP 501 `NOT_IMPLEMENTED`；坏 JSON/非法字段返回 400。501 不能被页面显示为分析成功或验收通过。
+仅 JPEG/PNG，MIME 与实际格式必须一致；拒绝空、损坏、动画/多页、SVG 及批内原内容或标准化后重复的图片。每张输入/输出最多 2 MiB，整批各最多 10 MiB，整个 multipart 正文最多 11 MiB；单边 4096，像素 1600 万。按照 EXIF 方向旋转、重编码并移除元数据，不保存原图/文件名。进程最多两个上传在处理，单图原生处理设 5 秒超时（不含等待线程的时间）。
+
+成功 201 `envelope(InspectionUploadResult)`/live，data 为 `{ demandId, images: [{ imageRef, contentType, sizeBytes, width, height, expiresAt }] }`。随机 `inspect-image/<UUID>` 引用 24 小时有效，不是公开 URL；大小/尺寸对应实际保存的照片。二进制、SHA-256、ownerId 和 demandId 存 SQLite；live 仅表示保存成功，不表示分析或验收。每业主最多 50 张/50 MiB 有效照片，数据库最多 5000 条/500 MiB 记录。过期引用立即拒绝；本人的后续成功上传清理其过期记录，无后台清理或到期物理擦除保证。需求删除级联删除临时照片，原有业务关联仍限制删除。无上传幂等键，重传产生新引用并计入配额。
+
+检查继续使用公共 `PhotoInspectionInput`：demandId 加 1–10 个不重复 imageRefs，JSON 最多 32 KiB，不接二进制、身份或业务状态。必须使用上传回执中的引用；同一事务校验当前业主、需求、每个引用的归属/有效期/存储摘要，不下载客户端 URL。文件名、未知/过期/跨需求/跨业主引用统一 404/IMAGE_NOT_FOUND；非本人/不存在需求统一 404/DEMAND_NOT_FOUND。全部引用有效后仍 501/NOT_IMPLEMENTED，没有 findings、data 或 meta，也不更新任何业务状态。
+
+两个接口均拒绝匿名、坏/重复/撤销/过期会话和仅服务方身份（401）；非同源或当前角色不符 403；演示/非法需求状态 409；坏 JSON、字段、文件或超限正文 400；配额 409/IMAGE_QUOTA_EXCEEDED，繁忙 429/IMAGE_UPLOAD_BUSY；数据库、坏 DTO/摘要或结果不确定 503/IMAGE_STORAGE_UNAVAILABLE。所有响应 private, no-store、Vary: Cookie。接口不回退 mock。
+
+A 页面尚未接线：先 fetch FormData，勿手写 Content-Type，再用公共 envelope 校验上传结果；apiPost 仅适用于第二步 JSON。现有文件名不是合法已上传引用。真实分析未来仍须返回 PhotoInspectionResult 并保留固定免责声明；501 不能显示分析成功或验收通过。预览/删除管理、对象存储、生产保留策略和人工复核未实现。部署 npm ci、npm run db:setup 后重启，不 reset 数据库。详见 docs/requests/D-photo-image-upload.md。
 
 ## 报价历史回执的当前限制
 

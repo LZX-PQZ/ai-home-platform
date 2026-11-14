@@ -75,3 +75,9 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] POST /api/order：真实业主同源确认本人 published 需求的 submitted 报价，在事务内重验身份/归属/原始数据并原子签约、接受、建立 ServiceOrder。每需求单一关系，重复同报价返回原关系，竞争报价最多一个成功；保留来源、null 费用和原提交回执。见 `docs/requests/D-quote-acceptance.md`。
 - [x] GET /api/provider/orders：当前已验证服务方仅读取本人实际接单；历史 accepted 报价不自动补单。当前演示身份整体仍 mock，逐条保留来源，异常/坏数据不回退成功空态。
 - [ ] B 接受按钮与 C 接单页面待各角色接入；生产服务方认证、改选/取消、多服务方拆单、履约推进/支付未实现。照片检查和评价仍为后续独立任务。
+
+## 施工照片上传基础（2026-11-14）
+
+- [x] POST /api/inspect/images：当前业主、同源及事务内归属重验，JPEG/PNG 实际解码、旋转去元数据，数量/大小/配额限制，整批原子保存 SQLite，返回 24 小时有效随机引用和 live 来源。
+- [x] POST /api/inspect：当前业主及需求/引用归属、有效期、摘要校验；未知/跨归属/过期引用 404，有效引用仍明确 501。来源标记不代表 AI 或验收结论。见 `docs/requests/D-photo-image-upload.md`。
+- [ ] A 上传表单接线、真实照片分析、预览/删除管理、后台清理、对象存储与人工复核未实现；评价写入仍待后续独立交付。
