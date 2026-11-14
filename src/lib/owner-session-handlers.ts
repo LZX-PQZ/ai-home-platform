@@ -5,6 +5,7 @@ import { isSameOrigin } from "@/lib/demo-provider-session";
 import { issueOwnerSession, OWNER_SESSION_COOKIE, OwnerAccessError, readOwnerSessionState, revokeOwnerSession } from "@/lib/owner-auth";
 import { PasswordCapacityError, verifyOwnerPassword } from "@/lib/owner-password";
 import { prisma } from "@/lib/prisma";
+import { expiredStaffCookie, revokeStaffSession } from "@/lib/staff-session";
 
 const headers = { "Cache-Control": "private, no-store", Vary: "Cookie" };
 const failures = {
@@ -24,7 +25,7 @@ function failure(code: keyof typeof failures, retryAfter?: number) {
 function success(data: OwnerSessionStateDTO) {
   return Response.json(envelope(OwnerSessionState).parse({ ok: true, data, meta: { source: "live" } }), { headers });
 }
-function secureOrigin(request: Request) {
+export function secureOrigin(request: Request) {
   const url = new URL(request.url);
   if (url.protocol === "https:") return true;
   if (url.protocol !== "http:") return false;
@@ -33,7 +34,7 @@ function secureOrigin(request: Request) {
     return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(`http://${authority}`).hostname);
   } catch { return false; }
 }
-async function readInput(request: Request) {
+export async function readInput(request: Request) {
   const length = request.headers.get("content-length");
   if (length && (!/^\d+$/.test(length) || Number(length) > 4096)) throw new Error("Body too large");
   if (!request.body) throw new Error("Missing body");
@@ -56,13 +57,13 @@ function failureKey(login: string) {
   // Legacy buckets included successes; do not inherit their lockouts after upgrading.
   return `failure:${createHash("sha256").update(login).digest("hex")}`;
 }
-async function loginRetryAfter(db: Pick<PrismaClient, "ownerLoginAttempt">, key: string, now: Date) {
+export async function loginRetryAfter(db: Pick<PrismaClient, "ownerLoginAttempt">, key: string, now: Date) {
   const previous = await db.ownerLoginAttempt.findUnique({ where: { key } });
   return previous && previous.count >= 5 && previous.resetsAt > now
     ? Math.max(1, Math.ceil((previous.resetsAt.getTime() - now.getTime()) / 1000)) : null;
 }
 /** Only rejected credentials consume this account's budget, never another account's. */
-async function recordFailure(db: PrismaClient, key: string, now: Date) {
+export async function recordFailure(db: PrismaClient, key: string, now: Date) {
   return db.$transaction(async tx => {
     await tx.ownerLoginAttempt.deleteMany({ where: { resetsAt: { lte: now } } });
     const retryAfter = await loginRetryAfter(tx, key, now);
@@ -105,6 +106,7 @@ export function createOwnerSessionHandlers(db: PrismaClient = prisma, clock = ()
           }
           const identity = { userId: current.userId, role: "owner" as const, providerId: null };
           await revokeOwnerSession(request, tx, clock());
+          await revokeStaffSession(request, tx);
           const issued = await issueOwnerSession(identity, tx, clock());
           await tx.ownerLoginAttempt.deleteMany({ where: { key } });
           const data = OwnerSessionState.parse({ status: "signed_in", identity, expiresAt: issued.expiresAt.toISOString() });
@@ -113,6 +115,7 @@ export function createOwnerSessionHandlers(db: PrismaClient = prisma, clock = ()
         if ("retryAfter" in result) return failure("RATE_LIMITED", result.retryAfter);
         const response = success(result.data);
         response.headers.set("Set-Cookie", result.cookie);
+        response.headers.append("Set-Cookie", expiredStaffCookie);
         return response;
       } catch (error) {
         if (error instanceof InvalidCredentials) {

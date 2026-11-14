@@ -34,8 +34,8 @@ const roles = {
 type Role = keyof typeof roles;
 
 function roleForPath(pathname: string): Role {
-  if (pathname === "/provider" || pathname.startsWith("/provider/")) return "provider";
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) return "operator";
+  if (pathname === "/provider" || pathname.startsWith("/provider/") || pathname === "/login/provider") return "provider";
+  if (pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/login/admin") return "operator";
   return "owner";
 }
 
@@ -76,7 +76,7 @@ export function RoleNavigation() {
                 );
               })}
             </div>
-            <AccountMenu />
+            <AccountMenu key={role} />
           </div>
         </div>
         <nav className="-mb-px mt-2 flex gap-7 overflow-x-auto" aria-label="产品导航">

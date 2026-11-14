@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { require as tsRequire } from 'tsx/cjs/api';
+import { runStaffLoginSmoke } from './staff-login-smoke.mjs';
 const base = process.env.SMOKE_BASE_URL ?? 'http://127.0.0.1:3000';
 let demoSchedule;
 let demoTickets;
@@ -222,3 +223,4 @@ assert.equal(forbidden.ok, false);
 assert.equal(forbidden.error.code, 'FORBIDDEN');
 assert.equal('data' in forbidden, false);
 console.log('13 个页面、32 个 GET 场景和 13 个 POST 场景通过（固定演示公开、服务方身份不可自报、真实排期/工单/接单隔离、匿名与失效凭证写入拒绝）。');
+await runStaffLoginSmoke(base);

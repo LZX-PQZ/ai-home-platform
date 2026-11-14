@@ -105,6 +105,18 @@ export const ProviderIdentity = z.object({
   role: z.literal("provider"),
   providerId: Id,
 }).strict();
+export const StaffRole = UserRole.exclude(["owner"]);
+export const StaffLoginInput = OwnerLoginInput;
+export const StaffIdentity = z.discriminatedUnion("role", [
+  ProviderIdentity,
+  VerifiedSession.extend({ role: z.literal("admin"), providerId: z.null() }),
+]);
+export const StaffSessionState = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("signed_out") }).strict(),
+  z.object({ status: z.literal("signed_in"), identity: StaffIdentity, expiresAt: z.string().datetime() }).strict(),
+]);
+export type StaffRoleDTO = z.infer<typeof StaffRole>;
+export type StaffSessionStateDTO = z.infer<typeof StaffSessionState>;
 export const DEMO_PROVIDER_USER_ID = "demo-provider-account" as const;
 export const DEMO_PROVIDER_ID = "provider-a" as const;
 export const DemoProviderLoginInput = z.object({ action: z.literal("login_demo") }).strict();

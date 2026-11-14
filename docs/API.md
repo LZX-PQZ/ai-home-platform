@@ -23,6 +23,9 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/auth/owner | OwnerSessionState | D | 读取业主凭证和当前账户，返回 signed_in / signed_out，不续期 |
 | POST /api/auth/owner | OwnerLoginInput → OwnerSessionState | D | 验证密码并在事务内重验凭证/角色，轮换当前浏览器的业主会话 |
 | DELETE /api/auth/owner | OwnerSessionState | D | 同源撤销当前会话，成功后清除 cookie，可重复退出 |
+| GET /api/auth/provider 或 /api/auth/admin | StaffSessionState | D | 当前端密码会话状态，private/no-store，不续期 |
+| POST /api/auth/provider 或 /api/auth/admin | StaffLoginInput → StaffSessionState | D | 同源密码校验与当前角色重验，30 分钟 HttpOnly 会话，成功 live；清理其他密码会话 |
+| DELETE /api/auth/provider 或 /api/auth/admin | StaffSessionState | D | 同源撤销当前浏览器的服务方/运营密码会话并清除 cookie |
 | GET /api/demand | Demand[] | D | 无业主 cookie 可公开读取 published；有效业主仅本人所有状态；坏业主凭证 401，不接受查询参数 |
 | POST /api/demand | DemandInput → Demand | D | 验证业主会话后写入本人需求，published/live；无会话 401，存储故障 503 |
 | GET /api/demand/[id] | Demand | D | 精确 ID 查询；published 公开，非公开限所属业主或有效服务方的实际接单；不可访问/不存在统一 404 |
@@ -49,6 +52,8 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | POST /api/inspect | PhotoInspectionInput → PhotoInspectionResult | D | 同源、业主及已上传引用校验；mock 模式 200/mock 固定模拟提示，live 模式仍 501，真实 AI 分析未接通 |
 
 ## 服务方目录与评价汇总
+
+三端密码登录协议补充见 `docs/requests/D-role-account-login.md`。`/provider/**` 与 `/admin/**` 页面由 middleware 验证对应 StaffSessionState 后放行，未登录或另一端身份跳转对应 `/login/provider`、`/login/admin`。公开 API 的读取范围保持原规则；页面门禁不能代替私有业务 API 的事务内校验。服务方密码会话已接入原认证适配器，现有报价、接单与实际接单详情按当前服务方绑定验证。
 
 `GET /api/provider` 只接受可选且唯一的 `performanceSource=live|mock`，缺省 live；空值、未知值、重复和其他参数 400/VALIDATION_ERROR。保持原六个固定演示服务方公开目录，不公开任意数据库服务方。Provider 新增可选 `source`、`availability` 和可选/可空 `performance`，旧 DTO 兼容；本接口返回固定 mock 档期样例和评价汇总。基础资料与档期 source=mock，故整体 meta.source=mock；performance.source 独立表示选择的统计口径，不能用整体来源覆盖逐维度来源。
 
@@ -260,12 +265,12 @@ POST 在事务外计算密码，再在写事务重读凭证和角色，撤销此
 
 - 没有已验证会话：401 `UNAUTHENTICATED`。
 - 已登录但不是服务方，或会话未绑定服务方：403 `FORBIDDEN`。
-- 默认 reader 仅在 `DEMO_AUTH_ENABLED=true` 且有效演示 cookie 对应当前账号绑定时返回固定服务方身份；客户端传入 userId/providerId/角色不能产生会话。过期、撤销、账号删除或绑定不符均视为会话失效，返回 401。真实认证仍未接入。
+- 默认 reader 优先验证服务方密码会话；显式无效 staff cookie 不回退旧模拟身份。无 staff cookie 时，才在 `DEMO_AUTH_ENABLED=true` 且有效演示 cookie 对应当前账号绑定时兼容固定服务方身份。客户端传入 userId/providerId/角色不能产生会话。过期、撤销、账号删除或绑定不符均视为会话失效，返回 401。
 - 报价 API 与报价引擎可复用 `findDemand`；页面和客户端仍禁止直接导入数据库服务。
 
 ### 演示服务方登录
 
-入口位于顶栏右上角登录状态按钮的浮层中，始终显示“模拟身份 · 演示专用”；角色导航不等于登录。维护者本地设置 `DEMO_AUTH_ENABLED=true`、运行 `npm run db:setup` 并重启应用后，才可点击“演示服务方登录”。默认关闭，不改已有 `.env`。
+旧版无密码接口仅保留给隔离测试兼容，界面不再显示全局演示登录栏；角色导航不等于登录。正常预览应设置 `DEMO_AUTH_ENABLED=false`，服务方通过 `/login/provider` 使用预置账号密码登录。冒烟 runner 仅为其测试子进程开启旧接口。
 
 登录请求仅为 `{ "action": "login_demo" }`，拒绝任何身份字段。`DemoProviderSession` 是三种状态的联合：`{status:"disabled",demo:true}`、`{status:"signed_out",demo:true}`，以及 `{status:"signed_in",demo:true,identity:{userId:"demo-provider-account",role:"provider",providerId:"provider-a"},expiresAt:"ISO 8601"}`。所有成功响应带 `meta.source: "mock"`，响应不缓存，不包含 cookie 令牌。
 
@@ -298,7 +303,7 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 
 ## AI 接入
 
-AI 澄清默认是 mock，已有服务端 live 网关，仓库不包含供应商凭据。本轮浏览器演示明确使用 mock；真实需求澄清完整业务验收仍待完成，本机配置、单次连通或受控响应测试不能代替完整草稿、缺失字段、非法 JSON、失败与来源验证。
+AI 澄清默认是 mock，已有服务端 live 网关，仓库不包含供应商凭据。本机真实调用与浏览器验收见 `docs/requests/D-demand-chat-live.md`；CI 冒烟保持 mock，其他部署需自行配置并验收。
 
 默认 `AI_MODE=mock`，会返回固定追问并标记 `meta.source: "mock"`。设为 `live` 后，服务端读取 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`，调用 OpenAI 兼容的 `/chat/completions` JSON 接口；响应必须通过 `ChatResult` 校验后才标记 `meta.source: "live"`。
 网关默认超时 5 秒、最多 2 次重试，可由服务端 `LLM_TIMEOUT_MS` 和 `LLM_MAX_RETRIES` 调整。缺少配置、超时、重试耗尽、非 JSON 或不符合契约的模型输出均返回 503 `AI_UNAVAILABLE`，不会伪装成成功或 mock。

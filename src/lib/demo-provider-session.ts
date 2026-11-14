@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { DEMO_PROVIDER_ID, DEMO_PROVIDER_USER_ID, type DemoProviderSessionDTO, type VerifiedSessionDTO } from "@/contracts";
 import { prisma } from "@/lib/prisma";
+import { readStaffSession, staffCredential } from "@/lib/staff-session";
 
 export const DEMO_SESSION_COOKIE = "ai_home_demo_session";
 export const DEMO_SESSION_TTL_SECONDS = 30 * 60;
@@ -56,8 +57,16 @@ export async function readDemoSession(
 /** Pass the current transaction client when used by B's atomic quote kernel. */
 export async function readDemoVerifiedSession(
   request: Request,
-  db: SessionDatabase = prisma,
+  db: SessionDatabase & Partial<Pick<Prisma.TransactionClient, "staffSession">> = prisma,
 ): Promise<VerifiedSessionDTO | null> {
+  // Compatibility export used by B and existing transactions. An explicit staff
+  // cookie never falls back to a legacy demo identity, including expired cookies.
+  if (staffCredential(request).present) {
+    if (!db.staffSession) return null;
+    if (!["GET", "HEAD"].includes(request.method) && !isSameOrigin(request)) return null;
+    const state = await readStaffSession(request, { staffSession: db.staffSession });
+    return state.status === "signed_in" && state.identity.role === "provider" ? state.identity : null;
+  }
   return (await readDemoSession(request, db))?.identity ?? null;
 }
 

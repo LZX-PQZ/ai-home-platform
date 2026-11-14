@@ -48,6 +48,7 @@ export function OwnerSessionView({ state, onAction }: {
           </div>
           <p className="!mb-0 mt-1.5 text-[13px] text-ink-3">新用户可先体验需求澄清；发布需求需登录。当前暂未开放注册，请向演示负责人领取业主账号。</p>
           <p className="!mb-0 mt-1 text-[13px] text-ink-3">角色切换仅切换导航和页面，不会自动登录。账号登录不代表实名认证。</p>
+          <p className="!mb-0 mt-1 text-[13px] text-ink-3">路演数据可能包含模拟数据，请以每条结果的来源标识为准。</p>
           {signedIn && state.session?.status === "signed_in" && <p className="!mb-0 mt-1 text-[13px]">有效至 <time dateTime={state.session.expiresAt}>
             {new Date(state.session.expiresAt).toLocaleTimeString("zh-CN")}</time>，到期需重新登录。</p>}
           {state.error && <p role="alert" className="!mb-0 mt-1 text-danger">{state.error}</p>}
@@ -82,7 +83,12 @@ export function OwnerLogin({ onStatusChange }: { onStatusChange?: (signedIn: boo
     setState({ session: null, pending: true, error: null });
     try {
       const session = await requestOwnerSession(action, input);
-      if (control.active && version === control.version) setState({ session, pending: false, error: null });
+      if (control.active && version === control.version) {
+        setState({ session, pending: false, error: null });
+        // The overview must re-query its ownership scope after login/logout.
+        // Other pages retain in-progress forms, including the demand chat draft.
+        if (action !== "GET" && window.location.pathname === "/owner") window.location.reload();
+      }
     } catch (error) {
       const message = error instanceof ApiClientError && error.code === "INVALID_CREDENTIALS" ? "账号或密码不正确，请重新输入。"
         : error instanceof ApiClientError && error.status === 429 ? "登录尝试过于频繁，请稍后重试。"
