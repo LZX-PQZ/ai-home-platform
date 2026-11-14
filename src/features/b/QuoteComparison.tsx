@@ -1,6 +1,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { QuoteTable } from "@/components/QuoteTable";
+import { QuoteUnitWarnings } from "@/features/b/QuoteUnitWarnings";
 import { formatQuoteMoney } from "@/features/b/format-quote";
 import type { loadQuoteComparison } from "@/features/b/load-quotes";
 
@@ -40,6 +41,7 @@ export function QuoteComparison({ data }: { data: Awaited<ReturnType<typeof load
           <h2 className="mb-0" id="quote-list">报价明细对比 · {response.data.length} 份</h2>
           <span className="text-sm text-slate-500">展示顺序不代表价格或质量排名</span>
         </div>
+        <QuoteUnitWarnings demandId={demand.id} quotes={response.data} />
         <QuoteTable quotes={response.data} providers={providers} demand={demand} />
       </section>
 
