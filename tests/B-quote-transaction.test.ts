@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { ZodError } from "zod";
 import { ProviderIdentity, Quote, QuoteSubmissionInput } from "../src/contracts";
 import { createQuoteAtomically, QuoteWriteRejected, type QuoteTransactionSessionReader } from "../src/lib/quote-engine/transaction";
@@ -17,7 +17,7 @@ const input = QuoteSubmissionInput.parse({ demandId: "test-demand", estimatedDay
   { code: "c", name: "未知费用", unit: "piece", quantity: 1, unitPriceCents: null, note: "" },
   { code: "d", name: "零元明细", unit: "piece", quantity: 1, unitPriceCents: 0, note: "" },
 ] });
-const request = () => new Request("http://localhost/api/quote", { method: "POST", body: JSON.stringify(input) });
+const request = (key = "test-quote-key-0001") => new Request("http://localhost/api/quote", { method: "POST", headers: { "Idempotency-Key": key }, body: JSON.stringify(input) });
 const rejected = (status: number, code: string) => (error: unknown) => error instanceof QuoteWriteRejected && error.status === status && error.code === code;
 
 test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据库", async (t) => {
@@ -44,6 +44,7 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
   ] });
   const provider = { id: identity.providerId, name: "Synthetic provider", city: "Test", kind: "construction", tagsJson: "[]", rating: 0 };
   await db.serviceProvider.create({ data: provider });
+  await db.user.update({ where: { id: identity.userId }, data: { providerId: identity.providerId } });
   const demand = { id: input.demandId, ownerId: "test-owner", description: "Synthetic demand", city: "Test", areaM2: 10,
     budgetMinCents: 100, budgetMaxCents: 1000, renovationType: "repair", desiredDays: 5, status: "published" };
   await db.demandOrder.createMany({ data: [demand, { ...demand, id: "demo-demand" }] });
@@ -53,8 +54,10 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
     const currentUser = await tx.user.findUnique({ where: { id: identity.userId } });
     return currentUser ? { ...identity, role: currentUser.role } : null;
   };
-  const create = (value: unknown = input, reader = readSession) => createQuoteAtomically(request(), value, identity, reader, db);
-  const noQuotes = async () => assert.equal(await db.quote.count(), 0);
+  const submit = (value: unknown = input, reader = readSession, key = "test-quote-key-0001") => createQuoteAtomically(request(key), value, identity, reader, db);
+  const create = async (value: unknown = input, reader = readSession) => (await submit(value, reader)).quote;
+  const clear = async () => { await db.quoteSubmissionReceipt.deleteMany(); await db.quote.deleteMany(); };
+  const noQuotes = async () => { assert.equal(await db.quote.count(), 0); assert.equal(await db.quoteSubmissionReceipt.count(), 0); };
 
   await t.test("事务提交后返回公共 Quote，持久化逐行整数计价、null、零元和服务端身份", async () => {
     const result = Quote.parse(await create());
@@ -69,7 +72,8 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
     assert.deepEqual(JSON.parse(row.pendingItemsJson), result.pendingItems);
     assert.equal(row.knownTotalCents, 30);
     assert.equal(await db.quote.count(), 1);
-    await db.quote.deleteMany();
+    assert.equal(await db.quoteSubmissionReceipt.count(), 1);
+    await clear();
   });
 
   await t.test("即使预检曾通过，事务内会话丢失或异常也不写入", async () => {
@@ -98,6 +102,7 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
     await assert.rejects(create(), rejected(403, "FORBIDDEN"));
     await noQuotes();
     await db.serviceProvider.create({ data: provider });
+    await db.user.update({ where: { id: identity.userId }, data: { providerId: identity.providerId } });
   });
 
   await t.test("需求预检之后状态变化，事务内重读并拒绝所有非 published 状态", async () => {
@@ -136,7 +141,7 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
     const result = await create({ ...input, demandId: id });
     assert.equal(result.demandId, id);
     assert.equal((await db.quote.findUniqueOrThrow({ where: { id: result.id } })).demandId, id);
-    await db.quote.deleteMany();
+    await clear();
   });
 
   await t.test("真实插入后若回执不符合契约，整个事务回滚且不返回成功", async () => {
@@ -177,7 +182,7 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
   await t.test("校验时复制输入，异步认证期间改动原对象不会改变已计算的报价", async () => {
     const mutableInput = structuredClone(input);
     const mutableIdentity = structuredClone(identity);
-    const result = await createQuoteAtomically(request(), mutableInput, mutableIdentity, async (req, tx) => {
+    const { quote: result } = await createQuoteAtomically(request(), mutableInput, mutableIdentity, async (req, tx) => {
       mutableInput.demandId = "changed-after-validation";
       mutableInput.items[0].unitPriceCents = 999;
       mutableIdentity.providerId = "changed-after-validation";
@@ -186,7 +191,7 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
     assert.equal(result.demandId, input.demandId);
     assert.equal(result.providerId, identity.providerId);
     assert.equal(result.knownTotalCents, 30);
-    await db.quote.deleteMany();
+    await clear();
   });
 
   await t.test("公开 POST 不接入原子内核，客户端仍不能获得模拟登录或提交成功", async () => {
@@ -194,5 +199,120 @@ test("原子报价内核使用隔离 SQLite 验证事务，不连接开发数据
     assert.equal(response.status, 401);
     assert.equal((await response.json()).ok, false);
     await noQuotes();
+  });
+
+  await t.test("同键规范化内容重放原报价，断开重连仍保持幂等", async () => {
+    const first = await submit();
+    assert.equal(first.replayed, false);
+    await db.$disconnect();
+    const replay = await submit({ ...input, items: input.items.map((item) => ({ ...item, name: ` ${item.name} ` })) });
+    assert.equal(replay.replayed, true);
+    assert.deepEqual(replay.quote, first.quote);
+    assert.equal(await db.quote.count(), 1);
+    assert.equal(await db.quoteSubmissionReceipt.count(), 1);
+    await clear();
+  });
+
+  await t.test("同键不同内容返回 409，null 与零元不混同；不同键可建立新版本", async () => {
+    const first = await submit();
+    await assert.rejects(submit({ ...input, items: input.items.map((item) => item.unitPriceCents === null ? { ...item, unitPriceCents: 0 } : item) }), rejected(409, "IDEMPOTENCY_CONFLICT"));
+    assert.equal(await db.quote.count(), 1);
+    const second = await submit(input, readSession, "test-quote-key-0002");
+    assert.notEqual(first.quote.id, second.quote.id);
+    assert.equal(second.replayed, false);
+    assert.equal(await db.quoteSubmissionReceipt.count(), 2);
+    await clear();
+  });
+
+  await t.test("数据库换绑拒绝旧会话首次写入及重放，幂等键不能代替当前权限", async () => {
+    await db.user.update({ where: { id: identity.userId }, data: { providerId: null } });
+    await assert.rejects(submit(), rejected(403, "FORBIDDEN"));
+    await noQuotes();
+    await db.user.update({ where: { id: identity.userId }, data: { providerId: identity.providerId } });
+    await submit();
+    await db.user.update({ where: { id: identity.userId }, data: { providerId: null } });
+    await assert.rejects(submit(), rejected(403, "FORBIDDEN"));
+    assert.equal(await db.quote.count(), 1);
+    await db.user.update({ where: { id: identity.userId }, data: { providerId: identity.providerId } });
+    await db.demandOrder.update({ where: { id: input.demandId }, data: { status: "contracted" } });
+    await assert.rejects(submit(), rejected(409, "INVALID_STATE"));
+    await db.demandOrder.update({ where: { id: input.demandId }, data: { status: "published" } });
+    await clear();
+  });
+
+  await t.test("不同服务方同键相互隔离，不返回其他服务方的回执", async () => {
+    await db.serviceProvider.create({ data: { ...provider, id: "other-provider" } });
+    const other = ProviderIdentity.parse({ ...identity, userId: "other-user", providerId: "other-provider" });
+    await db.user.create({ data: { id: other.userId, name: "Synthetic other", role: "provider", providerId: other.providerId } });
+    const first = await submit();
+    const second = await createQuoteAtomically(request(), input, other, async () => other, db);
+    assert.equal(second.replayed, false);
+    assert.equal(second.quote.providerId, other.providerId);
+    assert.notEqual(second.quote.id, first.quote.id);
+    assert.equal(await db.quoteSubmissionReceipt.count(), 2);
+    await clear();
+  });
+
+  await t.test("缺失/非法幂等键和超出数据库范围的金额/工期在写入前拒绝", async () => {
+    for (const req of [new Request("http://localhost/api/quote"), request("short"), request("a".repeat(129))]) {
+      await assert.rejects(createQuoteAtomically(req, input, identity, readSession, db), rejected(400, "VALIDATION_ERROR"));
+    }
+    for (const value of [
+      { ...input, estimatedDays: 2_147_483_648 },
+      { ...input, items: [{ ...input.items[0], quantity: 1, unitPriceCents: 2_147_483_648 }] },
+      { ...input, items: [{ ...input.items[0], quantity: 1, unitPriceCents: 2_147_483_647 }, { ...input.items[1], quantity: 1, unitPriceCents: 1 }] },
+    ]) await assert.rejects(submit(value), rejected(400, "VALIDATION_ERROR"));
+    await noQuotes();
+    const maximum = await submit({ ...input, estimatedDays: 2_147_483_647, items: [{ ...input.items[0], quantity: 1, unitPriceCents: 2_147_483_647 }] });
+    assert.equal(maximum.quote.knownTotalCents, 2_147_483_647);
+    await clear();
+  });
+
+  await t.test("回执插入失败时已插入的报价也回滚", async () => {
+    await db.$executeRawUnsafe('CREATE TRIGGER "reject_receipt" BEFORE INSERT ON "QuoteSubmissionReceipt" BEGIN SELECT RAISE(ABORT, \'synthetic receipt failure\'); END;');
+    try { await assert.rejects(submit()); await noQuotes(); }
+    finally { await db.$executeRawUnsafe('DROP TRIGGER "reject_receipt";'); }
+  });
+
+  await t.test("明确事务冲突重试整个事务并重新认证，最终只有一对报价和回执", async () => {
+    let receiptAttempts = 0;
+    let authAttempts = 0;
+    const conflictDb = db.$extends({ query: { quoteSubmissionReceipt: { async create({ args, query }) {
+      if (++receiptAttempts === 1) throw new Prisma.PrismaClientKnownRequestError("synthetic conflict", { code: "P2034", clientVersion: "test" });
+      return query(args);
+    } } } });
+    const result = await createQuoteAtomically(request(), input, identity, async (req, tx) => { authAttempts++; return readSession(req, tx); }, conflictDb as unknown as Pick<PrismaClient, "$transaction">);
+    assert.equal(result.replayed, false);
+    assert.equal(authAttempts, 2);
+    assert.equal(await db.quote.count(), 1);
+    assert.equal(await db.quoteSubmissionReceipt.count(), 1);
+    await clear();
+  });
+
+  await t.test("重试有上限，未知提交结果不自动重试或声明未保存", async () => {
+    for (const code of ["P2034", "P2002", "P1017"]) {
+      let attempts = 0;
+      const failedDb = db.$extends({ query: { quoteSubmissionReceipt: { async create() {
+        attempts++;
+        throw new Prisma.PrismaClientKnownRequestError("synthetic failure", { code, clientVersion: "test" });
+      } } } });
+      await assert.rejects(createQuoteAtomically(request(), input, identity, readSession, failedDb as unknown as Pick<PrismaClient, "$transaction">));
+      assert.equal(attempts, code === "P1017" ? 1 : 3);
+      await noQuotes();
+    }
+  });
+
+  await t.test("两个独立 SQLite 客户端并发同键提交只建立一份报价，另一个重放", async () => {
+    const otherDb = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+    try {
+      const results = await Promise.all([
+        createQuoteAtomically(request(), input, identity, readSession, db),
+        createQuoteAtomically(request(), input, identity, readSession, otherDb),
+      ]);
+      assert.equal(results[0].quote.id, results[1].quote.id);
+      assert.equal(results.filter((result) => result.replayed).length, 1);
+      assert.equal(await db.quote.count(), 1);
+      assert.equal(await db.quoteSubmissionReceipt.count(), 1);
+    } finally { await otherDb.$disconnect(); await clear(); }
   });
 });
