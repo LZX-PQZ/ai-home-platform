@@ -28,6 +28,51 @@ const schedule = (statuses: ScheduleDTO["tasks"][number]["status"][], demandId =
   })),
 });
 
+test("选择履约动作后重渲染仍显示确认，取消不发送请求", (t) => {
+  const state: unknown[] = [];
+  let cursor = 0;
+  // 模拟组件两次渲染之间保留 hook 状态；动作列表由真实组件重新计算。
+  t.mock.method(React, "useState", (initial: unknown) => {
+    const index = cursor++;
+    if (!(index in state)) state[index] = initial;
+    return [state[index], (value: unknown) => { state[index] = value; }];
+  });
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => { throw new Error("未经确认不能请求"); });
+  const render = (currentOrder: OrderSummaryDTO, currentSchedule: ScheduleDTO | null) => {
+    cursor = 0;
+    return OrderProgressPanel({ demandId: "demand-1", order: currentOrder, schedule: currentSchedule, source: "live", reload() {} });
+  };
+  const findClick = (node: React.ReactNode, label: string): (() => void) | undefined => {
+    for (const child of React.Children.toArray(node)) {
+      if (!React.isValidElement<{ children?: React.ReactNode; onClick?: () => void }>(child)) continue;
+      if (child.props.children === label && child.props.onClick) return child.props.onClick;
+      const nested = findClick(child.props.children, label);
+      if (nested) return nested;
+    }
+  };
+  for (const [currentOrder, currentSchedule] of [
+    [order("contracted"), schedule(["pending"])],
+    [order("in_progress"), schedule(["done", "pending"])],
+    [order("in_progress"), schedule(["done", "active"])],
+    [order("in_progress"), schedule(["done", "done"])],
+  ] as const) {
+    state.length = 0;
+    let tree = render(currentOrder, currentSchedule);
+    const select = findClick(tree, "先查看确认");
+    assert.ok(select);
+    select();
+    tree = render(currentOrder, currentSchedule);
+    assert.match(renderToStaticMarkup(tree), /请再次确认/);
+    assert.ok(findClick(tree, "确认并发送"));
+    const cancel = findClick(tree, "取消");
+    assert.ok(cancel);
+    cancel();
+    tree = render(currentOrder, currentSchedule);
+    assert.doesNotMatch(renderToStaticMarkup(tree), /请再次确认/);
+  }
+  assert.equal(fetchMock.mock.callCount(), 0);
+});
+
 test("严格按接单状态和前置工序筛选动作", () => {
   assert.deepEqual(availableProgressActions(order("contracted"), schedule(["pending"])).map(item => item.action), ["start"]);
   assert.deepEqual(availableProgressActions(order("in_progress"), schedule(["done", "pending"])).map(item => item.taskId), ["task-1"]);
