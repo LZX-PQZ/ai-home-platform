@@ -46,7 +46,8 @@ export function OwnerSessionView({ state, onAction }: {
             <span role="status" aria-live="polite">{state.pending ? "正在确认业主登录状态…" : state.error ? "业主登录状态未确认"
               : signedIn ? "已通过账号密码登录" : "尚未登录业主账号"}</span>
           </div>
-          <p className="mt-1">使用维护者开通的账号；角色切换仅切换导航。账号登录不代表实名认证。</p>
+          <p className="mt-1">新用户可先体验需求澄清；发布需求需登录。当前暂未开放注册，请向演示负责人领取业主账号。</p>
+          <p className="mt-1">角色切换仅切换导航和页面，不会自动登录。账号登录不代表实名认证。</p>
           {signedIn && state.session?.status === "signed_in" && <p className="mt-1">有效至 <time dateTime={state.session.expiresAt}>
             {new Date(state.session.expiresAt).toLocaleTimeString("zh-CN")}</time>，到期需重新登录。</p>}
           {state.error && <p role="alert" className="mt-1 text-danger">{state.error}</p>}
