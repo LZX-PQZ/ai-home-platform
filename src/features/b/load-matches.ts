@@ -28,13 +28,15 @@ export async function loadMatches(demandId: string) {
   const providerResponse = await apiGet("/api/provider", Provider.array());
   const demandSource = demandResponse.data.source;
   const providerSource = providerResponse.meta.source;
+  const readAt = Date.now();
   return {
+    readAt,
     demand: demandResponse.data,
     demandSource,
     providerSource,
     response: envelope(Match.array()).parse({
       ok: true,
-      data: matchProviders(demandResponse.data, providerResponse.data),
+      data: matchProviders(demandResponse.data, providerResponse.data, readAt),
       meta: { source: demandResponse.meta.source === "live" && demandSource === "live" && providerSource === "live" ? "live" : "mock" },
     }),
   };

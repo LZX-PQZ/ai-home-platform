@@ -1,8 +1,9 @@
 import * as React from "react";
 import type { z } from "zod";
 import type { Match } from "@/contracts";
+import { AvailabilitySummary } from "@/features/b/AvailabilitySummary";
 
-export function ProviderCard({ match, rank }: { match: z.infer<typeof Match>; rank: number }) {
+export function ProviderCard({ match, rank, desiredDays, readAt }: { match: z.infer<typeof Match>; rank: number; desiredDays?: number; readAt?: number }) {
   const { provider, score, reasons } = match;
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -28,6 +29,7 @@ export function ProviderCard({ match, rank }: { match: z.infer<typeof Match>; ra
         </> : <p>评价汇总未提供，来源未知；不按 0 分处理，也不以基础资料评分补齐。</p>}
         <p className="mb-0 text-xs text-slate-500">业主评价不代表准时率、质量认证或信用分。</p>
       </section>
+      {desiredDays !== undefined && readAt !== undefined && <AvailabilitySummary availability={provider.availability} desiredDays={desiredDays} readAt={readAt} />}
       <div className="mb-5 flex flex-wrap gap-2" aria-label="服务方擅长标签">
         {provider.tags.length ? provider.tags.map((tag, index) => (
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600" key={`${tag}-${index}`}>{tag}</span>

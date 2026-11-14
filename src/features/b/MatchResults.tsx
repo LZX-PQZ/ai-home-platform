@@ -6,7 +6,7 @@ import { renovationLabels } from "@/lib/match";
 import type { loadMatches } from "@/features/b/load-matches";
 
 export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMatches>> }) {
-  const { demand, response, demandSource, providerSource } = data;
+  const { demand, response, demandSource, providerSource, readAt } = data;
   const matches = response.data;
   const isMock = response.meta.source === "mock";
 
@@ -19,7 +19,8 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
           <span className="badge">{demandSource === undefined && providerSource === "live" ? "需求来源未知 · 规则匹配" : isMock ? "含模拟数据 · 规则匹配" : "规则匹配"}</span>
         </div>
         <h1>为这次改造，找到合适的施工团队</h1>
-        <p className="max-w-2xl text-slate-600">先确认服务城市与工种，再按改造经验和基础资料评分排序。基础分相同时，符合条件的整组再参考已完成接单评价均分。</p>
+        <p className="max-w-2xl text-slate-600">先确认服务城市与工种，再按改造经验和基础资料评分排序。基础分相同时，符合条件的整组依次参考已完成接单评价均分、档期窗口。</p>
+        <p className="break-words text-sm text-slate-500">本次读取时间：<time dateTime={new Date(readAt).toISOString()}>{new Date(readAt).toISOString()}</time>（UTC）。排序和剩余天数仅反映此时点，停留期间不会自动更新，请点击“刷新匹配”重新读取。</p>
       </header>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6" aria-labelledby="demand-summary">
@@ -42,7 +43,7 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
           {matches.length > 0 && <span className="text-sm text-slate-500">按匹配分从高到低排列</span>}
         </div>
         {matches.length ? (
-          <div className="grid gap-4 md:grid-cols-2">{matches.map((match, index) => <ProviderCard key={match.provider.id} match={match} rank={index + 1} />)}</div>
+          <div className="grid gap-4 md:grid-cols-2">{matches.map((match, index) => <ProviderCard key={match.provider.id} match={match} rank={index + 1} desiredDays={demand.desiredDays} readAt={readAt} />)}</div>
         ) : (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center" role="status">
             <p>{providerSource === "mock"
@@ -56,7 +57,8 @@ export function MatchResults({ data }: { data: Awaited<ReturnType<typeof loadMat
 
       <aside className="rounded-2xl border border-amber-200 bg-amber-50 p-6" aria-labelledby="matching-notes">
         <h2 className="text-base" id="matching-notes">做决定前，还需要确认</h2>
-        <p className="text-sm text-amber-950">匹配分 = 改造标签匹配 60 分 + 服务方评分 × 8（四舍五入，最高 40 分）。这是基础分，评价均分不加分，也不改变不同基础分组的顺序。同分组全部有有效且同来源的评价时，按均分降序；否则整组按编号展示。均分相同也按编号展示，不按样本数量加分。</p>
+        <p className="text-sm text-amber-950">匹配分 = 改造标签匹配 60 分 + 服务方评分 × 8（四舍五入，最高 40 分）。这是基础分，评价和档期不加分，也不改变不同基础分组的顺序。同分组全部有有效且同来源的评价时，按均分降序；否则跳过评价，不按样本数量加分。</p>
+        <p className="text-sm text-amber-950">同基础分组的档期全部在读取时有效且来源一致时，前序规则仍同序的候选中，单段剩余窗口可容纳期望天数者优先，否则跳过档期；最终按编号稳定展示。窗口按上海自然日含首尾计天，从今天截断，不累计或拼接多段。未知与过期不淘汰候选。</p>
         <p className="text-sm text-amber-950">null 表示没有均分，不当作 0 分；缺少评价不淘汰候选。少于 3 条显示“样本少”，请谨慎参考。评价反映业主反馈，不代表施工质量保证。</p>
         <p className="text-sm text-amber-950">服务方的报价、可接单日期和资质尚未核验。预算与期望工期只是你的需求，当前不作为已满足条件。</p>
         {providerSource === "mock" && <p className="text-sm text-amber-950">目录整体含模拟资料；基础资料评分与已完成接单评价是不同指标，评价统计来源见每张卡片。</p>}
