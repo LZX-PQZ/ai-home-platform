@@ -123,3 +123,7 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] #165 已固定 B 读取协议测试的候选与时间；D 将 a/b 改为同 98 分并交换窗口，补充实际样例和上海 11-22 边界回归。2026-11-15 浏览器实际 live→mock→live 为 b→a、a→b、b→a；11-22 起剩余不足不再保证翻转，见 `docs/requests/D-demo-browser-validation.md`。
 - [x] 同步 B #161 后，D 在共享生产冒烟加入“实际存在的非公开需求，匿名匹配返回 404”，并核对其他业主/服务方 404、本人可读及退出凭证拒绝；状态通过正常 HTTP 接受报价产生。
 - [x] 隔离库合成账号的浏览器完整链路已完成，覆盖发布至履约、评价、工单及退出拒绝。发现并获用户授权修复 A 确认按钮，独立 PR #168 已合入；完整流程先在包含该修复的本地组合验证，再同步 main 6b708df 检查。自动 HTTP 冒烟与浏览器结果分别记录，见 `docs/requests/D-demo-browser-validation.md`。
+
+## 公共首页清理（2026-11-15）
+
+- [x] 按 `C-home-scaffold-cleanup.md` 将首页开发分工卡片替换为我的装修、报价对比演示、服务方需求大厅、运营看板；保留模拟来源、角色导航与认证边界。核对仓库引用后删除未使用的 `ModulePage.tsx`，不修改 A/B/C 业务模块。实际验证见 `docs/requests/D-home-product-entry.md`。
