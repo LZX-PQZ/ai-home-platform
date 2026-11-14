@@ -7,7 +7,7 @@ import {
   emptyQuoteLine, formatQuoteMoney, MAX_QUOTE_LINES, quoteSubmissionInput, quoteUnitLabels, validateQuoteForm,
   type QuoteFormFields, type QuoteFormResult, type QuoteLineFields, type QuotePreviewData,
 } from "./quote-form";
-import { quoteSubmissionFailure, submitQuote, type QuoteSubmissionState } from "./quote-submit";
+import { quoteSubmissionFailure, quoteUncertainRetryFailure, submitQuote, type QuoteSubmissionState } from "./quote-submit";
 import { createQuoteSubmissionSession } from "./quote-idempotency";
 
 const inputClass = `${C.input} mt-1 block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:bg-line/40`;
@@ -134,7 +134,7 @@ export function QuoteForm({ demandId }: { demandId: DemandDTO["id"] }) {
       const response = await submitQuote(attempt.input, attempt.idempotencyKey);
       if (mounted.current) setSubmission({ status: "received", response });
     } catch (error) {
-      if (mounted.current) setSubmission(quoteSubmissionFailure(error));
+      if (mounted.current) setSubmission(allowUncertain ? quoteUncertainRetryFailure(error) : quoteSubmissionFailure(error));
     } finally {
       inFlight.current = false;
     }
