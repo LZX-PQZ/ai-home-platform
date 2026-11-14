@@ -8,6 +8,18 @@ export const providerOrderStatusLabels: Record<QuoteDTO["status"], string> = {
   rejected: "报价已拒绝",
 };
 
+export type ProviderQuoteFilters = { status: "all" | QuoteDTO["status"]; keyword: string };
+export const providerQuoteStatusOptions = ["all", ...Quote.shape.status.options] as const;
+export const defaultProviderQuoteFilters: ProviderQuoteFilters = { status: "all", keyword: "" };
+
+export function filterProviderQuotes(quotes: readonly QuoteDTO[], filters: ProviderQuoteFilters) {
+  const keyword = filters.keyword.trim().toLowerCase();
+  return quotes.filter(quote =>
+    (filters.status === "all" || quote.status === filters.status)
+    && (!keyword || [quote.id, quote.demandId].some(id => id.toLowerCase().includes(keyword))),
+  );
+}
+
 export async function loadProviderOrders() {
   const response = await apiGet("/api/provider/quotes", Quote.array());
   if (new Set(response.data.map((quote) => quote.id)).size !== response.data.length) {

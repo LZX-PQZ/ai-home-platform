@@ -42,7 +42,11 @@ test("查询后的四种报价均可查看原始明细，入口默认折叠且�
   const response = await loadProviderOrders();
   const html = renderPage({ status: "ready", response });
   assert.equal((html.match(/<details\b/g) ?? []).length, 4);
-  assert.doesNotMatch(html, /<details[^>]*\bopen\b|<form|<input|报价已提交（live）|已锁定本次表单/);
+  assert.doesNotMatch(html, /<details[^>]*\bopen\b|<form|报价已提交（live）|已锁定本次表单/);
+  // 页面允许搜索框；已保存的报价明细仍不可编辑。
+  for (const details of html.matchAll(/<details\b[\s\S]*?<\/details>/g)) {
+    assert.doesNotMatch(details[0], /<input|<select|<textarea/);
+  }
   for (const { id } of data) {
     assert.ok(html.includes(`报价编号：${id}</span></summary>`));
     assert.ok(html.includes(`aria-label="报价 ${id} 的项目明细"`));
