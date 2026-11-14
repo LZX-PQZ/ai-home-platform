@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ProviderDTO, ProviderPerformanceDTO } from "../src/contracts";
-import { demoDemand, providers } from "../src/lib/mock-data";
+import { demoDemand } from "../src/lib/mock-data";
+import { installMatchProtocolFixture } from "./B-match-fixtures";
 import { matchProviders } from "../src/lib/match";
 import { ProviderCard } from "../src/components/ProviderCard";
 import { prisma } from "../src/lib/prisma";
@@ -75,6 +76,7 @@ test("卡片区分旧评分、评价均分、未知/无样本及来源；0/1/2 �
 });
 
 test("浏览器与匹配 API 使用共享目录默认 live 汇总，mock 样本不补齐，读取失败不回退", async t => {
+  installMatchProtocolFixture(t);
   const transaction = prisma.$transaction;
   const sample = (id: string, providerId: string, source: "mock" | "live", rating: number) => ({
     id, orderId: `order-${id}`, demandId: `demand-${id}`, providerId, rating, source,
@@ -86,7 +88,7 @@ test("浏览器与匹配 API 使用共享目录默认 live 汇总，mock 样本�
   let fail = false;
   prisma.$transaction = (async (run: (tx: unknown) => Promise<unknown>) => {
     if (fail) throw Error("synthetic database failure");
-    return run({ review: { findMany: async () => [sample("live-one", providers[0].id, "live", 4), sample("mock-one", providers[1].id, "mock", 5)] } });
+    return run({ review: { findMany: async () => [sample("live-one", "fixture-a", "live", 4), sample("mock-one", "fixture-b", "mock", 5)] } });
   }) as typeof transaction;
   t.after(() => { prisma.$transaction = transaction; });
   const urls: string[] = [];
@@ -103,6 +105,7 @@ test("浏览器与匹配 API 使用共享目录默认 live 汇总，mock 样本�
   const browser = await loadMatches(demoDemand.id);
   const comparable = (rows: typeof browser.response.data) => rows.map(row => ({ id: row.provider.id, score: row.score, reasons: row.reasons, performance: { ...row.provider.performance, calculatedAt: "snapshot" } }));
   assert.deepEqual(comparable(api.data), comparable(browser.response.data));
+  assert.deepEqual(browser.response.data.map(row => row.provider.id), ["fixture-a", "fixture-b"]);
   assert.equal(browser.response.data[0].provider.performance?.averageRating, 4);
   assert.equal(browser.response.data[1].provider.performance?.averageRating, null);
   assert.equal(browser.response.data[1].provider.performance?.source, "live");
