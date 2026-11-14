@@ -30,7 +30,7 @@ export function ProviderOrdersContent({ state, onReload }: {
     <section aria-labelledby="provider-orders-title" className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 id="provider-orders-title">本人报价</h1>
+          <h2 id="provider-orders-title" className={C.pageTitle}>本人报价</h2>
           <p className="text-ink-2">查看当前服务方已保存的报价及其状态；查询范围由服务端登录会话确定。</p>
         </div>
         <Button onClick={onReload} variant="secondary" disabled={state.status === "loading"}
@@ -41,7 +41,7 @@ export function ProviderOrdersContent({ state, onReload }: {
 
       <div className={`${C.note} ${C.noteWarn}`}>
         <p>目前仅支持演示服务方登录，角色导航不能代替登录。登录、退出或身份变化后，请手动刷新报价，重新验证当前会话。</p>
-        <p className="!mb-0">本页展示本人报价。报价已提交不等于接单，报价已接受也不证明已建立接单关系或履约安排；真实接单流程仍待完成。</p>
+        <p className="!mb-0">此区域展示本人报价。报价已提交不等于接单，报价已接受也不证明已建立接单关系或履约安排；接单关系以上方“我的接单”查询结果为准。</p>
       </div>
 
       {state.status === "loading" && <div className={C.card} role="status" aria-live="polite">正在验证服务方会话并读取本人报价，请稍候…</div>}
