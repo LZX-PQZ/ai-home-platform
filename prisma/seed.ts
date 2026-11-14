@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { DEMO_PROVIDER_ID, DEMO_PROVIDER_USER_ID } from "../src/contracts";
 import { demoDemand, providers, quotes, schedule, payments, tickets } from "../src/lib/mock-data";
 const db=new PrismaClient();
 async function main() {
@@ -8,6 +9,7 @@ async function main() {
   const {tags,...rest}=provider;
   await db.serviceProvider.upsert({where:{id:provider.id},update:{},create:{...rest,tagsJson:JSON.stringify(tags)}});
  }
+ await db.user.upsert({where:{id:DEMO_PROVIDER_USER_ID},update:{},create:{id:DEMO_PROVIDER_USER_ID,name:"演示服务方账号",role:"provider",providerId:DEMO_PROVIDER_ID}});
  for(const quote of quotes) {
   const {items,pendingItems,...rest}=quote;
   await db.quote.upsert({where:{id:quote.id},update:{},create:{...rest,itemsJson:JSON.stringify(items),pendingItemsJson:JSON.stringify(pendingItems)}});

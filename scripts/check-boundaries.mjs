@@ -8,7 +8,9 @@ function walk(dir){for(const e of fs.readdirSync(dir,{withFileTypes:true})){cons
 walk("src");
 const failures=[];
 export function canReadAcrossOwner(file, target, clientReachable = false) {
- const quoteInfrastructure = target === "src/lib/idempotency.ts" || target === "src/lib/quote-policy.ts";
+ const sessionInfrastructure = target === "src/lib/demo-provider-session.ts" || target === "src/lib/demo-session-handlers.ts";
+ if (sessionInfrastructure) return !clientReachable && ownerOf(file) === "D" && (file.startsWith("src/lib/") || file.startsWith("src/app/api/"));
+ const quoteInfrastructure = target === "src/lib/idempotency.ts" || target === "src/lib/quote-policy.ts" || target === "src/lib/server-auth.ts";
  if (quoteInfrastructure) {
   const quoteServer = file === "src/lib/quote-engine.ts" || file.startsWith("src/lib/quote-engine/") || file.startsWith("src/app/api/quote/");
   const dServer = ownerOf(file) === "D" && (file.startsWith("src/lib/") || file.startsWith("src/app/api/"));
@@ -16,11 +18,10 @@ export function canReadAcrossOwner(file, target, clientReachable = false) {
  }
  const matchCanReadDemand = (file.startsWith("src/lib/match/") || file.startsWith("src/app/api/match/")) && target === "src/lib/demand.ts";
  const quoteCanReadDemand = (file === "src/lib/quote-engine.ts" || file.startsWith("src/lib/quote-engine/") || file.startsWith("src/app/api/quote/")) && target === "src/lib/demand.ts";
- const quoteCanReadServerAuth = (file === "src/lib/quote-engine.ts" || file.startsWith("src/lib/quote-engine/") || file.startsWith("src/app/api/quote/")) && target === "src/lib/server-auth.ts";
  const serverOnlyDatabase = target === "src/lib/prisma.ts";
  const serverCanReadDatabase = file.startsWith("src/app/api/") || file.startsWith("src/lib/") || file.startsWith("prisma/");
  if (serverOnlyDatabase) return serverCanReadDatabase;
- return ownerOf(file)===ownerOf(target)||shared.test(target)||matchCanReadDemand||quoteCanReadDemand||quoteCanReadServerAuth;
+ return ownerOf(file)===ownerOf(target)||shared.test(target)||matchCanReadDemand||quoteCanReadDemand;
 }
 const imports = new Map();
 const clientFiles = new Set();

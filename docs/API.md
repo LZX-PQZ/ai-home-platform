@@ -17,6 +17,9 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | 方法/路径 | data 对应契约 | 负责 | 当前状态 |
 |---|---|---|---|
 | GET /api/health | service、stage | D | 可用 |
+| GET /api/auth/demo-provider | DemoProviderSession | D | 读取演示会话状态，始终标 mock；默认 disabled |
+| POST /api/auth/demo-provider | DemoProviderLoginInput → DemoProviderSession | D | 显式开启后登录固定演示服务方，设置 HttpOnly cookie |
+| DELETE /api/auth/demo-provider | DemoProviderSession | D | 同源退出并撤销数据库会话，清除 cookie |
 | GET /api/demand | Demand[] | D | 查询 Prisma；每条 `Demand` 输出 `source`，列表含 `demo-demand` 时整体仍标 mock |
 | POST /api/demand | DemandInput → Demand | D | 校验后写入 Prisma，创建为 published，返回 live；无数据库时 503 |
 | GET /api/demand/[id] | Demand | D | 按 ID 查询 Prisma；每条输出 `source`，不存在 404，不回退到 demo-demand |
@@ -29,7 +32,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/ticket | Ticket[] | D | 固定 mock |
 
 ## 已预留、当前返回 501
-- POST /api/quote：由 B 实现。服务端先检查已验证的服务方身份：未登录先返回 `401 UNAUTHENTICATED`，已登录但不是服务方或未绑定服务方返回 `403 FORBIDDEN`；认证失败时不消费请求体，也不查询需求。写入开放后必须携带 `Idempotency-Key` 请求头（16–128 位 ASCII 字母、数字、`-`、`_`）；同服务方同键同摘要重放原报价，同键不同摘要返回 409 `IDEMPOTENCY_CONFLICT`。通过身份检查后，才依次进行 JSON/输入/需求状态检查。输入契约已由 D 冻结为 `QuoteSubmissionInput`（`demandId`、1–20 行 `items`、`estimatedDays`），不能让客户端自定 provider 身份、行金额、合计金额、待确认项或状态。服务端计价必须与 C 预览一致：数量按千分之一整数缩放，逐行用整数乘法并四舍五入到分后求和；禁止用浮点乘法替代。当前默认认证适配器没有真实会话，因此实际 HTTP 请求通常先返回 401；即使身份、输入和需求检查全部通过，写入尚未实现仍返回 `501 NOT_IMPLEMENTED`。401、403 和 501 都是失败，不能视为报价提交成功；业务接通后必须返回 `envelope(Quote)` 并如实标注 `meta.source`。完整决策见 `docs/requests/D-quote-idempotency.md`。
+- POST /api/quote：由 B 实现。服务端先检查已验证的服务方身份：未登录先返回 `401 UNAUTHENTICATED`，已登录但不是服务方或未绑定服务方返回 `403 FORBIDDEN`；认证失败时不消费请求体，也不查询需求。写入开放后必须携带 `Idempotency-Key` 请求头（16–128 位 ASCII 字母、数字、`-`、`_`）；同服务方同键同摘要重放原报价，同键不同摘要返回 409 `IDEMPOTENCY_CONFLICT`。通过身份检查后，才依次进行 JSON/输入/需求状态检查。输入契约已由 D 冻结为 `QuoteSubmissionInput`（`demandId`、1–20 行 `items`、`estimatedDays`），不能让客户端自定 provider 身份、行金额、合计金额、待确认项或状态。服务端计价必须与 C 预览一致：数量按千分之一整数缩放，逐行用整数乘法并四舍五入到分后求和；禁止用浮点乘法替代。默认适配器现可读取显式开启的演示会话；未开启、未登录或会话失效仍为 401。演示登录通过身份、输入和需求检查后，公开写入尚未接线，仍返回 `501 NOT_IMPLEMENTED`。401、403 和 501 都是失败，不能视为报价提交成功；B 后续接入原子内核时必须返回 `envelope(Quote)`，演示会话对应的回执必须标 `meta.source: mock`。完整决策见 `docs/requests/D-quote-idempotency.md` 和 `docs/requests/D-demo-provider-session.md`。
 - POST /api/schedule、/api/ticket、/api/inspect、/api/review：由 D 完成。ReviewInput 已预留；其他写入契约先补齐再让页面提交。
 - POST /api/payment：已实现最小模拟确认动作，不做身份校验，任何调用方都可触发演示状态转换。输入为 `PaymentActionInput`，只允许 `pending → confirmed_demo` 一次转换；状态只保存在服务进程内，进程重启后恢复初始演示状态。成功返回 `Payment`，`meta.source` 为 `mock` 且 `simulated` 为 `true`；这不是支付接口，不代表真实付款、资金托管或数据库持久化。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
@@ -52,8 +55,18 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 - 没有已验证会话：401 `UNAUTHENTICATED`。
 - 已登录但不是服务方，或会话未绑定服务方：403 `FORBIDDEN`。
-- 当前默认 reader 不产生演示身份，因此真实认证适配器接入前不能把报价提交标记为成功。
+- 默认 reader 仅在 `DEMO_AUTH_ENABLED=true` 且有效演示 cookie 对应当前账号绑定时返回固定服务方身份；客户端传入 userId/providerId/角色不能产生会话。过期、撤销、账号删除或绑定不符均视为会话失效，返回 401。真实认证仍未接入。
 - 报价 API 与报价引擎可复用 `findDemand`；页面和客户端仍禁止直接导入数据库服务。
+
+### 演示服务方登录
+
+入口位于全局导航下方，始终显示“模拟身份 · 演示专用”；角色导航不等于登录。维护者本地设置 `DEMO_AUTH_ENABLED=true`、运行 `npm run db:setup` 并重启应用后，才可点击“演示服务方登录”。默认关闭，不改已有 `.env`。
+
+登录请求仅为 `{ "action": "login_demo" }`，拒绝任何身份字段。`DemoProviderSession` 是三种状态的联合：`{status:"disabled",demo:true}`、`{status:"signed_out",demo:true}`，以及 `{status:"signed_in",demo:true,identity:{userId:"demo-provider-account",role:"provider",providerId:"provider-a"},expiresAt:"ISO 8601"}`。所有成功响应带 `meta.source: "mock"`，响应不缓存，不包含 cookie 令牌。
+
+Cookie `ai_home_demo_session` 使用 256 位随机凭证；数据库只存摘要、账号和绑定快照，30 分钟绝对过期。HttpOnly、SameSite=Strict、Path=/，HTTPS 时 Secure。POST/DELETE 强制同源 Origin；缺失或跨站为 `403 FORBIDDEN`。POST 未开启为 `403 DEMO_AUTH_DISABLED`，坏 JSON/字段为 400，账号未准备为 `503 DEMO_ACCOUNT_UNAVAILABLE`，数据库错误为 `503 SESSION_UNAVAILABLE`。退出会撤销数据库记录后清除 cookie；关闭演示期间 reader 拒绝所有演示 cookie，同源退出仍可撤销已有会话。
+
+B 的事务内核可从 `@/lib/server-auth` 导入 `readDemoVerifiedSession` 并作为 reader 传入 `createQuoteAtomically`，由内核传入当前 `tx`。每次验证过期、撤销、账户角色及固定绑定，不复用预检快照。演示登录是会话链路的演示能力，不是生产认证；公开报价写入仍为 501，真实报价读取闭环尚未接通。
 
 ## GET /api/match 查询参数
 

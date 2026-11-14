@@ -22,9 +22,9 @@
 
 ## 事务会话与账号绑定
 
-- 事务内会话读取器使用 `(request, tx) => unknown | Promise<unknown>`，必须在同一 Prisma transaction client 上重新验证会话签名、过期和撤销状态，并读取当前 `User`、`ServiceProvider` 记录；不能复用预检身份快照。
+- 事务内会话读取器使用 `(request, tx) => unknown | Promise<unknown>`，必须在同一 Prisma transaction client 上重新验证会话凭证、过期和撤销状态，并读取当前 `User`、`ServiceProvider` 记录；不能复用预检身份快照。D 的演示适配器使用随机令牌的数据库摘要验证凭证，可从 server-auth 导入 `readDemoVerifiedSession(request, tx)`；仅显式开启时可用，来源仍为 mock，详见 `D-demo-provider-session.md`。
 - `User.providerId` 与 `ServiceProvider.account` 形成一对一绑定，账号角色必须是 `provider`，绑定的服务方记录必须存在，且数据库绑定必须与会话中的 `providerId` 一致。缺失、换绑、角色变化或服务方删除均返回 403。
-- 认证适配器异常按未认证处理；默认适配器不产生演示身份。回执重放也要在当前事务中复核读取权限，不能因持有幂等键绕过身份检查。
+- 认证适配器异常按未认证处理；默认适配器只接受显式开启且凭证有效的固定演示会话，否则返回未认证。回执重放也要在当前事务中复核读取权限，不能因持有幂等键绕过身份检查。
 
 ## 服务方报价权限
 
