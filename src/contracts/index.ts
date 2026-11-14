@@ -93,6 +93,9 @@ export const OrderSummary = z.object({
   id: Id, demandId: Id, providerId: Id, acceptedQuoteId: Id,
   status: z.enum(["contracted", "in_progress", "completed"]), source: Source,
 }).strict();
+export const OrderQuery = z.object({ demandId: OrderAcceptInput.shape.demandId }).strict();
+/** null 表示已授权的需求确实没有实际接单关系。 */
+export const OwnerOrderResult = OrderSummary.nullable();
 const QUOTE_SUBMISSION_MAX_ITEMS = 20;
 const QUOTE_SUBMISSION_MAX_NAME_LENGTH = 100;
 const QUOTE_SUBMISSION_MAX_NOTE_LENGTH = 1000;
@@ -299,6 +302,8 @@ export type ProviderIdentityDTO = z.infer<typeof ProviderIdentity>;
 export type QuoteDTO = z.infer<typeof Quote>;
 export type OrderAcceptInputDTO = z.infer<typeof OrderAcceptInput>;
 export type OrderSummaryDTO = z.infer<typeof OrderSummary>;
+export type OrderQueryDTO = z.infer<typeof OrderQuery>;
+export type OwnerOrderResultDTO = z.infer<typeof OwnerOrderResult>;
 export type OrderProgressInputDTO = z.infer<typeof OrderProgressInput>;
 export type OrderProgressResultDTO = z.infer<typeof OrderProgressResult>;
 export type QuoteSubmissionItemInputDTO = z.infer<typeof QuoteSubmissionItemInput>;

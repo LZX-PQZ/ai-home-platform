@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient, Quote as StoredQuote } from "@prisma/client";
-import { OrderAcceptInput, OrderSummary, Quote, Source, envelope, type ApiFailure } from "@/contracts";
+import { Demand, OrderAcceptInput, OrderQuery, OrderSummary, OwnerOrderResult, Quote, Source, envelope, type ApiFailure } from "@/contracts";
 import { DEMO_DEMAND_ID } from "@/lib/demand";
 import { isSameOrigin, readDemoVerifiedSession } from "@/lib/demo-provider-session";
 import { OwnerAccessError, readOwnerVerifiedSession } from "@/lib/owner-auth";
@@ -19,7 +19,7 @@ const failures = {
   INVALID_STATE: { status: 409, message: "仅已发布需求的已提交报价可首次接受，请刷新核实。" },
   ORDER_ALREADY_EXISTS: { status: 409, message: "该需求已接受其他报价，不能改选。" },
   ACCEPTED_QUOTE_CONFLICT: { status: 409, message: "需求已有接受记录但缺少接单关系，请联系维护者核实。" },
-  ORDER_UNAVAILABLE: { status: 503, message: "暂时无法确认接单数据，请刷新或对同一报价重试核实。" },
+  ORDER_UNAVAILABLE: { status: 503, message: "暂时无法确认接单数据，请稍后重新读取核实。" },
 } as const;
 class OrderRejected extends Error {
   constructor(readonly code: keyof typeof failures) { super(failures[code].message); }
@@ -129,6 +129,33 @@ export async function handleOrderAccept(request: Request, db: Database = prisma)
       return { status: 201, body: envelope(OrderSummary).parse({ ok: true, data, meta: { source: data.source } }) };
     }, { isolationLevel: "Serializable" });
     return Response.json(result.body, { status: result.status, headers });
+  } catch (error) { return rejected(error); }
+}
+
+/** Read the current owner's order without replaying an acceptance or changing business data. */
+export async function handleOwnerOrderRead(request: Request, db: Database = prisma) {
+  if (!["GET", "HEAD"].includes(request.method)) return failure("FORBIDDEN");
+  try {
+    const params = new URL(request.url).searchParams;
+    if ([...params.keys()].length !== 1 || !params.has("demandId")) throw new OrderRejected("VALIDATION_ERROR");
+    const query = OrderQuery.safeParse({ demandId: params.get("demandId") });
+    if (!query.success) throw new OrderRejected("VALIDATION_ERROR");
+    const body = await db.$transaction(async tx => {
+      const current = await requireOwner(request, tx);
+      const demand = await tx.demandOrder.findFirst({ where: { id: query.data.demandId, ownerId: current.userId },
+        select: { id: true, ownerId: true, status: true } });
+      if (!demand) throw new OrderRejected("DEMAND_NOT_FOUND");
+      if (demand.id !== query.data.demandId || demand.ownerId !== current.userId) throw new OrderRejected("ORDER_UNAVAILABLE");
+      Demand.shape.status.parse(demand.status);
+      const row = await tx.serviceOrder.findFirst({ where: { demandId: demand.id, demand: { ownerId: current.userId } }, include: orderInclude });
+      const data = row ? orderSummaryFromRecord(row) : null;
+      if (data ? data.demandId !== demand.id || data.status !== demand.status : !["draft", "published"].includes(demand.status)) {
+        throw new OrderRejected("ORDER_UNAVAILABLE");
+      }
+      return envelope(OwnerOrderResult).parse({ ok: true, data,
+        meta: { source: data?.source ?? (demand.id === DEMO_DEMAND_ID ? "mock" : "live") } });
+    }, { isolationLevel: "Serializable" });
+    return Response.json(body, { headers });
   } catch (error) { return rejected(error); }
 }
 

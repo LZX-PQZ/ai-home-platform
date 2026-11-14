@@ -30,6 +30,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/provider | Provider[] | D | 固定 mock |
 | GET /api/provider/quotes | Quote[] | D | 同一事务验证服务方会话并只查本人报价；当前演示身份整体标 mock，不代表接单 |
 | POST /api/order | OrderAcceptInput → OrderSummary | D | 所属业主接受已提交报价，原子建立单一接单关系；首次 201，同报价重放 200，保留报价来源 |
+| GET /api/order?demandId=… | OrderQuery → OwnerOrderResult | D | 仅所属业主读取实际接单；OrderSummary 或 null，不重放接受报价，不写业务数据 |
 | POST /api/order/progress | OrderProgressInput → OrderProgressResult | D | 业主确认开工/工序/整单完成；需求、接单、排期版本及事件同事务保存，200，来源沿用接单 |
 | GET /api/provider/orders | OrderSummary[] | D | 同一事务验证服务方并只查本人接单关系；无参数，当前演示身份整体 mock |
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数保留演示入口；`demandId=demo-demand` 返回 mock；未知 ID 404，空/重复参数 400 |
@@ -59,6 +60,16 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 写入无效业主会话或仅服务方 cookie 为 401；角色变化/跨源 403；非本人和不存在需求统一 404/DEMAND_NOT_FOUND，确认本人归属后其他需求的报价与不存在报价统一 404/QUOTE_NOT_FOUND。本人演示需求 409/DEMO_DEMAND_READ_ONLY，非法状态 409/INVALID_STATE。读写存储、事务、坏来源/DTO/关联不一致均 503/ORDER_UNAVAILABLE，提示结果暂时无法确认，可对同一报价重试核实。所有成功/失败 private, no-store、Vary: Cookie，不回退 mock 或空成功。
 
 B 使用 `apiPost('/api/order', input, OrderSummary)` 并在明确确认前展示报价、待定费用和来源，成功后刷新报价/需求；C 使用 `apiGet('/api/provider/orders', OrderSummary.array())`，区分本人报价和接单，展示来源及错误。B 的接受按钮与 C 的接单页面已随 #121/#122/#125 合入，履约推进接口见下节；生产服务方认证、改选/取消、多服务方拆单仍未实现。数据库须先运行 `npm run db:setup` 同步新表，seed 不补造关系。详见 `docs/requests/D-quote-acceptance.md`。
+
+## GET /api/order：业主读取本人接单
+
+必须恰好一个非空 demandId；公共 `OrderQuery` 保留原 ID 精确匹配，缺失/空白/重复及其他参数为 400/VALIDATION_ERROR。同一 Serializable 事务核验当前业主会话、角色和需求 ownerId，再读取实际 ServiceOrder，验证需求/接单状态、accepted 报价、服务方和来源一致。公开需求也不公开接单，demo-demand 没有匿名例外，GET 不写数据或补造关系。
+
+200 `envelope(OwnerOrderResult)`，`OwnerOrderResult = OrderSummary.nullable()`：有关系时 data 为摘要（id、demandId、providerId、acceptedQuoteId、status、source），整体来源与接单一致，mock 不升级；确实无接单时 data:null，普通需求为 live、本人固定演示需求为 mock。历史 accepted 报价不自动变成接单；需求已处于 contracted/in_progress/completed 却缺关系则 503，避免掩盖状态损坏。
+
+无/坏/重复/过期/撤销业主 cookie 或仅服务方为 401/UNAUTHENTICATED；当前角色非 owner 为 403/FORBIDDEN；他人与不存在需求统一 404/DEMAND_NOT_FOUND；存储、字段、来源或关联损坏为 503/ORDER_UNAVAILABLE，不回退空态或 mock。双 cookie 以业主为准。所有响应 private, no-store、Vary: Cookie，不含内部身份、会话或报价明细。
+
+A 使用 `apiGet('/api/order?demandId=' + encodeURIComponent(demandId), OwnerOrderResult)`，data.id 用于履约、data.providerId 用于评价；data:null 显示尚无接单，错误保留可见。进入页面及操作/网络异常后可直接 GET 刷新核实，无需为了读取再次 POST 接受报价。前端接线另由 A 完成，详见 `docs/requests/D-owner-order-read.md`。
 
 ## POST /api/order/progress：业主确认履约推进
 

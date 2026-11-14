@@ -45,6 +45,8 @@ macOS / Linux：使用 npm 而非 npm.cmd，使用 cp .env.example .env。
 
 接受报价与接单后端已提供 `POST /api/order` 和 `GET /api/provider/orders`，部署本功能前运行 `npm.cmd run db:setup` 同步新增的 ServiceOrder 表，然后重启应用；不要重置数据库。既有需求、报价及提交回执保留，历史 accepted 报价不自动补成接单。B 的接受按钮与 C 的实际接单页面已随 #121/#122/#125 合入；履约动作按钮仍待接线。本版一需求只能接受一份报价，含待定费用的报价不会被宣称已确认最终总价。演示报价建立的关系仍标 mock，不代表生产服务方认证、付款或履约完成。协议见 [接受报价交接](docs/requests/D-quote-acceptance.md)。
 
+业主接单读取已提供 `GET /api/order?demandId=…`：仅所属业主可取 OrderSummary（含履约用 id、评价用 providerId），无接单返回 null；不再需要重放接受报价来获取编号。来源沿用接单，异常不伪装空态。A 接线见 [业主接单读取](docs/requests/D-owner-order-read.md)。本次无数据库或依赖变更。
+
 ## 演示服务方登录
 
 在已有 `.env` 中设置 `DEMO_AUTH_ENABLED="true"`，运行 `npm.cmd run db:setup` 同步会话表与演示账号，再重启应用。点击导航下方的“演示服务方登录”，即可使用固定的 `provider-a` 演示身份；无需填写或提交真实账号密码。默认关闭，界面和接口均明确标记模拟来源。
