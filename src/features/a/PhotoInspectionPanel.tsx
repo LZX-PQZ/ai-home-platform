@@ -58,7 +58,7 @@ export function PhotoInspectionPanel({ demandId }: { demandId: string }) {
 
   return (
     <Card className="mt-4">
-      <SectionHead title="照片辅助检查" aside={<span className={C.meta}>来源：未确认</span>} />
+      <SectionHead title="照片辅助检查" />
       <p className={`mb-3 ${C.meta}`}>
         选择施工现场照片后可提交辅助检查。照片只能提示疑点，不能替代现场检测或证明施工合格。
       </p>

@@ -20,10 +20,11 @@ after(() => {
   else Reflect.deleteProperty(globalThis, "React");
 });
 
-test("照片辅助检查首屏明确来源未知，并提示只能辅助发现疑点", () => {
+test("照片辅助检查首屏提示尚未选择照片，不显示固定来源徽章，并保留辅助检查说明", () => {
   const html = renderToStaticMarkup(createElement(PhotoInspectionPanel, { demandId: "d-1" }));
   assert.match(html, /照片辅助检查/);
-  assert.match(html, /来源：未确认/);
+  assert.doesNotMatch(html, /来源：未确认/);
+  assert.match(html, /尚未选择照片，来源未确认/);
   assert.match(html, /只能提示疑点/);
   assert.match(html, /不能替代现场检测或证明施工合格/);
   assert.match(html, /当前不会自动确认验收/);
