@@ -77,3 +77,9 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 - [x] 已接单服务方需求详情：有效会话及本人 ServiceOrder 关系在同一事务核验，签约后可读；匿名和其他服务方仍 404，列表不扩大。见 `docs/requests/D-provider-demand-access.md`。
 - [ ] 后续状态推进必须同一事务更新 DemandOrder 与 ServiceOrder；不同幂等键形成多报价是否为预期，由 B 确认业务规则，当前未确认，未擅改报价模块。
 - [ ] B 接受按钮与 C 接单页面待各角色接入；生产服务方认证、改选/取消、多服务方拆单、履约推进/支付未实现。照片检查和评价仍为后续独立任务。
+
+## 施工照片上传基础（2026-11-14）
+
+- [x] POST /api/inspect/images：当前业主、同源及事务内归属重验，JPEG/PNG 实际解码、旋转去元数据，数量/大小/配额限制，整批原子保存 SQLite，返回 24 小时有效随机引用和 live 来源。
+- [x] POST /api/inspect：当前业主及需求/引用归属、有效期、摘要校验；未知/跨归属/过期引用 404，有效引用仍明确 501。来源标记不代表 AI 或验收结论。见 `docs/requests/D-photo-image-upload.md`。
+- [ ] A 上传表单接线、真实照片分析、预览/删除管理、后台清理、对象存储与人工复核未实现；评价写入仍待后续独立交付。

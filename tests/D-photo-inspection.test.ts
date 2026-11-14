@@ -41,34 +41,34 @@ test("照片检查结果不允许写成验收结论", () => {
   }).success, false);
 });
 
-test("POST /api/inspect 对坏 JSON 和非法输入返回 400", async () => {
+test("POST /api/inspect 先拒绝非同源请求，不读取照片正文", async () => {
   const badJson = await POST(new Request("http://localhost/api/inspect", {
     method: "POST",
     body: "{",
     headers: { "content-type": "application/json" },
   }));
-  assert.equal(badJson.status, 400);
-  assert.equal((await badJson.json()).error.code, "INVALID_JSON");
+  assert.equal(badJson.status, 403);
+  assert.equal((await badJson.json()).error.code, "FORBIDDEN");
 
   const invalid = await POST(new Request("http://localhost/api/inspect", {
     method: "POST",
     body: JSON.stringify({ demandId: "demand-1", imageRefs: [] }),
     headers: { "content-type": "application/json" },
   }));
-  assert.equal(invalid.status, 400);
-  assert.equal((await invalid.json()).error.code, "VALIDATION_ERROR");
+  assert.equal(invalid.status, 403);
+  assert.equal((await invalid.json()).error.code, "FORBIDDEN");
 });
 
-test("POST /api/inspect 对合法输入返回明确 501，不伪装成功", async () => {
+test("POST /api/inspect 对匿名合法 JSON 返回 401，不能绕过照片权限", async () => {
   const response = await POST(new Request("http://localhost/api/inspect", {
     method: "POST",
     body: JSON.stringify(validInput),
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", origin: "http://localhost" },
   }));
-  assert.equal(response.status, 501);
+  assert.equal(response.status, 401);
   const body = await response.json();
   assert.deepEqual(body.ok, false);
-  assert.equal(body.error.code, "NOT_IMPLEMENTED");
+  assert.equal(body.error.code, "UNAUTHENTICATED");
   assert.ok(!("data" in body));
   assert.ok(!("meta" in body));
 });

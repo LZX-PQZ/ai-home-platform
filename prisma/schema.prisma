@@ -15,6 +15,7 @@ model User {
   demoSessions DemoProviderSession[]
   ownerSessions OwnerSession[]
   ownerCredential OwnerCredential?
+  inspectionImages InspectionImage[]
 }
 model OwnerCredential {
   userId String @id
@@ -66,6 +67,24 @@ model DemandOrder {
   reviews Review[]
   tickets Ticket[]
   serviceOrder ServiceOrder?
+  inspectionImages InspectionImage[]
+}
+model InspectionImage {
+  id String @id
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  demandId String
+  demand DemandOrder @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  contentType String
+  sizeBytes Int
+  width Int
+  height Int
+  sha256 String
+  bytes Bytes
+  expiresAt DateTime
+  @@index([ownerId, expiresAt])
+  @@index([demandId])
+  @@index([expiresAt])
 }
 model ServiceProvider {
   id String @id @default(cuid())
