@@ -1,5 +1,6 @@
 import { Demand, DemandIdParams } from "@/contracts";
 import { apiGet, ApiClientError } from "@/lib/api-client";
+import { demandAccessFailure } from "./demand-access-recovery";
 
 export async function loadDemandDetail(demandId: string) {
   const params = DemandIdParams.safeParse({ id: demandId });
@@ -20,15 +21,15 @@ export type DemandDetailState =
   | { status: "loading" }
   | { status: "ready"; response: Awaited<ReturnType<typeof loadDemandDetail>> }
   | { status: "not-found" }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; canExitOwnerSession?: boolean };
 
 export function demandDetailFailureState(error: unknown): Extract<DemandDetailState, { status: "not-found" | "error" }> {
+  const access = demandAccessFailure(error);
+  if (access) return { status: "error", ...access };
   if (error instanceof ApiClientError) {
     if (error.status === 404 && error.code === "DEMAND_NOT_FOUND") return { status: "not-found" };
     const messages: Partial<Record<number, string>> = {
       400: "需求编号无效，请返回需求大厅重新打开。",
-      401: "暂未获得查看此需求的身份授权，请完成身份验证后重试。角色导航不能代替登录。",
-      403: "当前身份无法查看此需求，请返回需求大厅。",
       501: "需求接口尚未实现，暂时无法读取详情，请等待接口接入后重试。",
       503: "需求服务暂时不可用，请稍后重试。",
     };
