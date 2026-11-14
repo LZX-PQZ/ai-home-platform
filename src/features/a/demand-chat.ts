@@ -12,6 +12,13 @@ export type ChatRole = ChatMessage["role"];
 const chatEnvelope = envelope(ChatResult);
 export type EnvelopeSource = z.infer<typeof chatEnvelope>["meta"]["source"];
 
+/** 将接口来源转换成业主可理解的文案，避免把内部枚举直接展示在页面上。 */
+export function sourceLabel(source: EnvelopeSource | null): string {
+  if (source === "mock") return "模拟结果";
+  if (source === "live") return "实时结果";
+  return "尚未确认";
+}
+
 /** 与 ChatInput 契约一致：单条 4000 字、最多 30 条 */
 export const MAX_MESSAGE_LENGTH = 4000;
 export const MAX_MESSAGES = 30;
@@ -93,7 +100,7 @@ export function describeFailure(status: number, payload: unknown): ApiError {
 /** 校验对话响应：缺 meta.source 或字段不符都按失败处理，不猜测 */
 export function parseChatResponse(payload: unknown): { data: ChatResultDTO; source: EnvelopeSource } {
   const parsed = chatEnvelope.safeParse(payload);
-  if (!parsed.success) throw new Error("对话接口返回格式不符合契约，已停止渲染。");
+  if (!parsed.success) throw new Error("需求助手暂时无法整理这次对话，请重试。");
   return { data: parsed.data.data, source: parsed.data.meta.source };
 }
 
@@ -205,7 +212,7 @@ export function interpretDemandSubmit(status: number, payload: unknown): SubmitO
   if (error.notImplemented) {
     return {
       kind: "not_implemented",
-      message: `需求保存尚未开放（${error.code}）：${error.message}`,
+      message: "当前暂时无法保存需求，请稍后重试。",
     };
   }
   if (status === 401 || error.code === "UNAUTHENTICATED") {
@@ -223,7 +230,7 @@ export function interpretDemandSubmit(status: number, payload: unknown): SubmitO
   if (error.code === "VALIDATION_ERROR") {
     return { kind: "rejected", messages: [error.message] };
   }
-  return { kind: "failed", message: `${error.message}（${error.code}）` };
+  return { kind: "failed", message: "保存需求时遇到问题，请先到需求列表核实，再决定是否重试。" };
 }
 
 export function demandPath(id: string): string {

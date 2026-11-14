@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { DemandDraftPanel } from "@/features/a/DemandDraftPanel";
 import { useDemandChat } from "@/features/a/useDemandChat";
-import { normalizeOutgoing } from "@/features/a/demand-chat";
+import { normalizeOutgoing, sourceLabel } from "@/features/a/demand-chat";
 import { Badge, Button, C, Card, Note, SectionHead } from "@/features/a/ui";
 
 const QUICK_PHRASES = [
@@ -54,12 +54,12 @@ export function ChatWindow() {
           title="AI 需求澄清"
           aside={
             <Badge tone={source === "live" ? "brand" : "accent"}>
-              对话接口来源：{source ?? "未确认"}
+              结果来源：{sourceLabel(source)}
             </Badge>
           }
         />
         <p className={`!mb-0 ${C.meta}`}>
-          当前为 mock 澄清接口，不调用真实模型，也不会自动补全您没说过的信息。
+          助手会根据您提供的信息整理需求，不会替您补写未提供的内容；结果来源会在页面标明。
         </p>
 
         <ol
