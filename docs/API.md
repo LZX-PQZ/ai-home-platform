@@ -35,7 +35,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/order/progress?demandId=… | OrderQuery → OrderProgressEvent[] | D | 所属业主读取已保存履约动作，隐藏操作者身份；来源沿用接单，无记录不补造 |
 | GET /api/provider/orders | OrderSummary[] | D | 同一事务验证服务方并只查本人接单关系；无参数，当前演示身份整体 mock |
 | GET /api/match[?demandId=<id>] | Match[] | B | 无参数固定演示；显式 ID 读库，未知 404，空/重复参数 400；未公开需求权限仍待 B 接入 D 读取器 |
-| GET /api/quote | Quote[] | B | 固定 mock |
+| GET /api/quote[?demandId=<id>] | QuoteQuery → Quote[] | B | 无参数固定 mock；显式 ID 在事务内核验业主归属，读取本人 submitted/accepted 报价并保留来源 |
 | POST /api/quote | QuoteSubmissionInput → Quote | B | 已接演示会话；合法首次提交 201/mock，同键同摘要重放 200/mock；无有效会话 401 |
 | GET /api/schedule[?demandId=<id>&version=<n>] | Schedule | D | 无参数或固定 demo-demand 为公开种子排期 mock；其他需求验证业主会话及归属后读取最新/指定版本 |
 | POST /api/schedule | ScheduleCreateInput → Schedule | D | 当前业主为本人 published/contracted 且无排期的需求创建 v1；201/live，工序均 pending 且责任服务方为空 |
@@ -56,7 +56,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 服务端 `readProviderDirectory({ performanceSource: 'live' | 'mock' })` 在 Serializable 事务内生成同一快照时间并返回公共信封，默认参数为 live；HTTP 与 B 后续 `/api/match` 可复用，抛错为 `ProviderDirectoryError`。浏览器使用 `apiGet('/api/provider?performanceSource=mock', Provider.array())`，不要导入服务端适配器。所有 HTTP 响应 no-store，不依赖 cookie、不写库或更新服务方 rating。`availability` 的窗口按 Asia/Shanghai 自然日解释，固定样例 source=mock；缺省/null 是未知，空窗口只表示覆盖区间内无窗口，过期后不参与排序。当前任一查询范围内的坏评价或坏关联会让整个目录返回 503：C 的需求页和 B 的匹配页会无法完成目录加载；B 的报价对比页会保留报价，但服务方名称与来源提示待确认。此指标是业主评价均分，不是准时率、质量认证或信用分；少于 3 个样本由调用方显示样本少。
 
-B 排序/来源展示与 `/api/match` 目录接线已随 #153 合入，C 档期展示 #152 已合入；匹配需求权限接线仍待 B 完成。固定 mock 档期、报价单位/列项差异样例与四组合成 completed 接单/评价已提供；运行 db:seed 补齐固定记录。仅种子样本时 mock 汇总为 provider-a 4.67/3、provider-b 4/1；默认 live 不回退这些样本。样例验收步骤见 README，最终演示版本待集成。详见 `docs/requests/D-provider-performance.md` 和 `docs/requests/D-provider-availability.md`。
+B 排序/来源展示与 `/api/match` 目录接线已随 #153 合入，C 档期展示 #152 已合入，#157 已提供固定演示页的 live/mock 评价选择器；匹配需求权限接线仍待 B 完成。固定 mock 档期、报价单位/列项差异样例与四组合成 completed 接单/评价已提供；运行 db:seed 补齐固定记录。仅种子样本时 mock 汇总为 provider-a 4.67/3、provider-b 4/1；默认 live 不回退这些样本。当前两候选基础分为 98/97，切换评价口径不会翻转排序；同分/互换窗口方案已采纳设计，但因 B 测试依赖旧顺序暂缓替换运行样例，见 `docs/requests/D-demo-integration.md`。操作脚本见 `docs/DEMO.md`，字段说明见 `docs/requests/D-provider-performance.md` 和 `docs/requests/D-provider-availability.md`。
 
 ## 接受报价与本人接单
 
@@ -127,7 +127,7 @@ A 用 `apiPost('/api/order/progress', input, OrderProgressResult)` 接线，展�
 
 无/失效/撤销/重复/过期业主 cookie 或仅服务方 cookie 为 401/UNAUTHENTICATED，角色改变/跨源为 403/FORBIDDEN；他人与不存在需求统一 404/DEMAND_NOT_FOUND。本人固定演示需求 POST 为 409/DEMO_DEMAND_READ_ONLY；无接单或未完成为 409/REVIEW_NOT_ALLOWED，目标服务方不符为 409/REVIEW_PROVIDER_MISMATCH；存储、事务或坏数据为 503/REVIEW_UNAVAILABLE。所有成功失败 private, no-store、Vary: Cookie，失败无 data/meta。
 
-更新后运行 `npm run db:setup` 同步 Review.orderId 唯一可空关联及 source（默认 mock）；可空仅保留历史记录，新写入必有实际关联，不自动将旧行补造成真实评价。A/C 使用 `apiPost('/api/review', input, Review)` 和 `apiGet(..., Review.array())`，显示来源并对已存在/错误先核实。评价页面、公开评价、聚合评分、审核与通知尚未实现；正常 API 已可通过 /api/order/progress 达到 completed，不需要直接改库。详见 `docs/requests/D-review-create.md` 及本轮履约交接。
+更新后运行 `npm run db:setup` 同步 Review.orderId 唯一可空关联及 source（默认 mock）；可空仅保留历史记录，新写入必有实际关联，不自动将旧行补造成真实评价。A 已在需求详情接入 ReviewPanel，使用公共 Review 提交并读取本人评价，显示来源并对已存在/错误先核实。公开目录的评价均分/样本数聚合也已实现，mock/live 分开；评论内容公开、审核与通知尚未实现。正常 API 已可通过 /api/order/progress 达到 completed，不需要直接改库。详见 `docs/requests/D-review-create.md` 及履约交接。
 
 ## 工单创建与读取
 
@@ -139,7 +139,7 @@ A 用 `apiPost('/api/order/progress', input, OrderProgressResult)` 接线，展�
 
 无参数或精确 demo-demand 返回固定种子工单/mock，不读取可变数据库记录。存在业主 cookie 时仍需验证：坏/重复/过期/撤销均 401，角色变更 403，不回退匿名。无参数不会列出当前业主或全站的真实工单，C 现有管理演示页保持固定 mock。
 
-读写缺失/失效业主凭证、只有服务方凭证均为 401/UNAUTHENTICATED；当前账户角色不是 owner 或非同源写入为 403/FORBIDDEN。本人固定演示需求写入 409/DEMO_DEMAND_READ_ONLY，非法状态 409/INVALID_STATE；JSON/字段错误 400。数据库/事务/坏 DTO 返回中性 503/TICKET_UNAVAILABLE，不回退 mock 或空成功。所有响应 private, no-store、Vary: Cookie。接入使用共享 `apiPost(..., Ticket)` / `apiGet(..., Ticket.array())` 并显示来源；表单、管理授权、派单/解决、通知尚未实现。详见 `docs/requests/D-ticket-create.md`。
+读写缺失/失效业主凭证、只有服务方凭证均为 401/UNAUTHENTICATED；当前账户角色不是 owner 或非同源写入为 403/FORBIDDEN。本人固定演示需求写入 409/DEMO_DEMAND_READ_ONLY，非法状态 409/INVALID_STATE；JSON/字段错误 400。数据库/事务/坏 DTO 返回中性 503/TICKET_UNAVAILABLE，不回退 mock 或空成功。所有响应 private, no-store、Vary: Cookie。A 已接入 TicketCreatePanel，使用共享 `apiPost(..., Ticket)` / `apiGet(..., Ticket.array())` 创建、重读并显示来源；管理授权、派单/解决、通知尚未实现。详见 `docs/requests/D-ticket-create.md`。
 
 ## GET /api/schedule
 
@@ -159,7 +159,7 @@ A 用 `apiPost('/api/order/progress', input, OrderProgressResult)` 接线，展�
 
 无/失效/撤销/重复/过期业主 cookie 为 401，只有演示服务方 cookie 同样 401，当前账户角色不符或同源失败为 403；非本人和不存在需求统一 404/DEMAND_NOT_FOUND。确认归属后，固定演示需求 409/DEMO_DEMAND_READ_ONLY，不可创建状态 409/INVALID_STATE，已有任何版本 409/SCHEDULE_ALREADY_EXISTS。重复请求不覆盖、不追加版本，应通过 GET 核实；事务/数据库冲突或坏输出为中性的 503/SCHEDULE_UNAVAILABLE，不宣称一定未保存。所有响应 private, no-store、Vary: Cookie；坏 JSON 400/INVALID_JSON，非法字段、正文超限或依赖 400/VALIDATION_ERROR。
 
-A 可用 `apiPost('/api/schedule', input, Schedule)` 保存后刷新现有 GET。未开工计划的确认修订与版本追加见下节 PUT；工序状态推进由 `/api/order/progress` 提供。创建表单、施工中变更审批、责任方分配与专业阶段验收尚未交付。现有变更/验收按钮不能当作创建入口。首版字段及接入说明见 `docs/requests/D-schedule-create.md`。
+A 已在无排期页面接入首版创建表单，用 `apiPost('/api/schedule', input, Schedule)` 保存后刷新现有 GET。未开工计划的确认修订与版本追加见下节 PUT；工序状态推进由 `/api/order/progress` 提供。施工中变更审批、责任方分配与专业阶段验收尚未交付。首版字段及接入说明见 `docs/requests/D-schedule-create.md`。
 
 ## PUT /api/schedule：确认修订未开工计划
 
@@ -171,7 +171,7 @@ baseVersion 与最新版本不符返回 409/SCHEDULE_VERSION_CONFLICT；页面�
 
 无/坏/重复/过期/撤销业主 cookie 或仅服务方 cookie 返回 401；角色不符、身份中途变化或同源失败 403；他人与不存在需求统一 404/DEMAND_NOT_FOUND。本人需求无初版为 404/SCHEDULE_NOT_FOUND；本人演示需求 409/DEMO_DEMAND_READ_ONLY，非法需求状态 409/INVALID_STATE，最新计划已有施工状态/责任方 409/SCHEDULE_REVISION_NOT_ALLOWED。JSON/字段错误 400，数据库、事务竞争或坏输出为中性 503/SCHEDULE_UNAVAILABLE，需 GET 核实结果。所有响应 private, no-store、Vary: Cookie。
 
-调用使用 `apiPut('/api/schedule', input, Schedule)`，现有 GET 仍支持最新及指定历史版本。A 的修订表单/差异展示、变更原因/审批审计记录、施工中异常变更、服务方确认及专业验收仍未实现；工序状态推进由 `/api/order/progress` 提供。完整字段和验收见 `docs/requests/D-schedule-revision.md`。
+调用使用 `apiPut('/api/schedule', input, Schedule)`，现有 GET 仍支持最新及指定历史版本。A 已提供修订表单、版本冲突提示和指定旧版本读取；提交前差异预览、变更原因/审批审计记录、施工中异常变更、服务方确认及专业验收仍未实现。工序状态推进由 `/api/order/progress` 提供，A 的履约动作按钮也已接入。完整字段和验收见 `docs/requests/D-schedule-revision.md`。
 
 ## GET /api/provider/quotes
 
@@ -179,7 +179,7 @@ baseVersion 与最新版本不符返回 409/SCHEDULE_VERSION_CONFLICT；页面�
 
 匿名/失效/撤销/过期/重复凭证、演示关闭或账号绑定变化为 401；只有业主身份为 403。存储故障或 JSON/来源/DTO 损坏为 503，不回退固定 mock 或成功空数组；鉴权成功且确实无本人报价才返回空数组。所有成功与失败响应 private, no-store、Vary: Cookie。
 
-逐条 source 保留持久化来源且严格校验，null 费用不当作 0；当前会话为演示服务方，整体 meta.source 始终 mock（含空数组及单条 live 的情况）。这提供“本人报价”，不创建或证明接单关系；`GET /api/provider/orders` 和生产服务方登录尚未交付。C 接线说明见 `docs/requests/D-provider-own-quotes.md`，页面修改由 C 维护。
+逐条 source 保留持久化来源且严格校验，null 费用不当作 0；当前会话为演示服务方，整体 meta.source 始终 mock（含空数组及单条 live 的情况）。这提供“本人报价”，不创建或证明接单关系；实际接单须读已实现的 `GET /api/provider/orders`，C 接单页面已接入。生产服务方登录仍未交付。报价接线说明见 `docs/requests/D-provider-own-quotes.md`，页面修改由 C 维护。
 
 ## POST /api/quote
 
@@ -193,9 +193,9 @@ PR #74 已将 `handleQuoteSubmission` 的默认预检及事务会话 reader 接�
 - 同一事务内重新验证会话/绑定 → 检查当前服务方的回执摘要 → 读取需求并验证写入权限 → 原子提交或重放。首次成功 `201 envelope(Quote)`，同键同摘要且当前授权有效时重放原报价 `200 envelope(Quote)`；不同摘要为 `409 IDEMPOTENCY_CONFLICT`。
 - 明确的 P2034/P2002 冲突耗尽重试后为 `503 DATABASE_UNAVAILABLE`；其他无法可靠分类的异常（含提交后确认丢失、坏数据库输出）为 `500 INTERNAL_ERROR`。结果未知时保留原键与原输入，不能自动换键重报，也不能宣称此前一定未保存。
 
-完整决策见 `docs/requests/D-quote-idempotency.md`、`docs/requests/D-demo-provider-session.md`。已用真实演示 cookie 和隔离 SQLite 验证公开 POST；本次未做浏览器手工验收，业主公开 GET/页面读取仍未接通。
+完整决策见 `docs/requests/D-quote-idempotency.md`、`docs/requests/D-demo-provider-session.md`。已用实际演示 cookie 和隔离 SQLite 验证公开 POST；业主 GET 和报价页面已接通本人持久化报价读取，当前生产 HTTP 冒烟覆盖登录、报价、接受、履约与评价。自动 HTTP 验证不等于浏览器手工验收。
 
-## 已预留、当前返回 501
+## 已实现部分与仍返回 501 的能力
 - POST /api/inspect 的真实分析由 D 后续完成：照片已可通过 /api/inspect/images 上传，mock 模式校验身份和引用后返回明确模拟结果；live 模式仍 501。POST/GET /api/review 已实现本人已完成接单的评价保存/读取，履约推进由 /api/order/progress 提供。POST /api/schedule 已实现首版计划创建，PUT /api/schedule 已实现未开工计划确认修订，POST /api/ticket 已实现业主创建工单，见上节；施工中变更、专业验收、工单派单与解决仍未实现。
 - POST /api/payment：已实现最小模拟确认动作，不做身份校验，任何调用方都可触发演示状态转换。输入为 `PaymentActionInput`，只允许 `pending → confirmed_demo` 一次转换；状态只保存在服务进程内，进程重启后恢复初始演示状态。成功返回 `Payment`，`meta.source` 为 `mock` 且 `simulated` 为 `true`；这不是支付接口，不代表真实付款、资金托管或数据库持久化。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
@@ -220,19 +220,19 @@ A 的 #134 已接线：先 fetch FormData，勿手写 Content-Type，再用公�
 
 幂等重放成功的前提是当前事务中的身份、账号绑定和需求授权均通过。`live`、`published`、非演示需求的同键同摘要重放才可返回原报价；需求进入 `contracted`、`in_progress`、`completed` 或变为 `draft` 后，同摘要重放仍返回 `409 INVALID_STATE`，不返回历史回执、不新建或修改记录。此拒绝不表示上一次未保存，客户端不能自动换键重报。同键不同摘要仍优先返回 `409 IDEMPOTENCY_CONFLICT`；需求不存在为 404，身份失效/权限变化为 401/403。
 
-以上规则已由写入内核执行；公开 `POST /api/quote` 已接入演示会话，首次和重放成功均标 mock，当前授权失效仍拒绝。历史幂等回执读取接口未开放，`GET /api/quote` 仍为固定 mock。业主比较列表的独立读取规则如下，不改变 POST 重放限制。完整顺序见 `docs/requests/D-quote-idempotency.md`。
+以上规则已由写入内核执行；公开 `POST /api/quote` 已接入演示会话，首次和重放成功均标 mock，当前授权失效仍拒绝。历史幂等回执读取接口未开放；`GET /api/quote` 无参数为固定 mock，显式需求查询已提供独立的业主比较列表读取，不改变 POST 重放限制。完整顺序见 `docs/requests/D-quote-idempotency.md`。
 
-## GET /api/quote?demandId=：已冻结规则，尚未开放
+## GET /api/quote?demandId=：本人持久化报价读取
 
-现有 main 的 GET 仍返回固定演示报价，尚不解析或执行 demandId 查询。D 已提供公共 `QuoteQuery`/DTO、持久化业主会话读取及事务授权器，本次补齐密码登录入口；B 的公开 GET 接线位于待合入 PR #79，D 已另提 #87 修正来源断言，页面接线仍待 B 完成。#79 合入前调用方不能把带参数的响应当作该需求的数据库报价。
+当前 GET 已通过 `handleQuoteRead` 接入公共 `QuoteQuery`、`authorizeOwnerQuoteRead` 和 `readStoredQuoteComparison`；B 的页面也已读取本人持久化报价。固定公开演示页使用无参数 mock 入口；显式 `demandId=demo-demand` 仍执行归属校验，不因同名演示 ID 而公开数据库报价。
 
-冻结的目标协议：无参数保留固定 mock；显式查询仅接受单一非空 demandId，拒绝纯空白、重复和未知参数，非空 ID 原样精确查找。仅当前已验证的业主可读取数据库 `DemandOrder.ownerId === session.userId` 的需求；服务方（含演示 provider-a）和管理员均返回 403，此接口不给跨业主或跨服务方的比较权限。
+当前执行规则：无参数保留固定 mock；显式查询仅接受单一非空 demandId，拒绝纯空白、重复和未知参数，非空 ID 原样精确查找。仅当前已验证的业主可读取数据库 `DemandOrder.ownerId === session.userId` 的需求；服务方（含演示 provider-a）和管理员不能取得业主报价比较权限。
 
 显式查询按参数 400 → 会话 401 → 当前账户/角色 403 → 归属查询的顺序处理。有效业主查询不存在或不属于自己的需求统一返回 `404 DEMAND_NOT_FOUND`，不区分两者，避免透露资源是否存在。凭证、撤销、账户和归属均须在同一事务核验；请求头或参数中的自报身份不参与授权。
 
-业主可读取本人需求在 draft、published、contracted、in_progress、completed 各状态下的 submitted/accepted 报价；不返回 draft/rejected 报价。存在且无可比报价为 `200 envelope(Quote[])` 空数组，不能把查询失败变成空数组。数据库或数据校验失败为 `503 DATABASE_UNAVAILABLE`，不回退 mock。显式查询所有成功和失败响应均须 `Cache-Control: private, no-store`、`Vary: Cookie`，禁止共享缓存。目标来源协议改为同时考虑需求及持久化报价来源：只有需求与所有返回报价都为 live 才标 live，混入 mock 或未知来源即标 mock；空列表沿用已验证的需求来源。D 已提供 schema、兼容字段和来源工具，B 读写适配仍需接入；接入前不得开放会误标 live 的数据库 GET。服务方资料仍须独立标识来源，详见 `docs/requests/D-quote-source.md`。
+业主可读取本人需求在 draft、published、contracted、in_progress、completed 各状态下的 submitted/accepted 报价；不返回 draft/rejected 报价。存在且无可比报价为 `200 envelope(Quote[])` 空数组，不能把查询失败变成空数组。数据库或数据校验失败为 `503 DATABASE_UNAVAILABLE`，不回退 mock。显式查询所有成功和失败响应均带 `Cache-Control: private, no-store`、`Vary: Cookie`，禁止共享缓存。来源同时考虑需求及持久化报价：只有需求与所有返回报价都为 live 才标 live，混入 mock 或缺省来源即标 mock；空列表沿用已验证的需求来源。B 已在读写适配中接入来源工具，非法持久化来源会失败，不会降级为 mock。服务方资料仍独立标识来源，详见 `docs/requests/D-quote-source.md`。
 
-参数细节、错误优先级、服务端适配器约束和 D/B 后续交付见 `docs/requests/D-quote-read-protocol.md`。
+参数细节、错误优先级和服务端适配器约束见 `docs/requests/D-quote-read-protocol.md`；该请求中的历史待办以此处当前实现状态为准。
 
 ### B 可调用的业主读取入口
 
@@ -269,7 +269,7 @@ POST 在事务外计算密码，再在写事务重读凭证和角色，撤销此
 
 Cookie `ai_home_demo_session` 使用 256 位随机凭证；数据库只存摘要、账号和绑定快照，30 分钟绝对过期。HttpOnly、SameSite=Strict、Path=/，HTTPS 时 Secure。POST/DELETE 强制同源 Origin；缺失或跨站为 `403 FORBIDDEN`。POST 未开启为 `403 DEMO_AUTH_DISABLED`，坏 JSON/字段为 400，账号未准备为 `503 DEMO_ACCOUNT_UNAVAILABLE`，数据库错误为 `503 SESSION_UNAVAILABLE`。退出会撤销数据库记录后清除 cookie；关闭演示期间 reader 拒绝所有演示 cookie，同源退出仍可撤销已有会话。
 
-B 已从 `@/lib/server-auth` 导入 `readDemoVerifiedSession`，作为处理器默认的 `readSession` 和 `readTransactionSession`；后者使用内核传入的当前 `tx`。每次验证过期、撤销、账户角色及固定绑定，不复用预检快照。有效演示 cookie 的合法首次提交返回 201/mock，同键重放返回 200/mock；关闭演示、过期、退出或绑定失效仍返回 401。演示登录不是生产认证；该服务方身份也不授予业主报价比较读取权限，真实报价读取闭环尚未接通。
+B 已从 `@/lib/server-auth` 导入 `readDemoVerifiedSession`，作为处理器默认的 `readSession` 和 `readTransactionSession`；后者使用内核传入的当前 `tx`。每次验证过期、撤销、账户角色及固定绑定，不复用预检快照。有效演示 cookie 的合法首次提交返回 201/mock，同键重放返回 200/mock；关闭演示、过期、退出或绑定失效仍返回 401。演示登录不是生产认证，也不授予业主报价比较读取权限；业主须使用独立的实际业主会话读取本人需求报价，当前此链路已接通。
 
 ## GET /api/match 查询参数
 
@@ -292,7 +292,7 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 
 `Demand.source` 是输出中的可选字段，值为 `mock` 或 `live`；字段缺失表示来源未知。需求服务会为演示需求填入 `mock`，为数据库需求填入 `live`。`DemandInput` 和更新输入不接受该字段，客户端不能声明来源。整体响应的 `meta.source` 继续按整批数据标记，混入 `demo-demand` 时仍为 `mock`。
 
-`Quote.source` 已增加为输出中的可选字段，沿用公共 Source；缺省兼容旧 DTO，不能解释为 live。数据库 `Quote.source` 非空且默认 mock，普通 schema 同步会把无来源的历史记录回填 mock，固定 mock 报价也显式输出 source。`QuoteSubmissionInput` 仍拒绝 source/meta，客户端不能指定来源。B 服务端从 `@/lib/quote-policy` 导入 `parseStoredQuoteSource` 严格校验库值，再用 `summarizeQuoteSources(demand.source, returnedQuotes)` 汇总：全 live 才 live，混合/缺省 mock，空列表沿用需求来源。非法持久化值须报错，不能降级为 mock。B 的首次/重放/GET 映射仍待接入，详见 `docs/requests/D-quote-source.md` 的调用与旧库同步步骤。
+`Quote.source` 已增加为输出中的可选字段，沿用公共 Source；缺省兼容旧 DTO，不能解释为 live。数据库 `Quote.source` 非空且默认 mock，普通 schema 同步会把无来源的历史记录回填 mock，固定 mock 报价也显式输出 source。`QuoteSubmissionInput` 仍拒绝 source/meta，客户端不能指定来源。B 服务端已从 `@/lib/quote-policy` 导入 `parseStoredQuoteSource` 严格校验库值，再用 `summarizeQuoteSources(demand.source, returnedQuotes)` 汇总：全 live 才 live，混合/缺省 mock，空列表沿用需求来源。非法持久化值会报错，不能降级为 mock。首次/重放/GET 的来源映射均已接入，详见 `docs/requests/D-quote-source.md` 的调用与旧库同步步骤。
 
 ## AI 接入
 
