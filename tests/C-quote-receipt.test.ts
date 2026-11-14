@@ -39,8 +39,8 @@ test("成功提交反馈展示服务端回执各行，同名项目用编号区�
   assert.match(items[0], /现场作业.*项目编号：free-check.*单价：¥0\.00\/项.*项目金额：¥0\.00.*免费检查/s);
   assert.match(items[1], /现场作业.*项目编号：measured-work.*数量：0\.145 平方米.*单价：¥1\.00\/平方米.*项目金额：¥0\.15/s);
   assert.match(items[2], /项目编号：pending-material.*数量：2 件；单价：待确认.*项目金额：待确认（未计入已知小计）.*选型后确认\n含运送费用/s);
-  for (const text of [quote.id, quote.demandId, quote.providerId, "预计工期：3 天", "接口返回的已知金额小计：¥0.15", "接口列出的待确认事项", "已锁定本次表单", "本页不确认业主已可查看"]) assert.ok(html.includes(text), text);
-  assert.doesNotMatch(html, /本地报价预览|尚未保存|最终总价|业主已接受/);
+  for (const text of [quote.id, quote.demandId, quote.providerId, "预计工期：3 天", "接口返回的已知金额小计：¥0.15", "接口列出的待确认事项", "已锁定本次表单", "需求所属业主登录后可在该需求的报价对比页查看本次报价", "提交不代表业主已阅读、接受或接单"]) assert.ok(html.includes(text), text);
+  assert.doesNotMatch(html, /本地报价预览|尚未保存|最终总价|业主已接受|页面接线仍待完成|本页不确认业主已可查看/);
 });
 
 test("只要明细金额或单价未知就保留待确认提示，不依赖 pendingItems 完整性或把未知算零", () => {
@@ -63,7 +63,7 @@ test("回执单独显示报价逐条来源，缺省不由接口的 live 或 mock
       assert.ok(html.includes(itemSource === undefined ? "报价来源：未知（接口未提供）" : itemSource === "mock" ? "报价来源：模拟标识（mock）" : "报价来源：实时标识（live）"));
     }
   }
-  assert.match(render(), /演示身份报价已保存，不代表真实业务身份或业主已收到/);
+  assert.match(render(), /演示身份报价已保存，不代表真实业务身份。/);
 });
 
 test("空明细不编造项目；独立待确认事项保留重复名称和服务端原文", () => {

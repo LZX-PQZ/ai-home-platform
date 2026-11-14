@@ -49,6 +49,21 @@ export function findDemand(list: DemandDTO[], id: string): DemandDTO | null {
   return list.find((item) => item.id === id) ?? null;
 }
 
+export type DemandStatusFilter = DemandDTO["status"] | "all";
+
+/** 仅筛选已加载的记录，保留接口顺序及逐条来源，不向接口添加未约定的参数。 */
+export function filterDemands(
+  items: readonly DemandDTO[],
+  keyword: string,
+  status: DemandStatusFilter,
+): DemandDTO[] {
+  const query = keyword.trim().toLowerCase();
+  return items.filter((item) =>
+    (status === "all" || item.status === status)
+    && (!query || [item.id, item.city, item.description].some((value) => value.toLowerCase().includes(query))),
+  );
+}
+
 /**
  * 一条需求从「说清楚」到「住进去」的五个阶段，顺序与契约 status 一一对应。
  * 列表卡片上用这条链告诉业主「我现在走到哪一步了」，而不是只给一个状态词。
