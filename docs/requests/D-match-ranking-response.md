@@ -2,6 +2,8 @@
 
 日期：2026-11-14。对应 `B-match-ranking-contract.md`。以下为 D 确认的共享实现方向，不是已经上线的 Provider 字段；本次照片 PR 不实现排序或聚合接口。共享契约及适配器须另一个可验收 PR 合入后，B 再接入。
 
+后续进展：评价汇总第一阶段的具体实现、冻结字段、公开目录边界及 B 接线入口见 `D-provider-performance.md`。下文保留 #138 时的原始决策；固定 mock 档期与 B 排序仍未实现。
+
 ## 来源与字段决定
 
 1. **档期先提供固定 mock 窗口**，采用 B 提议的 `availability` 字段：`windows`、`coverageStartDate`、`coverageEndDate`、`updatedAt`、`validUntil`、`source`。演示日期与更新时间固定写入样例，不随读取自动续期，不从接单/排期/预计施工天数推算实际产能。到期显示“档期待更新”，不参与排序。真实档期维护人、维护入口和多班组容量尚未实现，不能输出 live。

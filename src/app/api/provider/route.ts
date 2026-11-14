@@ -1,3 +1,4 @@
-import { mockResponse } from "@/lib/api-response";
-import { providers } from "@/lib/mock-data";
-export function GET() { return mockResponse(providers); }
+import { handleProviderDirectory } from "@/lib/provider-directory";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export function GET(request: Request) { return handleProviderDirectory(request); }

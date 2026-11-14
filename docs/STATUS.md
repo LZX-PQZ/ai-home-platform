@@ -4,7 +4,7 @@
 - #132 业主接单查询、#136 全局过期照片配额修复与 #134 A 照片上传已在 main。
 - 本次补齐 `/api/inspect` 模拟返回：有效的本人照片引用返回 200/mock 和固定免责声明，提示明确未分析照片内容；上传为 live。live 分析仍 501，异常/权限失败不回退模拟成功。
 - 演示数据维持已有可重复 seed，不为 demo-owner 设置默认密码，不种入用户照片。完整可写链路使用隔离库的合成账号/图片与实际 HTTP；固定 demo-demand 保持只读。
-- B #133 回复见 `requests/D-match-ranking-response.md`：确认固定 mock 档期、已完成接单评价均分/样本数和来源隔离。Provider 新字段、聚合/档期接口及 B 接线仍需独立交付。
+- B #133 第一阶段评价汇总已提供 Provider 可选公共字段及 GET /api/provider 查询，完成接单的评价均分/样本数按 mock/live 分开，公开目录仍为六个演示服务方，无样本不补种子评分。交接与验证见 `requests/D-provider-performance.md`；固定 mock 档期、B 接线、演示报价种子与最终演示步骤待后续。
 - 本轮最终集成验证记录见 `requests/D-photo-inspection-mock.md`，包括实际测试、构建和生产 HTTP 冒烟。真实照片 AI、专业验收、生产服务方认证、付款及售后解决闭环仍未完成。
 
 以下保留的是开工骨架阶段的历史记录，当前接口以 docs/API.md 和各角色任务书为准。

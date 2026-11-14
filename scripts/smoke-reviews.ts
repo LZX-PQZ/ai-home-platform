@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { DEMO_PROVIDER_ID, OrderProgressResult, OwnerOrderResult, Review, envelope } from "../src/contracts";
+import { DEMO_PROVIDER_ID, OrderProgressResult, OwnerOrderResult, Provider, Review, envelope, type SourceDTO } from "../src/contracts";
 import { createOwnerAccount } from "../src/lib/owner-account";
 
 /** Real HTTP login, fulfillment and reviews; only the live-source quote is a synthetic storage fixture. */
@@ -24,7 +24,27 @@ export async function smokeReviews(base: string) {
     assert.equal("data" in result.payload, false); assert.equal("meta" in result.payload, false);
     assert.equal(result.response.headers.get("cache-control"), "private, no-store"); assert.match(result.response.headers.get("vary") ?? "", /Cookie/i);
   };
+  const directory = async (source?: SourceDTO) => {
+    const started = Date.now();
+    const result = await http(`/api/provider${source ? `?performanceSource=${source}` : ""}`);
+    assert.equal(result.response.status, 200); assert.equal(result.response.headers.get("cache-control"), "no-store");
+    const parsed = envelope(Provider.array()).parse(result.payload); assert.equal(parsed.meta.source, "mock");
+    assert.doesNotMatch(JSON.stringify(result.payload), /comment|ownerId|demandId|orderId|acceptedQuoteId|tokenHash/);
+    assert.equal(parsed.data.some(provider => provider.id === syntheticProviderId), false, "unpublished providers stay private");
+    for (const provider of parsed.data) {
+      assert.equal(provider.source, "mock"); assert.ok(provider.performance);
+      assert.equal(provider.performance.source, source ?? "live");
+      assert.ok(Date.parse(provider.performance.calculatedAt) >= started && Date.parse(provider.performance.calculatedAt) <= Date.now());
+    }
+    return parsed.data.map(provider => ({ id: provider.id, averageRating: provider.performance!.averageRating,
+      reviewCount: provider.performance!.reviewCount, source: provider.performance!.source }));
+  };
   try {
+    for (const query of ["?performanceSource=", "?performanceSource=bad", "?performanceSource=mock&performanceSource=live", "?providerId=provider-a"]) {
+      const invalid = await http(`/api/provider${query}`); assert.equal(invalid.response.status, 400);
+      assert.equal(invalid.response.headers.get("cache-control"), "no-store"); assert.equal(invalid.payload.error.code, "VALIDATION_ERROR");
+      assert.equal("data" in invalid.payload, false);
+    }
     for (const suffix of ["one", "two"]) owners.push((await createOwnerAccount({ login: `${prefix}-${suffix}`, name: "Synthetic review smoke", password }, db)).userId);
     await db.serviceProvider.create({ data: { id: syntheticProviderId, name: "Synthetic review provider", city: "Test", kind: "construction", tagsJson: "[]", rating: 3 } });
     const providerLogin = await http("/api/auth/demo-provider", "POST", "", { action: "login_demo" });
@@ -37,8 +57,9 @@ export async function smokeReviews(base: string) {
     };
     const cookie = await login("one"); const otherCookie = await login("two");
     let lastDemandId = "";
-    for (const source of ["mock", "live"] as const) {
-      const providerId = source === "mock" ? DEMO_PROVIDER_ID : syntheticProviderId;
+    for (const [source, providerId] of [["mock", DEMO_PROVIDER_ID], ["live", DEMO_PROVIDER_ID], ["live", syntheticProviderId]] as const) {
+      const beforeStats = await directory(source); const otherSource = source === "mock" ? "live" : "mock";
+      const beforeOtherStats = await directory(otherSource);
       const demand = await http("/api/demand", "POST", cookie, { description: "Synthetic review smoke; no real fulfillment", city: "Test", areaM2: 20,
         budgetMinCents: 0, budgetMaxCents: 10000, renovationType: "repair", desiredDays: 10 });
       assert.equal(demand.response.status, 201); const demandId = demand.payload.data.id as string; lastDemandId = demandId;
@@ -52,7 +73,7 @@ export async function smokeReviews(base: string) {
       assert.deepEqual(await readOrder(), { ok: true, data: null, meta: { source: "live" } });
       await denied(await http(orderPath, "GET", otherCookie), 404, "DEMAND_NOT_FOUND");
       await denied(await http(orderPath, "GET", providerCookie), 401, "UNAUTHENTICATED");
-      const input = { demandId, providerId, rating: 4, comment: " Synthetic review " };
+      const input = { demandId, providerId, rating: source === "mock" ? 4 : 5, comment: " Synthetic review " };
       assert.deepEqual((await http(target, "GET", cookie)).payload, { ok: true, data: [], meta: { source: "live" } });
       await denied(await http("/api/review", "POST", cookie, input), 409, "REVIEW_NOT_ALLOWED");
       let quoteId: string;
@@ -124,12 +145,26 @@ export async function smokeReviews(base: string) {
       assert.equal(result.data.comment, input.comment.trim()); assert.equal(result.data.orderId, accepted.payload.data.id);
       const stored = await db.review.findUniqueOrThrow({ where: { id: result.data.id } }); assert.deepEqual(stored, result.data);
       const replay = await http("/api/review", "POST", cookie, input); assert.equal(replay.response.status, 200); assert.deepEqual(replay.payload, saved.payload);
+      const afterStats = await directory(source);
+      const beforeStat = beforeStats.find(provider => provider.id === providerId);
+      if (beforeStat) {
+        const afterStat = afterStats.find(provider => provider.id === providerId)!;
+        assert.equal(afterStat.reviewCount, beforeStat.reviewCount + 1, "replayed review counts once");
+        if (beforeStat.reviewCount === 0) assert.equal(afterStat.averageRating, input.rating);
+      } else assert.deepEqual(afterStats, beforeStats);
+      assert.deepEqual(await directory(otherSource), beforeOtherStats, "sources never mix");
+      assert.deepEqual(await directory(), await directory("live"), "default is live, even when only mock samples exist");
       const read = await http(target, "GET", cookie); assert.equal(read.response.status, 200);
       assert.deepEqual(read.payload, { ok: true, data: [result.data], meta: { source } });
-      await denied(await http("/api/review", "POST", cookie, { ...input, rating: 5 }), 409, "REVIEW_ALREADY_EXISTS");
+      await denied(await http("/api/review", "POST", cookie, { ...input, rating: input.rating === 5 ? 4 : 5 }), 409, "REVIEW_ALREADY_EXISTS");
       assert.equal(await db.review.count({ where: { demandId } }), 1);
       await db.review.update({ where: { id: result.data.id }, data: { source: "broken" } });
       await denied(await http(target, "GET", cookie), 503, "REVIEW_UNAVAILABLE");
+      if (providerId === DEMO_PROVIDER_ID) for (const selected of ["live", "mock"]) {
+        const corrupt = await http(`/api/provider?performanceSource=${selected}`);
+        assert.equal(corrupt.response.status, 503); assert.equal(corrupt.payload.error.code, "PROVIDER_UNAVAILABLE");
+        assert.equal("data" in corrupt.payload, false); assert.equal("meta" in corrupt.payload, false);
+      }
       await db.review.update({ where: { id: result.data.id }, data: { source } });
       assert.equal((await db.demandOrder.findUniqueOrThrow({ where: { id: demandId } })).status, "completed");
       assert.equal((await db.serviceOrder.findUniqueOrThrow({ where: { demandId } })).status, "completed");
@@ -142,6 +177,7 @@ export async function smokeReviews(base: string) {
     await denied(await http(`/api/order?demandId=${encodeURIComponent(lastDemandId)}`, "GET", cookie), 401, "UNAUTHENTICATED");
     assert.equal((await http("/api/auth/owner", "DELETE", otherCookie)).response.status, 200);
     console.log("履约→评价生产 HTTP 通过：实际登录/演示报价/接受/业主 GET 接单取得编号/开工/依赖工序推进/完工/评价，需求与接单始终一致，历史排期保留；无直接改库伪造完工。mock/live、空接单、越权/旧版/跳级/退出拒绝通过。");
+    console.log("服务方评价汇总生产 HTTP 通过：公开目录、均分/样本数、mock/live 分开、默认 live 不回退、重放计一次、坏来源 503；不公开评论和关联 ID，不扩大目录。");
   } finally {
     try {
       if (providerCookie) await http("/api/auth/demo-provider", "DELETE", providerCookie);

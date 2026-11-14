@@ -39,6 +39,8 @@ macOS / Linux：使用 npm 而非 npm.cmd，使用 cp .env.example .env。
 
 评价后端已提供 `POST /api/review` 和 `GET /api/review?demandId=…`，更新后运行 `npm.cmd run db:setup` 同步评价接单关联与来源列，再重启；历史评价保留，不自动补造成真实接单评价。仅所属业主可对需求与接单均已完成的实际关系提交一次评价，来源沿用接单，mock 不升级。详见 [评价交接](docs/requests/D-review-create.md)。
 
+服务方公开目录新增评价汇总：`GET /api/provider?performanceSource=live|mock`，缺省 live。返回已完成接单的业主评价均分、样本数和计算时间，mock/live 分开；没有所选来源样本时返回 null/0，不用种子评分补齐。六个演示服务方基础资料仍 mock，整体来源仍 mock，每条评价汇总保留自己的来源。只公开统计，不公开评论或业主/接单编号；坏关联或存储错误返回 503。无需新依赖或数据库变更，B 的排序展示和固定 mock 档期待后续，见 [汇总交接](docs/requests/D-provider-performance.md)。
+
 履约后端新增 `POST /api/order/progress`，业主明确确认后，需求与接单在同一事务中“已签约→施工中→已完成”。有排期时按依赖逐项开工/确认完成，保留历史版本，全部完成才允许整单完成；无排期也须显式确认。运行 `npm.cmd run db:setup` 同步操作记录表后重启。生产 HTTP 冒烟已通过正常接口推进到评价，不再直接改库伪造完工。A/C 的按钮及评价表单仍待接线，专业验收、返工/阻塞和付款联动未实现。详见 [履约交接](docs/requests/D-order-progress.md)。
 
 ## 接单数据同步

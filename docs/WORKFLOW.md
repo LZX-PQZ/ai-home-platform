@@ -39,6 +39,8 @@ node scripts/smoke.mjs
 
 履约/评价冒烟创建并清理随机合成账号，经实际 HTTP 登录、演示服务方报价、接受报价、创建排期、开工/工序完成/整单完成、提交和读取评价，同时检查服务方接单列表和详情状态。不会直接改库伪造 completed；仅 live 来源的报价仍为存储夹具，因为生产服务方认证尚未实现。分别验证 mock/live 不变、未完成/跨归属/旧版本/跳级/坏数据/退出拒绝。不能在真实用户数据库上运行这些夹具。
 
+同一冒烟还读取公开服务方评价汇总：默认 live、显式 mock/live 分离、同内容重放只计一次、坏来源 503、目录不扩大、无评论或关联 ID。live 来源报价仍仅为合成存储夹具；基础服务方目录与演示认证保持 mock。
+
 runner 只对本次服务和冒烟子进程设置 `DEMO_AUTH_ENABLED=true` 与 `AI_MODE=mock`，不修改 .env 或正常启动配置。直接运行 smoke.mjs 时需给测试服务及冒烟进程均显式开启该演示开关；固定 demo-demand 仍只读，写链路使用新建的合成业主需求。
 
 也可让 runner 自动启动并停止独立端口的生产服务。PowerShell 在同一终端设置 `$env:DATABASE_URL = "file:./smoke.db"`、`$env:AI_MODE = "mock"`，然后依次运行 `npm.cmd run db:setup`、`npm.cmd run build`、`node scripts/run-production-smoke.mjs`。macOS/Linux 先 `export DATABASE_URL="file:./smoke.db" AI_MODE=mock`，再使用 `npm` 执行相同命令。使用专门测试库，保留已有 `.env`。

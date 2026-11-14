@@ -27,7 +27,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | POST /api/demand | DemandInput → Demand | D | 验证业主会话后写入本人需求，published/live；无会话 401，存储故障 503 |
 | GET /api/demand/[id] | Demand | D | 精确 ID 查询；published 公开，非公开限所属业主或有效服务方的实际接单；不可访问/不存在统一 404 |
 | POST /api/demand/chat | ChatResult | D | 读取 ChatInput；`AI_MODE=mock` 返回 mock，`AI_MODE=live` 调用服务端 LLM 网关并返回 live |
-| GET /api/provider | Provider[] | D | 固定 mock |
+| GET /api/provider[?performanceSource=live\|mock] | ProviderQuery → Provider[] | D | 固定公开目录的基础资料 mock；已完成接单评价汇总按所选来源查询，缺省 live，无样本 null/0 |
 | GET /api/provider/quotes | Quote[] | D | 同一事务验证服务方会话并只查本人报价；当前演示身份整体标 mock，不代表接单 |
 | POST /api/order | OrderAcceptInput → OrderSummary | D | 所属业主接受已提交报价，原子建立单一接单关系；首次 201，同报价重放 200，保留报价来源 |
 | GET /api/order?demandId=… | OrderQuery → OwnerOrderResult | D | 仅所属业主读取实际接单；OrderSummary 或 null，不重放接受报价，不写业务数据 |
@@ -46,6 +46,16 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/review?demandId=<id> | Review[] | D | 仅所属业主读取，必须显式 demandId；无公开演示入口，坏关联不回退空数组 |
 | POST /api/inspect/images | multipart InspectionUploadFields + images → InspectionUploadResult | D | 当前业主上传本人需求的 JPEG/PNG，真实解码去元数据并原子保存，201/live，引用 24 小时有效 |
 | POST /api/inspect | PhotoInspectionInput → PhotoInspectionResult | D | 同源、业主及已上传引用校验；mock 模式 200/mock 固定模拟提示，live 模式仍 501，真实 AI 分析未接通 |
+
+## 服务方目录与评价汇总
+
+`GET /api/provider` 只接受可选且唯一的 `performanceSource=live|mock`，缺省 live；空值、未知值、重复和其他参数 400/VALIDATION_ERROR。保持原六个固定演示服务方公开目录，不公开任意数据库服务方。Provider 新增可选 `source` 和可选/可空 `performance`，旧 DTO 兼容；本接口始终给出明确的汇总。基础资料 source=mock，故整体 meta.source=mock；performance.source 独立表示选择的统计口径，不能用整体来源覆盖逐维度来源。
+
+公共 `ProviderPerformance` 为 `{ basis: 'completed_order_review_average', averageRating: number | null, reviewCount: number, calculatedAt: ISO8601, source }`。仅统计需求与实际接单均 completed、同需求/业主/服务方且 accepted 报价关系一致、评价/接单/报价来源一致的绑定评价。每接单最多一个样本，均分四舍五入到两位（1–5），无样本明确 null/0；不使用旧 Provider.rating 或其他来源补齐。`calculatedAt` 只要求 ISO 8601 datetime 格式，不用浏览器当前时间判断未来，以容忍客户端时钟偏差。无 orderId 旧评价不在口径内；一致但未完成的关系排除；错绑/坏来源/非法评分/存储异常返回整批 503/PROVIDER_UNAVAILABLE，不伪装空样本。公开响应没有评论、业主、需求、接单或评价 ID。
+
+服务端 `readProviderDirectory({ performanceSource: 'live' | 'mock' })` 在 Serializable 事务内生成同一快照时间并返回公共信封，默认参数为 live；HTTP 与 B 后续 `/api/match` 可复用，抛错为 `ProviderDirectoryError`。浏览器使用 `apiGet('/api/provider?performanceSource=mock', Provider.array())`，不要导入服务端适配器。所有 HTTP 响应 no-store，不依赖 cookie、不写库或更新服务方 rating。当前任一查询范围内的坏评价或坏关联会让整个目录返回 503：C 的需求页和 B 的匹配页会无法完成目录加载；B 的报价对比页会保留报价，但服务方名称与来源提示待确认。此指标是业主评价均分，不是准时率、质量认证或信用分；少于 3 个样本由调用方显示样本少。
+
+B 排序/来源展示和 `/api/match` 新数据接线仍由 B 后续完成；本次只交付共享契约与目录接口。固定 mock 档期、报价种子调整和最终演示步骤另做。详见 `docs/requests/D-provider-performance.md`。
 
 ## 接受报价与本人接单
 
