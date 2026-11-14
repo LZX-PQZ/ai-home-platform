@@ -17,6 +17,11 @@ export function canReadAcrossOwner(file, target, clientReachable = false) {
   return !clientReachable && (quoteServer || dServer);
  }
  const matchCanReadDemand = (file.startsWith("src/lib/match/") || file.startsWith("src/app/api/match/")) && target === "src/lib/demand.ts";
+ const matchCanReadProviderDirectory = (file.startsWith("src/lib/match/") || file.startsWith("src/app/api/match/")) && target === "src/lib/provider-directory.ts";
+ if (target === "src/lib/provider-directory.ts") {
+  const dServer = ownerOf(file) === "D" && (file.startsWith("src/lib/") || file.startsWith("src/app/api/"));
+  return !clientReachable && (matchCanReadProviderDirectory || dServer);
+ }
  const quoteCanReadDemand = (file === "src/lib/quote-engine.ts" || file.startsWith("src/lib/quote-engine/") || file.startsWith("src/app/api/quote/")) && target === "src/lib/demand.ts";
  const serverOnlyDatabase = target === "src/lib/prisma.ts";
  const serverCanReadDatabase = file.startsWith("src/app/api/") || file.startsWith("src/lib/") || file.startsWith("prisma/");

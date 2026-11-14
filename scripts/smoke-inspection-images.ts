@@ -20,7 +20,7 @@ export async function smokeInspectionImages(base: string, mode: "mock" | "live" 
     const payload = await response.json();
     return { response, payload };
   };
-  const checkedInspection = (result: Awaited<ReturnType<typeof http>>, demandId: string, refs: string[], started: number) => {
+  const checkedInspection = (result: Awaited<ReturnType<typeof http>>, demandId: string, refs: string[]) => {
     assert.equal(result.response.headers.get("cache-control"), "private, no-store");
     assert.match(result.response.headers.get("vary") ?? "", /Cookie/i);
     if (mode === "live") {
@@ -35,7 +35,9 @@ export async function smokeInspectionImages(base: string, mode: "mock" | "live" 
     assert.equal(parsed.data.disclaimer, PHOTO_INSPECTION_DISCLAIMER);
     assert.deepEqual(parsed.data.findings.map(finding => finding.imageRef), refs);
     for (const finding of parsed.data.findings) assert.match(finding.message, /【模拟】未分析照片内容/);
-    assert.ok(parsed.data.reviewedAt && Date.parse(parsed.data.reviewedAt) >= started && Date.parse(parsed.data.reviewedAt) <= Date.now());
+    // The result must include a valid server timestamp, independent of the smoke process clock.
+    assert.ok(parsed.data.reviewedAt, "mock inspection must include reviewedAt");
+    assert.ok(Number.isFinite(Date.parse(parsed.data.reviewedAt)), "reviewedAt must be a valid timestamp");
   };
   try {
     for (const suffix of ["one", "two"]) {
@@ -67,10 +69,9 @@ export async function smokeInspectionImages(base: string, mode: "mock" | "live" 
     const persisted = await db.inspectionImage.findUniqueOrThrow({ where: { id: imageRef } });
     assert.equal(persisted.ownerId, owners[0]); assert.equal(persisted.demandId, demandId);
     const metadata = await sharp(persisted.bytes).metadata(); assert.equal(metadata.exif, undefined); assert.equal(metadata.orientation, undefined);
-    const started = Date.now();
     const demandBefore = await db.demandOrder.findUniqueOrThrow({ where: { id: demandId } });
     const inspection = await http("/api/inspect", "POST", cookie, { demandId, imageRefs: [imageRef] });
-    checkedInspection(inspection, demandId, [imageRef], started);
+    checkedInspection(inspection, demandId, [imageRef]);
     assert.deepEqual(await db.demandOrder.findUniqueOrThrow({ where: { id: demandId } }), demandBefore);
     assert.deepEqual(await db.inspectionImage.findUniqueOrThrow({ where: { id: imageRef } }), persisted);
     for (const [target, credential, ref, code] of [[demandId, otherCookie, imageRef, "DEMAND_NOT_FOUND"],
@@ -99,7 +100,7 @@ export async function smokeInspectionImages(base: string, mode: "mock" | "live" 
     assert.equal(await db.inspectionImage.count({ where: { id: otherRefs[0] } }), 0);
     assert.deepEqual(await db.inspectionImage.findUniqueOrThrow({ where: { id: otherRefs[1] } }), retained);
     const activeOther = await http("/api/inspect", "POST", otherCookie, { demandId: otherDemandId, imageRefs: [otherRefs[1]] });
-    checkedInspection(activeOther, otherDemandId, [otherRefs[1]], started);
+    checkedInspection(activeOther, otherDemandId, [otherRefs[1]]);
     const removedOther = await http("/api/inspect", "POST", otherCookie, { demandId: otherDemandId, imageRefs: [otherRefs[0]] });
     assert.equal(removedOther.response.status, 404); assert.equal(removedOther.payload.error.code, "IMAGE_NOT_FOUND");
     assert.equal((await http("/api/auth/owner", "DELETE", cookie)).response.status, 200);
