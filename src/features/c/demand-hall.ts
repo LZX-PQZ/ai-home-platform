@@ -8,6 +8,20 @@ export const renovationLabels: Record<DemandDTO["renovationType"], string> = {
   repair: "维修",
 };
 
+export type DemandHallFilters = Readonly<{
+  keyword: string;
+  renovationType: "all" | DemandDTO["renovationType"];
+}>;
+export const defaultDemandHallFilters: DemandHallFilters = { keyword: "", renovationType: "all" };
+export const demandHallRenovationOptions = ["all", ...Demand.shape.renovationType.options] as const;
+
+export function filterHallDemands(demands: readonly DemandDTO[], filters: DemandHallFilters) {
+  const keyword = filters.keyword.trim().toLowerCase();
+  return demands.filter(demand => demand.status === "published"
+    && (filters.renovationType === "all" || demand.renovationType === filters.renovationType)
+    && (!keyword || [demand.id, demand.city, demand.description].some(value => value.toLowerCase().includes(keyword))));
+}
+
 export async function loadDemandHall() {
   const response = await apiGet("/api/demand", Demand.array());
   return {

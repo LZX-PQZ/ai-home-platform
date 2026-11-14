@@ -3,23 +3,34 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Button, C } from "@/components/ui";
 import { DemandSource } from "./DemandSource";
 import { DemandAccessRecovery } from "./DemandAccessRecovery";
 import {
+  defaultDemandHallFilters,
   demandHallFailureState,
+  demandHallRenovationOptions,
+  filterHallDemands,
   formatBudget,
   loadDemandHall,
   renovationLabels,
   type DemandHallState,
+  type DemandHallFilters,
 } from "./demand-hall";
 
 export function DemandHallContent({
   state,
   onReload,
+  filters = defaultDemandHallFilters,
+  onFiltersChange = () => {},
 }: {
   state: DemandHallState;
   onReload: () => void;
+  filters?: DemandHallFilters;
+  onFiltersChange?: (filters: DemandHallFilters) => void;
 }) {
+  const visibleDemands = state.status === "ready" ? filterHallDemands(state.response.data, filters) : [];
+  const hasFilters = filters.keyword.length > 0 || filters.renovationType !== "all";
   return (
     <section aria-labelledby="demand-hall-title">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -42,7 +53,7 @@ export function DemandHallContent({
       </div>
 
       <p className="text-sm text-slate-600">
-        当前为服务方演示入口，模拟数据仅用于演示，数据来源以加载后的标识为准。角色导航不代表登录鉴权。演示服务方可对非演示的已发布需求提交报价，真实接单功能仍待接入。
+        当前为服务方演示入口，模拟数据仅用于演示，数据来源以加载后的标识为准。角色导航不代表登录鉴权。演示服务方可对非演示的已发布需求提交报价，接单关系可在“我的接单”查看；生产服务方认证尚未接入。
       </p>
 
       <aside aria-label="需求大厅登录提示" className="my-4 rounded-lg border border-line bg-canvas p-4 text-sm text-ink-2">
@@ -76,18 +87,49 @@ export function DemandHallContent({
             />
             <p className="mt-2 text-sm text-slate-600">
               接口来源标记针对整批返回数据；本页筛选后仅展示已发布需求。各条需求来源以卡片标识为准，未提供时显示未知；模拟需求不代表真实客户需求。
-              当前共 {state.response.data.length} 条。
+              本次读取的已发布需求共 {state.response.data.length} 条。
             </p>
           </div>
+
+          <section aria-labelledby="demand-hall-filters-title" className={`${C.card} space-y-4`}>
+            <h2 id="demand-hall-filters-title" className={C.sectionTitle}>筛选已发布需求</h2>
+            <p className={`${C.pageSub} !mb-0`}>只筛选本次已读取的需求，不扩大当前登录身份的可见范围。筛选不重新请求接口；刷新保留条件并按最新结果重新筛选。</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="min-w-0">
+                <label htmlFor="demand-hall-keyword" className={`${C.label} mb-2`}>关键词</label>
+                <input id="demand-hall-keyword" type="search" className={`${C.input} w-full min-w-0`}
+                  value={filters.keyword} aria-describedby="demand-hall-keyword-hint"
+                  onChange={event => onFiltersChange({ ...filters, keyword: event.target.value })} />
+                <p id="demand-hall-keyword-hint" className={`${C.meta} mt-2 !mb-0`}>匹配需求编号、城市或描述；忽略首尾空格和字母大小写，按原文连续匹配。</p>
+              </div>
+              <div className="min-w-0">
+                <label htmlFor="demand-hall-renovation" className={`${C.label} mb-2`}>改造类型</label>
+                <select id="demand-hall-renovation" className={`${C.input} w-full min-w-0`} value={filters.renovationType}
+                  onChange={event => onFiltersChange({ ...filters, renovationType: demandHallRenovationOptions.find(value => value === event.target.value) ?? "all" })}>
+                  {demandHallRenovationOptions.map(value => <option key={value} value={value}>{value === "all" ? "全部类型" : renovationLabels[value]}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p role="status" aria-live="polite" className={`${C.pageSub} !mb-0`}>当前显示 {visibleDemands.length} / {state.response.data.length} 条已发布需求。</p>
+              {hasFilters && <Button type="button" variant="secondary" size="sm" onClick={() => onFiltersChange(defaultDemandHallFilters)}
+                className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">清除筛选</Button>}
+            </div>
+          </section>
 
           {state.response.data.length === 0 ? (
             <div className="card">
               <h2>暂无已发布需求</h2>
               <p>当前没有可展示的需求，请稍后刷新。</p>
             </div>
+          ) : visibleDemands.length === 0 ? (
+            <div className="card" role="status">
+              <h2>没有符合筛选条件的需求</h2>
+              <p>本次仍有已发布需求，可调整关键词、改造类型或清除筛选查看。</p>
+            </div>
           ) : (
             <ul aria-label="已发布需求列表" className="grid gap-x-6 md:grid-cols-2">
-              {state.response.data.map((demand) => (
+              {visibleDemands.map((demand) => (
                 <li key={demand.id} className="card min-w-0">
                   <article aria-labelledby={`demand-${demand.id}`}>
                     <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -147,6 +189,7 @@ export function DemandHallContent({
 export function DemandHall() {
   const [state, setState] = useState<DemandHallState>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
+  const [filters, setFilters] = useState<DemandHallFilters>(defaultDemandHallFilters);
 
   useEffect(() => {
     let active = true;
@@ -168,5 +211,5 @@ export function DemandHall() {
     setReloadKey((key) => key + 1);
   }
 
-  return <DemandHallContent state={state} onReload={reload} />;
+  return <DemandHallContent state={state} onReload={reload} filters={filters} onFiltersChange={setFilters} />;
 }
