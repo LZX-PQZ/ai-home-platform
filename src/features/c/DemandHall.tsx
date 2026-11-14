@@ -41,8 +41,13 @@ export function DemandHallContent({
       </div>
 
       <p className="text-sm text-slate-600">
-        当前为服务方演示入口，模拟数据仅用于演示，数据来源以加载后的标识为准。角色导航不代表登录鉴权。报价提交和接单功能待接入。
+        当前为服务方演示入口，模拟数据仅用于演示，数据来源以加载后的标识为准。角色导航不代表登录鉴权。演示服务方可对非演示的已发布需求提交报价，真实接单功能仍待接入。
       </p>
+
+      <aside aria-label="需求大厅登录提示" className="my-4 rounded-lg border border-line bg-canvas p-4 text-sm text-ink-2">
+        <p className="!mb-2">业主登录优先于服务方身份。同一浏览器已登录业主时，大厅仅显示该业主自己的已发布需求；切换角色导航不会退出登录。</p>
+        <p className="!mb-0">演示公开需求大厅前，请先点击“退出业主登录”，再刷新需求（加载失败时点击“重新加载”）；或用两个浏览器分别演示业主和服务方。</p>
+      </aside>
 
       {state.status === "loading" && (
         <div className="card" role="status" aria-live="polite">
