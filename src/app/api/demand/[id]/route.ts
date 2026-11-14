@@ -1,6 +1,7 @@
 import { DemandIdParams } from "@/contracts";
 import { dataResponse } from "@/lib/api-response";
-import { deleteDemand, findDemand } from "@/lib/demand";
+import { findDemand } from "@/lib/demand";
+import { handleDemandDelete } from "@/lib/demand-delete";
 import { handleDemandUpdate } from "@/lib/demand-update";
 
 export const dynamic = "force-dynamic";
@@ -32,34 +33,6 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   return handleDemandUpdate(request, params.id);
 }
 
-export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
-  const parsedId = parseDemandId(params);
-  if (!parsedId.success) {
-    return Response.json({ ok: false, error: { code: "VALIDATION_ERROR", message: "需求 ID 不能为空。" } }, { status: 400 });
-  }
-
-  try {
-    const result = await deleteDemand(parsedId.data.id);
-    if (result.kind === "not-found") {
-      return Response.json({ ok: false, error: { code: "DEMAND_NOT_FOUND", message: "需求不存在。" } }, { status: 404 });
-    }
-    if (result.kind === "invalid-state") {
-      return Response.json({ ok: false, error: { code: "INVALID_STATE", message: "当前状态的需求不可删除。" } }, { status: 409 });
-    }
-    if (result.kind === "demo-read-only") {
-      return Response.json({ ok: false, error: { code: "DEMO_DEMAND_READ_ONLY", message: "演示需求只读，不能删除。" } }, { status: 409 });
-    }
-    if (result.kind === "has-related-records") {
-      return Response.json(
-        { ok: false, error: { code: "DEMAND_HAS_RELATED_RECORDS", message: "需求已有报价、排期、付款、评价或工单记录，不能删除。" } },
-        { status: 409 },
-      );
-    }
-    return dataResponse(result.data, result.source);
-  } catch {
-    return Response.json(
-      { ok: false, error: { code: "DATABASE_UNAVAILABLE", message: "需求暂时无法删除。" } },
-      { status: 503 },
-    );
-  }
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  return handleDemandDelete(request, params.id);
 }
