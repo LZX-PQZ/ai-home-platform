@@ -109,6 +109,20 @@ assert.equal(chat.status, 200);
 assert.equal((await chat.json()).data.ready, false);
 const bad = await fetch(base + '/api/demand/chat', { method:'POST', body:'invalid json' });
 assert.equal(bad.status, 400);
+// Revisions require an actual owner session and same-origin explicit confirmation.
+for (const [headers, status, code] of [
+ [{}, 403, 'FORBIDDEN'],
+ [{ Origin: new URL(base).origin }, 401, 'UNAUTHENTICATED'],
+ [{ Origin: new URL(base).origin, Cookie: '__Host-ai_home_owner_session=invalid' }, 401, 'UNAUTHENTICATED'],
+]) {
+ const response = await fetch(base + '/api/schedule', { method: 'PUT', headers });
+ assert.equal(response.status, status, 'schedule revision authorization');
+ assert.equal(response.headers.get('cache-control'), 'private, no-store');
+ assert.ok((response.headers.get('vary') ?? '').split(',').some(value => value.trim().toLowerCase() === 'cookie'));
+ const body = await response.json();
+ assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
+}
+console.log('3 个 PUT 排期修订鉴权场景通过（无同源、匿名与失效凭证均拒绝）。');
 const demandBody = JSON.stringify({
  description: '冒烟测试需求', city: '深圳', areaM2: 60,
  budgetMinCents: 3000000, budgetMaxCents: 5000000,

@@ -54,6 +54,13 @@ src/contracts/、prisma/、src/lib 中基础设施、除 match/quote 外的 src/
 
 需求 PUT/DELETE 和 GET 的鉴权已单独记录在上方，POST 由 #95 处理。来源实现及数据库同步见 `docs/requests/D-quote-source.md`。
 
+## 未开工排期确认修订（2026-11-14）
+
+- [x] PUT /api/schedule：本人 published/contracted 需求的最新计划全部 pending、未分配责任方时，显式 confirmed=true、校验 baseVersion 后追加下一版；旧版保留且可读，事务内重验、并发保护与失败回滚。见 `docs/requests/D-schedule-revision.md`。不依赖工单 PR #116。
+- [ ] A 的修订表单/差异展示、变更原因/审批审计记录、服务方确认、施工中异常变更与验收仍未实现；业主确认保存不代表他人审批或施工承诺。
+
+未开工手工计划的版本追加已完成；下方变更申请/审批及其版本流转待办仍指完整审批流程。
+
 ## 排期写入与后续业务（2026-11-14）
 
 - [x] POST /api/schedule 创建首版手工计划：真实业主为本人 published/contracted 且无排期的需求创建 v1；同源、事务内身份/归属重验、依赖图与工期校验、重复/并发保护、输出失败回滚。持久化结果 live，初始工序均 pending，无责任服务方；不是 AI 排期或施工承诺。见 `docs/requests/D-schedule-create.md`。

@@ -141,10 +141,11 @@ export const ScheduleCreateTaskInput = ScheduleTask.pick({
   startDay: DatabaseInt.nonnegative(), durationDays: DatabaseInt.positive(),
   dependsOn: z.array(ScheduleTaskId).max(99),
 }).strict();
-export const ScheduleCreateInput = z.object({
+const SchedulePlanInput = z.object({
   demandId: ScheduleQuery.shape.demandId,
   tasks: z.array(ScheduleCreateTaskInput).min(1).max(100),
-}).strict().superRefine(({ tasks }, context) => {
+}).strict();
+function validateSchedulePlan({ tasks }: z.infer<typeof SchedulePlanInput>, context: z.RefinementCtx) {
   if (tasks.length > 100) return; // The array limit already fails; keep graph traversal bounded.
   const byId = new Map(tasks.map(task => [task.id, task]));
   const seen = new Set<string>();
@@ -174,7 +175,12 @@ export const ScheduleCreateInput = z.object({
     return valid;
   }
   if (tasks.some(task => !acyclic(task.id))) context.addIssue({ code: z.ZodIssueCode.custom, path: ["tasks"], message: "工序依赖不能成环" });
-});
+}
+export const ScheduleCreateInput = SchedulePlanInput.superRefine(validateSchedulePlan);
+export const ScheduleRevisionInput = SchedulePlanInput.extend({
+  baseVersion: DatabaseInt.positive().max(SQLITE_INT_MAX - 1),
+  confirmed: z.literal(true),
+}).strict().superRefine(validateSchedulePlan);
 export const Payment = z.object({
   id: Id, demandId: Id, stage: z.string(), amountCents: Money,
   status: z.enum(["pending", "confirmed_demo"]), simulated: z.literal(true),
@@ -244,6 +250,7 @@ export type QuoteSubmissionInputDTO = z.infer<typeof QuoteSubmissionInput>;
 export type ScheduleDTO = z.infer<typeof Schedule>;
 export type ScheduleQueryDTO = z.infer<typeof ScheduleQuery>;
 export type ScheduleCreateInputDTO = z.infer<typeof ScheduleCreateInput>;
+export type ScheduleRevisionInputDTO = z.infer<typeof ScheduleRevisionInput>;
 export type PaymentDTO = z.infer<typeof Payment>;
 export type PaymentActionInputDTO = z.infer<typeof PaymentActionInput>;
 export type TicketDTO = z.infer<typeof Ticket>;

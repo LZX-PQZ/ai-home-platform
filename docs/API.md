@@ -34,6 +34,7 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | POST /api/quote | QuoteSubmissionInput → Quote | B | 已接演示会话；合法首次提交 201/mock，同键同摘要重放 200/mock；无有效会话 401 |
 | GET /api/schedule[?demandId=<id>&version=<n>] | Schedule | D | 无参数或固定 demo-demand 为公开种子排期 mock；其他需求验证业主会话及归属后读取最新/指定版本 |
 | POST /api/schedule | ScheduleCreateInput → Schedule | D | 当前业主为本人 published/contracted 且无排期的需求创建 v1；201/live，工序均 pending 且责任服务方为空 |
+| PUT /api/schedule | ScheduleRevisionInput → Schedule | D | 业主确认修订本人未开工且未分配责任方的计划，校验基准版本后追加下一版，201/live；旧版保留 |
 | GET /api/payment | Payment[] | D | 模拟节点列表；simulated 必须 true |
 | GET /api/ticket[?demandId=<id>] | Ticket[] | D | 无参数/精确 demo-demand 返回固定 mock；其他需求仅所属业主可读 |
 | POST /api/ticket | TicketCreateInput → Ticket | D | 当前业主为本人已发布及后续状态需求创建 open 工单，责任方 null；201/live |
@@ -68,7 +69,19 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 
 无/失效/撤销/重复/过期业主 cookie 为 401，只有演示服务方 cookie 同样 401，当前账户角色不符或同源失败为 403；非本人和不存在需求统一 404/DEMAND_NOT_FOUND。确认归属后，固定演示需求 409/DEMO_DEMAND_READ_ONLY，不可创建状态 409/INVALID_STATE，已有任何版本 409/SCHEDULE_ALREADY_EXISTS。重复请求不覆盖、不追加版本，应通过 GET 核实；事务/数据库冲突或坏输出为中性的 503/SCHEDULE_UNAVAILABLE，不宣称一定未保存。所有响应 private, no-store、Vary: Cookie；坏 JSON 400/INVALID_JSON，非法字段、正文超限或依赖 400/VALIDATION_ERROR。
 
-A 可用 `apiPost('/api/schedule', input, Schedule)` 保存后刷新现有 GET。创建表单、排期变更审批、版本追加、任务状态推进、责任方分配与阶段验收尚未交付；现有变更/验收按钮不能当作创建入口。完整字段及接入说明见 `docs/requests/D-schedule-create.md`。
+A 可用 `apiPost('/api/schedule', input, Schedule)` 保存后刷新现有 GET。未开工计划的确认修订与版本追加见下节 PUT；创建表单、施工中变更审批、任务状态推进、责任方分配与阶段验收尚未交付。现有变更/验收按钮不能当作创建入口。首版字段及接入说明见 `docs/requests/D-schedule-create.md`。
+
+## PUT /api/schedule：确认修订未开工计划
+
+新增公共 `ScheduleRevisionInput`：demandId、baseVersion、confirmed、tasks。baseVersion 是当前最新版本，必须为小于 SQLite Int 上限的正整数；confirmed 必须显式 true。其余字段和依赖图复用首版创建规则，完整提交 1–100 个工序；请求体上限 64 KiB，拒绝查询参数及任何额外字段（身份、目标 version、状态、责任方、来源等）。旧版工序可以在新版增删/改名/调整工期，旧版记录不变。
+
+同源及实际业主预检通过后，事务外读取正文；Serializable 写事务重验同一身份、当前账号角色、需求归属/状态与最新排期。仅本人非演示 published/contracted 需求，且最新计划全部 pending、responsibleProviderId=null 可修订；已开工/完成/阻塞或已有责任方的工序不能被重置。最新计划同时经过公共字段、版本范围与依赖图校验，坏数据返回 503，不能以修订掩盖。
+
+baseVersion 与最新版本不符返回 409/SCHEDULE_VERSION_CONFLICT；页面必须刷新比较并重新确认，不能自动换版本重发。最终写入再次限定需求归属/状态、原计划 ID/版本/内容及无更新版本，只追加下一版，不覆盖历史；输出校验失败回滚。同基准版本并发最多成功一个新版，其余 409 或 503。成功 201 envelope(Schedule)/live，version=baseVersion+1，工序均 pending 且责任方为空，需求状态不变；live 仅表示保存手工计划，confirmed 不代表他人审批或验收。
+
+无/坏/重复/过期/撤销业主 cookie 或仅服务方 cookie 返回 401；角色不符、身份中途变化或同源失败 403；他人与不存在需求统一 404/DEMAND_NOT_FOUND。本人需求无初版为 404/SCHEDULE_NOT_FOUND；本人演示需求 409/DEMO_DEMAND_READ_ONLY，非法需求状态 409/INVALID_STATE，最新计划已有施工状态/责任方 409/SCHEDULE_REVISION_NOT_ALLOWED。JSON/字段错误 400，数据库、事务竞争或坏输出为中性 503/SCHEDULE_UNAVAILABLE，需 GET 核实结果。所有响应 private, no-store、Vary: Cookie。
+
+调用使用 `apiPut('/api/schedule', input, Schedule)`，现有 GET 仍支持最新及指定历史版本。本次未实现 A 的修订表单/差异展示、变更原因/审批审计记录、施工中异常变更、服务方确认、任务状态推进或验收。完整字段和验收见 `docs/requests/D-schedule-revision.md`。
 
 ## GET /api/provider/quotes
 
