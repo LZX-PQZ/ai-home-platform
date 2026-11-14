@@ -8,6 +8,7 @@ import { loadQuoteComparison, quoteLoadErrorMessage, QuoteDemandNotFound } from 
 import { isFixedDemoQuote, loadQuotePageData } from "@/features/b/load-demo-quotes";
 import { quoteReadFeedback } from "@/features/b/quote-feedback";
 import { subscribeQuotePageRefresh } from "@/features/b/quote-page-refresh";
+import { QuoteAcceptance } from "@/features/b/QuoteAcceptance";
 
 type QuotePageState =
   | { status: "loading" }
@@ -55,8 +56,15 @@ export function QuotePageContent({ state, retry, demo = false }: { state: QuoteP
 }
 
 export function QuotePage({ demandId }: { demandId: string }) {
+  return <QuotePageSession key={demandId} demandId={demandId} />;
+}
+
+function QuotePageSession({ demandId }: { demandId: string }) {
   const demo = isFixedDemoQuote(demandId);
-  const [attempt, retry] = React.useReducer((value: number) => value + 1, 0);
+  const [attempt, incrementAttempt] = React.useReducer((value: number) => value + 1, 0);
+  const writeBusy = React.useRef(false);
+  const retry = React.useCallback(() => { if (!writeBusy.current) incrementAttempt(); }, []);
+  const onBusy = React.useCallback((busy: boolean) => { writeBusy.current = busy; }, []);
   const [result, setResult] = React.useState<{ id: string; attempt: number; state: QuotePageState } | null>(null);
   React.useEffect(() => subscribeQuotePageRefresh(retry, window, document), [retry]);
   React.useEffect(() => {
@@ -74,5 +82,8 @@ export function QuotePage({ demandId }: { demandId: string }) {
 
   // 更换需求或刷新立即隐藏旧报价，迟到的响应不能覆盖新需求。
   const state: QuotePageState = result?.id === demandId && result.attempt === attempt ? result.state : { status: "loading" };
-  return <QuotePageContent state={state} retry={retry} demo={demo} />;
+  return <div className="space-y-4">
+    {!demo && <QuoteAcceptance data={state.status === "ready" ? state.data : null} onBusy={onBusy} refresh={retry} />}
+    <QuotePageContent state={state} retry={retry} demo={demo} />
+  </div>;
 }
