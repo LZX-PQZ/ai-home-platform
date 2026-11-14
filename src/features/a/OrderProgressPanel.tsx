@@ -1,0 +1,95 @@
+"use client";
+
+import { useState } from "react";
+import type { OrderSummaryDTO, ScheduleDTO, SourceDTO } from "@/contracts";
+import { Badge, Button, C, Card, Note, SectionHead } from "./ui";
+import {
+  availableProgressActions,
+  orderProgressErrorMessage,
+  submitOrderProgress,
+  type ProgressActionCandidate,
+} from "./order-progress";
+
+export function OrderProgressPanel({
+  demandId,
+  order,
+  schedule,
+  source,
+  reload,
+}: {
+  demandId: string;
+  order: OrderSummaryDTO | null;
+  schedule: ScheduleDTO | null;
+  source: SourceDTO | null;
+  reload: () => void;
+}) {
+  const [pending, setPending] = useState<ProgressActionCandidate | null>(null);
+  const [phase, setPhase] = useState<"idle" | "submitting" | "success" | "failed">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const [responseSource, setResponseSource] = useState<SourceDTO | null>(null);
+
+  if (!order) {
+    return (
+      <Card className="mt-4">
+        <SectionHead title="履约推进" aside={<Badge tone="neutral">等待接单信息</Badge>} />
+        <Note tone="info">
+          <p>确认开工、工序完成和确认完工需要当前订单编号及接单关系。业主端读取接口尚未接入，本页不会把需求编号当成订单编号，也不会发送猜测请求。</p>
+          <p className="mt-2">当前排期来源：{source ?? "未确认"}。请先刷新需求详情，待订单读取接口接入后再操作。</p>
+        </Note>
+      </Card>
+    );
+  }
+
+  const actions = availableProgressActions(order, schedule);
+  const confirm = async () => {
+    if (!pending || phase === "submitting") return;
+    setPhase("submitting");
+    setMessage(null);
+    try {
+      const result = await submitOrderProgress(demandId, order.id, schedule, pending);
+      setResponseSource(result.source);
+      setPending(null);
+      setPhase("success");
+      setMessage("操作已保存，正在重新读取需求和排期。");
+      reload();
+    } catch (cause) {
+      setPhase("failed");
+      setMessage(orderProgressErrorMessage(cause));
+    }
+  };
+
+  return (
+    <Card className="mt-4">
+      <SectionHead title="履约推进" aside={<Badge tone={order.source === "mock" ? "accent" : "brand"}>接单来源：{order.source}</Badge>} />
+      <p className={`mb-3 ${C.meta}`}>订单 {order.id} · 当前状态 {order.status} · 排期版本 {schedule?.version ?? "无"}</p>
+      {actions.length === 0 ? (
+        <Note tone="info">当前没有满足前置条件的履约动作。工序完成只表示业主确认当前工序完成，不等于专业验收或付款完成。</Note>
+      ) : (
+        <div className="grid gap-2">
+          {actions.map((action) => (
+            <div key={`${action.action}-${action.taskId ?? "order"}`} className="rounded-[10px] border border-[#EEF3F4] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[13px] font-medium text-[#16242B]">{action.label}</span>
+                <Button variant="secondary" size="sm" disabled={phase === "submitting"} onClick={() => { setPending(action); setPhase("idle"); setMessage(null); }}>
+                  先查看确认
+                </Button>
+              </div>
+              <p className={`mt-1 !mb-0 ${C.meta}`}>{action.description}</p>
+              {pending === action ? (
+                <div className="mt-3 rounded-[8px] bg-[#FEF6E7] p-3">
+                  <p className="!mb-2 text-[12.5px] text-[#8A5A06]">请再次确认：{action.label}？确认后才会发送请求。</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button disabled={phase === "submitting"} onClick={() => void confirm()}>{phase === "submitting" ? "提交中…" : "确认并发送"}</Button>
+                    <Button variant="ghost" disabled={phase === "submitting"} onClick={() => setPending(null)}>取消</Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+      {message ? <div className="mt-3"><Note tone={phase === "failed" ? "danger" : "info"} title={phase === "failed" ? "履约推进未确认" : undefined}><p>{message}</p>{responseSource ? <p className="mt-1">接口来源：{responseSource}。</p> : null}{phase === "failed" ? <Button variant="secondary" size="sm" onClick={reload}>重新加载核实</Button> : null}</Note></div> : null}
+      <p className={`mt-3 !mb-0 ${C.meta}`}>每次操作均使用当前排期版本；排期变化或结果不确定时不会自动重发。</p>
+    </Card>
+  );
+}

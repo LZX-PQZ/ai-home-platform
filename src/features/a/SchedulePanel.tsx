@@ -22,6 +22,7 @@ import {
 import { useSchedule, type ScheduleState } from "./useSchedule";
 import { PhotoInspectionPanel } from "./PhotoInspectionPanel";
 import { ScheduleVersionControls } from "./ScheduleVersionControls";
+import { OrderProgressPanel } from "./OrderProgressPanel";
 
 /**
  * 业主端「施工进度」页。
@@ -328,7 +329,12 @@ export function ScheduleContent({ id, version, state, reload }: {
         </div>
       </div>
 
-      {version === undefined ? <PhotoInspectionPanel demandId={id} /> : null}
+      {version === undefined ? (
+        <>
+          <OrderProgressPanel demandId={id} order={null} schedule={data} source={source} reload={reload} />
+          <PhotoInspectionPanel demandId={id} />
+        </>
+      ) : null}
     </div>
   );
 }
