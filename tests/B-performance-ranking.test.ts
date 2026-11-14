@@ -97,7 +97,8 @@ test("浏览器与匹配 API 使用共享目录默认 live 汇总，mock 样本�
   });
   const http = await GET(new Request("http://localhost/api/match"));
   assert.equal(http.status, 200);
-  assert.equal(http.headers.get("cache-control"), "no-store");
+  assert.equal(http.headers.get("cache-control"), "private, no-store");
+  assert.equal(http.headers.get("vary"), "Cookie");
   const api = await http.json();
   const browser = await loadMatches(demoDemand.id);
   const comparable = (rows: typeof browser.response.data) => rows.map(row => ({ id: row.provider.id, score: row.score, reasons: row.reasons, performance: { ...row.provider.performance, calculatedAt: "snapshot" } }));
