@@ -1,5 +1,6 @@
 import { Demand, DemandIdParams, type DemandDTO } from "@/contracts";
 import { apiGet, ApiClientError } from "@/lib/api-client";
+import { demandAccessFailure } from "./demand-access-recovery";
 
 export async function loadAdminDemandDetail(demandId: DemandDTO["id"]) {
   const params = DemandIdParams.safeParse({ id: demandId });
@@ -16,15 +17,15 @@ export type AdminDemandDetailState =
   | { status: "loading" }
   | { status: "ready"; response: Awaited<ReturnType<typeof loadAdminDemandDetail>> }
   | { status: "not-found" }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; canExitOwnerSession?: boolean };
 
 export function adminDemandDetailFailureState(error: unknown): Extract<AdminDemandDetailState, { status: "not-found" | "error" }> {
+  const access = demandAccessFailure(error);
+  if (access) return { status: "error", ...access };
   if (error instanceof ApiClientError) {
     if (error.status === 404 && error.code === "DEMAND_NOT_FOUND") return { status: "not-found" };
     const messages: Partial<Record<number, string>> = {
       400: "需求编号无效，请从平台看板或售后工单重新打开。",
-      401: "请完成平台管理身份验证后重试。角色导航不能代替登录。",
-      403: "当前身份无权查看此需求，请核实平台管理权限。",
       501: "需求详情查询尚未实现，请等待接口接入后重试。",
       503: "需求服务暂时不可用，请稍后重试。",
     };

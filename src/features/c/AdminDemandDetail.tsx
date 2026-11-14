@@ -6,6 +6,7 @@ import type { DemandDTO } from "@/contracts";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button, C, Empty } from "@/components/ui";
 import { DemandSource } from "./DemandSource";
+import { DemandAccessRecovery } from "./DemandAccessRecovery";
 import { formatBudget, renovationLabels } from "./demand-hall";
 import { adminDemandStatusLabels } from "./admin-demand-overview";
 import { adminDemandDetailFailureState, loadAdminDemandDetail, type AdminDemandDetailState } from "./admin-demand-detail";
@@ -38,6 +39,8 @@ export function AdminDemandDetailContent({ demandId, state, onReload }: {
       </div>
       <div className={`${C.note} ${C.noteWarn}`}>
         <p>当前为平台管理演示入口，可能包含模拟数据，来源以加载后的标识为准。角色导航不代表登录鉴权。</p>
+        <p>已发布需求公开可读；其他状态仅所属业主登录后可读。管理员专属读取尚未接入，切换角色或从工单进入不会扩大可见范围。</p>
+        <p>登录、退出或身份变化后，请点击“刷新详情”（加载失败时点击“重新加载”）。退出业主会话后，非公开需求不可查看。</p>
         <p className="!mb-0">本页仅供查看需求，不能修改需求、接单或处理工单。需求状态由接口提供；关联需求不代表已确认责任服务方或售后处理结果。</p>
       </div>
 
@@ -46,6 +49,7 @@ export function AdminDemandDetailContent({ demandId, state, onReload }: {
         <div className={`${C.card} border-danger/30`} role="alert">
           <h2>暂时无法加载需求详情</h2>
           <p className="!mb-0">{state.message}</p>
+          {state.canExitOwnerSession && <DemandAccessRecovery />}
         </div>
       )}
       {state.status === "not-found" && (
