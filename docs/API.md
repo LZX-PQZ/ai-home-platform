@@ -20,6 +20,9 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/auth/demo-provider | DemoProviderSession | D | 读取演示会话状态，始终标 mock；默认 disabled |
 | POST /api/auth/demo-provider | DemoProviderLoginInput → DemoProviderSession | D | 显式开启后登录固定演示服务方，设置 HttpOnly cookie |
 | DELETE /api/auth/demo-provider | DemoProviderSession | D | 同源退出并撤销数据库会话，清除 cookie |
+| GET /api/auth/owner | OwnerSessionState | D | 读取业主凭证和当前账户，返回 signed_in / signed_out，不续期 |
+| POST /api/auth/owner | OwnerLoginInput → OwnerSessionState | D | 验证密码并在事务内重验凭证/角色，轮换当前浏览器的业主会话 |
+| DELETE /api/auth/owner | OwnerSessionState | D | 同源撤销当前会话，成功后清除 cookie，可重复退出 |
 | GET /api/demand | Demand[] | D | 查询 Prisma；每条 `Demand` 输出 `source`，列表含 `demo-demand` 时整体仍标 mock |
 | POST /api/demand | DemandInput → Demand | D | 校验后写入 Prisma，创建为 published，返回 live；无数据库时 503 |
 | GET /api/demand/[id] | Demand | D | 按 ID 查询 Prisma；每条输出 `source`，不存在 404，不回退到 demo-demand |
@@ -65,7 +68,7 @@ PR #74 已将 `handleQuoteSubmission` 的默认预检及事务会话 reader 接�
 
 ## GET /api/quote?demandId=：已冻结规则，尚未开放
 
-现有 GET 仍返回固定演示报价，尚不解析或执行 demandId 查询。D 已提供公共 `QuoteQuery`/DTO、持久化业主会话读取及事务授权器；B 的公开 GET/页面接线和业主身份验证登录入口仍未实现，调用方目前不能把带参数的响应当作该需求的数据库报价。
+现有 main 的 GET 仍返回固定演示报价，尚不解析或执行 demandId 查询。D 已提供公共 `QuoteQuery`/DTO、持久化业主会话读取及事务授权器，本次补齐密码登录入口；B 的公开 GET 接线位于待合入 PR #79，D 已另提 #87 修正来源断言，页面接线仍待 B 完成。#79 合入前调用方不能把带参数的响应当作该需求的数据库报价。
 
 冻结的目标协议：无参数保留固定 mock；显式查询仅接受单一非空 demandId，拒绝纯空白、重复和未知参数，非空 ID 原样精确查找。仅当前已验证的业主可读取数据库 `DemandOrder.ownerId === session.userId` 的需求；服务方（含演示 provider-a）和管理员均返回 403，此接口不给跨业主或跨服务方的比较权限。
 
@@ -81,7 +84,17 @@ PR #74 已将 `handleQuoteSubmission` 的默认预检及事务会话 reader 接�
 
 `readOwnerVerifiedSession(request, tx)` 必须接收事务客户端。它读取 `__Host-ai_home_owner_session` 的随机凭证，在 OwnerSession 表比对 SHA-256 摘要、到期与撤销状态，再检查当前账户。无效凭证返回 null；当前角色不符抛 403，数据库异常抛 503。授权器将 null 映射为 401；只有有效服务方演示 cookie 时返回 403，不转换为业主。有效业主 cookie 优先，存在但无效/重复的业主 cookie 不回退其他身份。授权器只允许 GET/HEAD，不能用于需求修改/删除。
 
-OwnerSession 的服务端签发/撤销函数仅由 D 内部认证代码使用，不从 server-auth 暴露，也无公开签发路由。签发要求上游已完成身份验证，并检查当前账户仍为 owner；随机 256 位令牌只经 HTTPS 的 Set-Cookie 交付，HttpOnly、Secure、SameSite=Strict、Path=/，绝对有效期 30 分钟。数据库只存摘要。当前密码/外部身份验证与登录/注销路由尚未交付，因此不能宣称已提供可用的业主登录流程。测试中的身份是临时数据库合成夹具，不是生产认证。具体接线和限制见 `docs/requests/D-owner-quote-read-auth.md`。
+OwnerSession 的服务端签发/撤销函数仅由 D 内部认证代码使用，不从 server-auth 暴露，也不提供按 userId 直接签发的接口。`POST /api/auth/owner` 验证密码后，在写事务内重新核验当前凭证和 owner 角色，再签发随机 256 位 cookie。Cookie 使用 `__Host-ai_home_owner_session`、HttpOnly、Secure、SameSite=Strict、Path=/，绝对有效期 30 分钟，数据库仅存摘要。业务读取器和授权器签名不变，继续在调用方事务中校验。基础设施记录见 `docs/requests/D-owner-quote-read-auth.md`，登录协议见下节。
+
+### 业主密码登录
+
+`OwnerLoginInput` 仅为 `{login,password}`：账号 3–64 位 ASCII 字母、数字或 `._-`，去除首尾空白并转小写；密码 15–128 字符，保留原值。未知字段一律拒绝。正文最多 4096 字节，非法 JSON/字段或超大正文统一 400/VALIDATION_ERROR。账号由维护者交互运行 `npm run owner:create` 开通，只创建新 owner；没有公开注册、默认密码或自动接管演示账号。
+
+POST/DELETE 强制同源 Origin，缺失/跨源或 cross-site 返回 403/FORBIDDEN；所有三种方法仅支持 HTTPS 或 localhost/127.0.0.1/[::1] 的本地 HTTP。不会因 forwarded 头降低检查。成功 `envelope(OwnerSessionState)` 标 live：`{status:"signed_out"}` 或 `{status:"signed_in",identity:OwnerIdentity,expiresAt:"ISO 8601"}`；cookie/密码/摘要不进入 JSON。所有响应 `Cache-Control: private, no-store` 和 `Vary: Cookie`。
+
+密码使用随机盐的 scrypt 摘要，未知账号执行同等密码计算。错误密码、未知账号、当前角色不符及验证期间凭证变化均返回相同 401/INVALID_CREDENTIALS。登录尝试通过数据库限频，每账号 15 分钟最多 5 次、全局 5 分钟最多 60 次，成功也计数；未知账号执行相同规则，重启不清零。超限或进程密码计算繁忙为 429/RATE_LIMITED，带 Retry-After。存储或摘要错误为 503/SESSION_UNAVAILABLE，不暴露内部异常，不声称已登录或退出。
+
+POST 在事务外计算密码，再在写事务重读凭证和角色，撤销此浏览器的旧业主会话并签发新凭证；签发失败回滚撤销。GET 读取当前账户，不续期；无效/重复/过期/撤销凭证或账户不再是 owner 时显示 signed_out。DELETE 可幂等退出，存储撤销成功后才清 cookie；服务方演示会话独立保留。浏览器已使用临时合成账号验收错误密码、登录、刷新、本人需求编辑、退出后编辑被拒绝；这不是实名认证，也不代表其余业务访问控制已补齐。
 
 ## 服务端身份基础设施
 
@@ -138,7 +151,7 @@ Ticket 包含 demandId、responsibleProviderId（可空）、category、status�
 |---|---|---|---|
 | POST /api/demand | DemandInput | 201 envelope(Demand)，初始 published | 已实现；写入 Prisma，返回 live |
 | GET /api/demand/[id] | DemandIdParams | 200 envelope(Demand) | 已实现；按 ID 查询 Prisma，不存在 404 |
-| PUT /api/demand/[id] | DemandIdParams + DemandUpdateInput | 200 envelope(Demand) | 已接业主会话、同源检查及事务内归属/状态校验；业主登录入口待实现 |
+| PUT /api/demand/[id] | DemandIdParams + DemandUpdateInput | 200 envelope(Demand) | 已接业主会话、同源检查及事务内归属/状态校验，可使用密码登录凭证 |
 | DELETE /api/demand/[id] | DemandIdParams | 200 envelope(DemandDeleteResult) | 已接业主会话、同源检查及事务内归属/状态/关联校验与删除 |
 
 PUT 完整替换可编辑字段，全部必填，不提供 PATCH。创建/更新禁止客户端设置 id、ownerId、status、source 或未知字段；description/city 去除首尾空白后不可为空，面积为有限正数，预算为非负安全整数分且下限不超过上限。更新/删除只允许 draft 或 published；进入 contracted、in_progress 或 completed 后返回 409/INVALID_STATE。PUT/DELETE 先验证归属，再检查状态和只读规则：本人 `demo-demand` 返回 409/DEMO_DEMAND_READ_ONLY，他人的演示需求仍为 404。DELETE 检查所有报价（含 draft/rejected）、排期、付款、评价和工单关联，存在关联时返回 409/DEMAND_HAS_RELATED_RECORDS，不级联清除。删除结果为 {id,deleted:true}，仍须包含来源信封。
@@ -149,4 +162,4 @@ PUT 所有响应均带 `Cache-Control: private, no-store`、`Vary: Cookie`。输
 
 DELETE 无请求体，非空 ID 原样精确查找，错误顺序为路径 400 → 方法/同源 Origin 403 → 事务内业主会话 401/403/503 → 本人需求 404 → 只读/状态/关联约束 409 → 删除。凭证规则与 PUT 一致；他人和不存在统一 404。会话、当前账号、归属、状态、五类关联检查、删除及输出校验全部处于同一个 Serializable 事务；最后 DELETE SQL 也限制 ID、ownerId、可编辑状态和关联均为空，必须恰好删除一条。成功为 200/live，重复删除为 404；所有响应 private, no-store、Vary: Cookie。事务/存储故障为中性 503/DATABASE_UNAVAILABLE，提示刷新核实，不承诺之前一定未删除。详见 `docs/requests/D-demand-delete-auth.md`。
 
-需求 POST 仍固定归属 demo-owner，列表/详情仍缺少访问隔离。PUT/DELETE 的修复不能代表整个需求模块已形成生产权限边界。业主密码登录已在 PR #90 单独提交，尚待合入；本 PR 基线尚无浏览器登录入口，测试使用临时数据库合成账号及 D 内部签发函数，不是公开登录流程。后续事项已登记在 `docs/tasks/D.md`。
+需求 POST 仍固定归属 demo-owner，列表/详情仍缺少访问隔离。密码登录和 PUT/DELETE 的修复不能代表整个需求模块已形成生产权限边界。维护者开通的新账号可登录并操作本人已有需求，但不会自动取得旧需求或 POST 创建的 demo-owner 需求归属。未登录操作为 401，他人需求为 404。后续事项已登记在 `docs/tasks/D.md`。

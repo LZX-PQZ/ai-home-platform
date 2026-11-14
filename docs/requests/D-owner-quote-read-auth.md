@@ -1,5 +1,7 @@
 # D：业主会话读取与报价读取授权
 
+后续更新（2026-11-14）：本文保留原交付范围；业主密码登录/注销现由 `docs/requests/D-owner-login.md` 补齐，需求 PUT 鉴权已随 #84 合入。下文“未提供登录”描述原阶段限制，不代表当前登录实现状态。DELETE、POST 归属和查询隔离仍待办。
+
 日期：2026-11-14 · 同步基线：main 05da047 · 对应请求：B-quote-read-protocol.md、D-quote-read-protocol.md
 
 ## 本次变更申请
