@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { PrismaClient, type Prisma } from "@prisma/client";
 import sharp from "sharp";
-import { INSPECTION_UPLOAD_LIMITS as limits, InspectionUploadFields, InspectionUploadResult, envelope } from "../src/contracts";
+import { INSPECTION_UPLOAD_LIMITS as limits, InspectionUploadFields, InspectionUploadResult,
+  PhotoInspectionResult, PHOTO_INSPECTION_DISCLAIMER, envelope } from "../src/contracts";
 import { handleInspectionUpload, handlePhotoInspection } from "../src/lib/inspection-images";
 import { handleDemandDelete } from "../src/lib/demand-delete";
 import { issueOwnerSession, OWNER_SESSION_COOKIE } from "../src/lib/owner-auth";
@@ -30,6 +31,13 @@ async function checked(response: Response, status: number, code?: string) {
   const raw = await response.json();
   assert.doesNotMatch(JSON.stringify(raw), /private-original-name|ownerId|tokenHash|sha256|private database|bytes":/);
   if (status === 201) return envelope(InspectionUploadResult).parse(raw);
+  if (status === 200) {
+    const result = envelope(PhotoInspectionResult).parse(raw);
+    assert.equal(result.meta.source, "mock");
+    assert.equal(result.data.disclaimer, PHOTO_INSPECTION_DISCLAIMER);
+    for (const finding of result.data.findings) assert.match(finding.message, /【模拟】未分析照片内容/);
+    return result;
+  }
   assert.equal(raw.ok, false); assert.equal(raw.error.code, code); assert.equal("data" in raw, false); assert.equal("meta" in raw, false);
   return raw;
 }
@@ -58,6 +66,8 @@ test("上传公共契约限制来源、引用、尺寸、批量和额外字段",
 });
 
 test("照片存储：隔离 SQLite、真实解码、归属、引用和事务回滚", async t => {
+  const originalMode = process.env.AI_MODE;
+  t.after(() => { if (originalMode === undefined) delete process.env.AI_MODE; else process.env.AI_MODE = originalMode; });
   const tempRoot = resolve(tmpdir());
   const fixture = mkdtempSync(join(tempRoot, "ai-home-D-images-"));
   const path = join(fixture, "images.db");
@@ -80,6 +90,7 @@ test("照片存储：隔离 SQLite、真实解码、归属、引用和事务回�
   const png: ImageFile = { bytes: await image().png().toBuffer(), type: "image/png" };
   const jpeg: ImageFile = { bytes: await image(12, 24).jpeg().withMetadata({ orientation: 6 }).toBuffer(), type: "image/jpeg" };
   t.beforeEach(async () => {
+    process.env.AI_MODE = "mock";
     await db.user.update({ where: { id: "one" }, data: { role: "owner" } });
     await db.ownerSession.update({ where: { tokenHash }, data: { userId: "one", revokedAt: null, expiresAt: issued.expiresAt } });
     await db.inspectionImage.deleteMany(); await db.demandOrder.deleteMany();
@@ -91,7 +102,7 @@ test("照片存储：隔离 SQLite、真实解码、归属、引用和事务回�
   const inspect = (refs: string[], id = "one", credential = cookie, client: Database = db) => handlePhotoInspection(inspectRequest(credential, { demandId: id, imageRefs: refs }), client);
   const saved = async () => (await checked(await upload(), 201)).data.images[0].imageRef as string;
 
-  await t.test("PNG/JPEG 真实重编码去元数据、旋转、回执无路径，引用有效仍明确 501", async () => {
+  await t.test("PNG/JPEG 真实重编码去元数据、旋转、回执无路径，上传 live 与检查 mock 区分", async () => {
     const before = Date.now();
     const response = await checked(await upload([png, jpeg]), 201);
     assert.equal(response.meta.source, "live"); assert.equal(response.data.demandId, "one");
@@ -107,7 +118,7 @@ test("照片存储：隔离 SQLite、真实解码、归属、引用和事务回�
       assert.equal(metadata.orientation, undefined); assert.equal(metadata.width, item.width); assert.equal(metadata.height, item.height);
       if (item.contentType === "image/jpeg") { assert.equal(item.width, 24); assert.equal(item.height, 12); assert.notDeepEqual(row.bytes, jpeg.bytes); }
     }
-    await checked(await inspect(response.data.images.map((entry: { imageRef: string }) => entry.imageRef)), 501, "NOT_IMPLEMENTED");
+    await checked(await inspect(response.data.images.map((entry: { imageRef: string }) => entry.imageRef)), 200);
     assert.equal(await db.inspectionImage.count(), 2);
     assert.equal((await db.demandOrder.findUniqueOrThrow({ where: { id: "one" } })).status, "published");
     assert.equal((await checked(await upload(), 201)).meta.source, "live"); assert.equal(await db.inspectionImage.count(), 3, "separate uploads do not deduplicate");
@@ -192,7 +203,7 @@ test("照片存储：隔离 SQLite、真实解码、归属、引用和事务回�
     assert.equal(await db.inspectionImage.count(), 1);
   });
 
-  await t.test("检查 JSON/查询限制，已授权有效引用仍 501，不改业务状态", async () => {
+  await t.test("检查 JSON/查询限制，已授权有效引用才返回 mock", async () => {
     const ref = await saved();
     for (const body of [{ demandId: "one", imageRefs: [] }, { demandId: "one", imageRefs: [ref, ref] }, { demandId: "one", imageRefs: [ref], ownerId: "one" }]) {
       await checked(await handlePhotoInspection(inspectRequest(cookie, body), db), 400, "VALIDATION_ERROR");
@@ -203,7 +214,49 @@ test("照片存储：隔离 SQLite、真实解码、归属、引用和事务回�
     }
     for (const handler of [handlePhotoInspection, handleInspectionUpload]) await checked(await handler(new Request(`${origin}/api/inspect?ownerId=one`,
       { method: "POST", headers: { origin, cookie } }), db), 400, "VALIDATION_ERROR");
-    await checked(await inspect([ref]), 501, "NOT_IMPLEMENTED");
+    await checked(await inspect([ref]), 200);
+  });
+
+  await t.test("mock 逐个绑定输入引用和顺序、生成时间及免责声明，整个数据库业务快照不变", async () => {
+    const files = await Promise.all(Array.from({ length: 10 }, async (_, i) => ({
+      type: "image/png", bytes: await image(20 + i, 10).png().toBuffer(),
+    })));
+    const uploaded = await checked(await upload(files), 201);
+    const refs = uploaded.data.images.map((item: { imageRef: string }) => item.imageRef).reverse();
+    const snapshot = () => db.$transaction(async tx => ({
+      demands: await tx.demandOrder.findMany(), images: await tx.inspectionImage.findMany(),
+      orders: await tx.serviceOrder.findMany(), schedules: await tx.schedule.findMany(),
+      payments: await tx.payment.findMany(), tickets: await tx.ticket.findMany(), reviews: await tx.review.findMany(),
+    }));
+    const before = await snapshot();
+    const started = Date.now();
+    for (const subset of [[refs[0]], refs]) {
+      const result = await checked(await inspect(subset), 200);
+      assert.equal(result.data.demandId, "one");
+      assert.deepEqual(result.data.findings.map((item: { imageRef: string }) => item.imageRef), subset);
+      assert.ok(result.data.findings.every((item: { severity: string }) => item.severity === "low"));
+      assert.ok(Date.parse(result.data.reviewedAt) >= started && Date.parse(result.data.reviewedAt) <= Date.now());
+    }
+    assert.deepEqual(await snapshot(), before);
+    await checked(await inspect([...refs, `inspect-image/${randomUUID()}`]), 400, "VALIDATION_ERROR");
+  });
+
+  await t.test("未设置模式默认 mock；live 明确 501，非法模式 503，均不降级或绕过授权与存储校验", async () => {
+    const ref = await saved();
+    delete process.env.AI_MODE;
+    await checked(await inspect([ref]), 200);
+    for (const mode of ["live", "", "LIVE", "invalid"]) {
+      process.env.AI_MODE = mode;
+      await checked(await inspect([ref]), mode === "live" ? 501 : 503, mode === "live" ? "NOT_IMPLEMENTED" : "INSPECTION_UNAVAILABLE");
+      await checked(await inspect([ref], "one", ""), 401, "UNAUTHENTICATED");
+      await checked(await inspect([ref], "one", otherCookie), 404, "DEMAND_NOT_FOUND");
+      await checked(await inspect([`inspect-image/${randomUUID()}`]), 404, "IMAGE_NOT_FOUND");
+    }
+    await db.inspectionImage.update({ where: { id: ref }, data: { sha256: "broken" } });
+    for (const mode of ["mock", "live", "invalid"]) {
+      process.env.AI_MODE = mode;
+      await checked(await inspect([ref]), 503, "IMAGE_STORAGE_UNAVAILABLE");
+    }
   });
 
   await t.test("解码前后均重验会话/角色/归属/状态；最终 SQL 再限制，失败全部回滚", async () => {
@@ -244,11 +297,17 @@ test("照片存储：隔离 SQLite、真实解码、归属、引用和事务回�
 
   await t.test("检查引用同一事务重验授权与 SQL 范围，不接收跨归属或损坏的数据库结果", async () => {
     const ref = await saved();
-    const revoked = decorate(db, async (tx, count) => {
-      if (count === 2) await tx.ownerSession.update({ where: { tokenHash }, data: { revokedAt: new Date() } });
-      return tx;
-    });
-    await checked(await inspect([ref], "one", cookie, revoked), 401, "UNAUTHENTICATED");
+    for (const [change, status, code] of [
+      [async (tx: Prisma.TransactionClient) => { await tx.ownerSession.update({ where: { tokenHash }, data: { revokedAt: new Date() } }); }, 401, "UNAUTHENTICATED"],
+      [async (tx: Prisma.TransactionClient) => { await tx.ownerSession.update({ where: { tokenHash }, data: { userId: "two" } }); }, 403, "FORBIDDEN"],
+      [async (tx: Prisma.TransactionClient) => { await tx.user.update({ where: { id: "one" }, data: { role: "provider" } }); }, 403, "FORBIDDEN"],
+      [async (tx: Prisma.TransactionClient) => { await tx.demandOrder.update({ where: { id: "one" }, data: { ownerId: "two" } }); }, 404, "DEMAND_NOT_FOUND"],
+      [async (tx: Prisma.TransactionClient) => { await tx.demandOrder.update({ where: { id: "one" }, data: { status: "draft" } }); }, 409, "INVALID_STATE"],
+      [async (tx: Prisma.TransactionClient) => { await tx.inspectionImage.update({ where: { id: ref }, data: { expiresAt: new Date(0) } }); }, 404, "IMAGE_NOT_FOUND"],
+    ] as const) {
+      const changed = decorate(db, async (tx, count) => { if (count === 2) await change(tx); return tx; });
+      await checked(await inspect([ref], "one", cookie, changed), status, code);
+    }
     const row = await db.inspectionImage.findUniqueOrThrow({ where: { id: ref } });
     for (const patch of [{ ownerId: "two" }, { demandId: "other" }, { id: `inspect-image/${randomUUID()}` },
       { sizeBytes: row.sizeBytes + 1 }, { expiresAt: new Date(0) }, { contentType: "image/svg+xml" }, { bytes: new Uint8Array([1]) }]) {
@@ -261,7 +320,7 @@ test("照片存储：隔离 SQLite、真实解码、归属、引用和事务回�
       } }) as unknown as Prisma.TransactionClient);
       await checked(await inspect([ref], "one", cookie, corrupt), 503, "IMAGE_STORAGE_UNAVAILABLE");
     }
-    await checked(await inspect([ref]), 501, "NOT_IMPLEMENTED");
+    await checked(await inspect([ref]), 200);
   });
 
   await t.test("到期仅引用失效，成功上传清理所有过期行并保留其他业主有效照片；删除需求级联照片", async () => {
@@ -274,7 +333,7 @@ test("照片存储：隔离 SQLite、真实解码、归属、引用和事务回�
     await checked(await upload(), 201);
     assert.equal(await db.inspectionImage.count({ where: { id: ref } }), 0); assert.equal(await db.inspectionImage.count({ where: { id: otherRef } }), 0);
     assert.deepEqual(await db.inspectionImage.findUniqueOrThrow({ where: { id: active.id } }), active);
-    await checked(await inspect([active.id], "other", otherCookie), 501, "NOT_IMPLEMENTED");
+    await checked(await inspect([active.id], "other", otherCookie), 200);
     const deleted = await handleDemandDelete(new Request(`${origin}/api/demand/one`, { method: "DELETE", headers: { origin, cookie } }), "one", db);
     assert.equal(deleted.status, 200); assert.equal(await db.inspectionImage.count({ where: { demandId: "one" } }), 0);
   });

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { InspectionImage, Prisma, PrismaClient } from "@prisma/client";
 import sharp from "sharp";
 import { INSPECTION_UPLOAD_LIMITS as limits, InspectionImageRef, InspectionUploadedImage, InspectionUploadFields,
-  InspectionUploadResult, PhotoInspectionInput, envelope, type ApiFailure } from "@/contracts";
+  InspectionUploadResult, PhotoInspectionInput, PhotoInspectionResult, PHOTO_INSPECTION_DISCLAIMER, envelope, type ApiFailure } from "@/contracts";
 import { DEMO_DEMAND_ID } from "@/lib/demand";
 import { isSameOrigin } from "@/lib/demo-provider-session";
 import { OwnerAccessError, readOwnerVerifiedSession } from "@/lib/owner-auth";
@@ -23,6 +23,7 @@ const failures = {
   IMAGE_QUOTA_EXCEEDED: { status: 409, message: "照片存储配额不足，请等待有效期结束或联系维护者。" },
   IMAGE_UPLOAD_BUSY: { status: 429, message: "照片处理暂时繁忙，请稍后重试。" },
   NOT_IMPLEMENTED: { status: 501, message: "照片引用有效，但辅助分析尚未接通，未生成检查或验收结论。" },
+  INSPECTION_UNAVAILABLE: { status: 503, message: "照片检查模式配置无效，请联系维护者核实。" },
   IMAGE_STORAGE_UNAVAILABLE: { status: 503, message: "暂时无法确认照片存储状态，请稍后核实；重传会产生新引用。" },
 } as const;
 class ImageRejected extends Error {
@@ -196,7 +197,7 @@ export async function handleInspectionUpload(request: Request, db: Database = pr
   } catch (error) { return rejected(error); }
 }
 
-/** Validate stored references; a valid photo is not an AI inspection result. */
+/** Validate stored references before returning an explicitly simulated result; live analysis is not connected. */
 export async function handlePhotoInspection(request: Request, db: Database = prisma) {
   if (request.method !== "POST" || !isSameOrigin(request)) return failure("FORBIDDEN");
   if (new URL(request.url).searchParams.size) return failure("VALIDATION_ERROR");
@@ -207,7 +208,7 @@ export async function handlePhotoInspection(request: Request, db: Database = pri
     try { json = JSON.parse(bytes.toString("utf8")); } catch { throw new ImageRejected("INVALID_JSON"); }
     const input = PhotoInspectionInput.safeParse(json);
     if (!input.success) throw new ImageRejected("VALIDATION_ERROR");
-    await db.$transaction(async tx => {
+    const body = await db.$transaction(async tx => {
       const current = await requireOwner(request, tx, expected.userId);
       const demand = await ownedDemand(tx, input.data.demandId, current.userId);
       if (input.data.imageRefs.some(ref => !InspectionImageRef.safeParse(ref).success)) throw new ImageRejected("IMAGE_NOT_FOUND");
@@ -221,7 +222,17 @@ export async function handlePhotoInspection(request: Request, db: Database = pri
           || row.expiresAt.getTime() <= now.getTime()) throw new ImageRejected("IMAGE_STORAGE_UNAVAILABLE");
         receipt(row);
       }
+      const mode = process.env.AI_MODE ?? "mock";
+      if (mode === "live") throw new ImageRejected("NOT_IMPLEMENTED");
+      if (mode !== "mock") throw new ImageRejected("INSPECTION_UNAVAILABLE");
+      // Fixed demonstration text, never inferred from the stored pixels or a model.
+      return envelope(PhotoInspectionResult).parse({ ok: true, data: {
+        demandId: demand.id,
+        findings: input.data.imageRefs.map(imageRef => ({ imageRef, severity: "low",
+          message: "【模拟】未分析照片内容。本条仅演示辅助检查提示：请人工核实关键细节是否清晰，必要时补拍近景和不同角度；不代表发现缺陷或施工合格。" })),
+        reviewedAt: now.toISOString(), disclaimer: PHOTO_INSPECTION_DISCLAIMER,
+      }, meta: { source: "mock" } });
     }, { isolationLevel: "Serializable" });
-    return failure("NOT_IMPLEMENTED");
+    return Response.json(body, { headers });
   } catch (error) { return rejected(error); }
 }
