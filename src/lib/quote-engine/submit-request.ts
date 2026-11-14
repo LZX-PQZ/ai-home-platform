@@ -2,6 +2,7 @@ import { ZodError } from "zod";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { Quote, envelope, type ApiFailure } from "@/contracts";
 import { readIdempotencyKey } from "@/lib/idempotency";
+import { parseStoredQuoteSource } from "@/lib/quote-policy";
 import { readDemoVerifiedSession, providerIdentityFailureResponse, requireProviderIdentity, type VerifiedSessionReader } from "@/lib/server-auth";
 import { calculateQuoteSubmission } from "@/lib/quote-engine/submission";
 import { createQuoteAtomically, QuoteWriteRejected, type QuoteTransactionSessionReader } from "@/lib/quote-engine/transaction";
@@ -45,9 +46,8 @@ export async function handleQuoteSubmission(
   try {
     // 身份、回执和需求均由内核在同一事务复核；外部需求预检会破坏重放错误优先级。
     const result = await createQuoteAtomically(request, input, identity.identity, auth.readTransactionSession, db);
-    // 当前公开认证仅支持演示身份；落库与重放均不代表真实身份来源。
-    // 生产认证及持久化来源协议由 D 交付后再开放 live，不接受客户端来源声明。
-    const body = envelope(Quote).parse({ ok: true, data: result.quote, meta: { source: "mock" } });
+    // 首次和重放均使用原记录来源，不由当前会话重写历史来源。
+    const body = envelope(Quote).parse({ ok: true, data: result.quote, meta: { source: parseStoredQuoteSource(result.quote.source) } });
     return Response.json(body, { status: result.replayed ? 200 : 201 });
   } catch (error) {
     if (error instanceof QuoteWriteRejected) {

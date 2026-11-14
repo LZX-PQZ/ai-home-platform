@@ -1,12 +1,13 @@
-import { loadQuoteData } from "@/lib/quote-engine/data";
+import { handleQuoteRead } from "@/lib/quote-engine/read-request";
 import { handleQuoteSubmission } from "@/lib/quote-engine/submit-request";
 
-export function GET() {
-  // 沿用演示入口；D 已冻结读取协议，公共查询契约和业主授权适配器待交付。
-  return Response.json(loadQuoteData()!.response);
+export const dynamic = "force-dynamic";
+
+export function GET(request: Request) {
+  return handleQuoteRead(request);
 }
 
 export async function POST(request: Request) {
-  // 演示会话在预检和事务内分别验证；首次提交及重放均标记 mock。
+  // 演示会话在预检和事务内分别验证；回执使用报价的持久化来源。
   return handleQuoteSubmission(request);
 }
