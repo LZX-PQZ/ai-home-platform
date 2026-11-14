@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 const base = process.env.SMOKE_BASE_URL ?? 'http://127.0.0.1:3000';
 let demoSchedule;
+let demoTickets;
 for (const route of ['/', '/owner', '/owner/demand/chat', '/owner/demand/demo-demand', '/owner/matches/demo-demand', '/owner/quotes/demo-demand', '/owner/project/demo-demand', '/owner/payments/demo-demand', '/provider', '/provider/demand/demo-demand', '/provider/orders', '/admin', '/admin/tickets']) {
  const response = await fetch(base + route);
  assert.equal(response.status, 200, route);
@@ -18,6 +19,7 @@ for (const route of ['/api/health', '/api/demand', '/api/provider', '/api/match'
  }
  else assert.equal(payload.meta.source, 'mock');
  if (route === '/api/schedule') demoSchedule = payload.data;
+ if (route === '/api/ticket') demoTickets = payload.data;
 }
 const demoDetail = await fetch(base + '/api/demand/demo-demand');
 assert.equal(demoDetail.status, 200);
@@ -66,18 +68,41 @@ for (const path of ['/api/schedule', '/api/schedule?demandId=demo-demand', '/api
  const body = await response.json();
  assert.equal(body.ok, false); assert.equal(body.error.code, 'UNAUTHENTICATED'); assert.equal('data' in body, false);
 }
-// Schedule creation is implemented and owner-only; anonymous smoke must never write fixtures.
+const ticketDemo = await fetch(base + '/api/ticket?demandId=demo-demand');
+assert.equal(ticketDemo.status, 200);
+assert.equal(ticketDemo.headers.get('cache-control'), 'private, no-store');
+const ticketDemoBody = await ticketDemo.json();
+assert.equal(ticketDemoBody.ok, true); assert.equal(ticketDemoBody.meta.source, 'mock');
+assert.deepEqual(ticketDemoBody.data, demoTickets);
+assert.ok(ticketDemoBody.data.length > 0);
+assert.ok(ticketDemoBody.data.every(ticket => ticket.demandId === 'demo-demand'));
+for (const [path, cookie, status, code] of [
+ ['/api/ticket?demandId=smoke-private-demand', '', 401, 'UNAUTHENTICATED'],
+ ['/api/ticket?unknown=', '', 400, 'VALIDATION_ERROR'],
+ ...['/api/ticket', '/api/ticket?demandId=demo-demand', '/api/ticket?demandId=smoke-private-demand']
+  .map(path => [path, '__Host-ai_home_owner_session=invalid', 401, 'UNAUTHENTICATED']),
+]) {
+ const response = await fetch(base + path, { headers: { Cookie: cookie } });
+ assert.equal(response.status, status, path);
+ assert.equal(response.headers.get('cache-control'), 'private, no-store');
+ assert.ok((response.headers.get('vary') ?? '').split(',').some(value => value.trim().toLowerCase() === 'cookie'));
+ const body = await response.json();
+ assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
+}
+// Implemented owner-only writes: anonymous smoke must never create fixtures.
+for (const path of ['/api/schedule', '/api/ticket']) {
 for (const [headers, status, code] of [
  [{}, 403, 'FORBIDDEN'],
  [{ Origin: new URL(base).origin }, 401, 'UNAUTHENTICATED'],
  [{ Origin: new URL(base).origin, Cookie: '__Host-ai_home_owner_session=invalid' }, 401, 'UNAUTHENTICATED'],
 ]) {
- const response = await fetch(base + '/api/schedule', { method: 'POST', headers });
- assert.equal(response.status, status, 'schedule creation authorization');
+ const response = await fetch(base + path, { method: 'POST', headers });
+ assert.equal(response.status, status, `${path} creation authorization`);
  assert.equal(response.headers.get('cache-control'), 'private, no-store');
  assert.ok((response.headers.get('vary') ?? '').split(',').some(value => value.trim().toLowerCase() === 'cookie'));
  const body = await response.json();
  assert.equal(body.ok, false); assert.equal(body.error.code, code); assert.equal('data' in body, false);
+}
 }
 const chat = await fetch(base + '/api/demand/chat', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({messages:[{role:'user',content:'我想翻新浴室'}]}) });
 assert.equal(chat.status, 200);
@@ -110,4 +135,4 @@ const forbidden = await withoutOrigin.json();
 assert.equal(forbidden.ok, false);
 assert.equal(forbidden.error.code, 'FORBIDDEN');
 assert.equal('data' in forbidden, false);
-console.log('13 个页面、20 个 GET 场景和 7 个 POST 场景通过（固定演示排期公开、真实排期隔离、匿名与失效凭证写入拒绝）。');
+console.log('13 个页面、26 个 GET 场景和 10 个 POST 场景通过（固定演示公开、真实排期/工单隔离、匿名与失效凭证写入拒绝）。');

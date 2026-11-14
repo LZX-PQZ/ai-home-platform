@@ -35,7 +35,20 @@ HTTP：400 输入错误；404 资源不存在；409 状态冲突；501 尚未实
 | GET /api/schedule[?demandId=<id>&version=<n>] | Schedule | D | 无参数或固定 demo-demand 为公开种子排期 mock；其他需求验证业主会话及归属后读取最新/指定版本 |
 | POST /api/schedule | ScheduleCreateInput → Schedule | D | 当前业主为本人 published/contracted 且无排期的需求创建 v1；201/live，工序均 pending 且责任服务方为空 |
 | GET /api/payment | Payment[] | D | 模拟节点列表；simulated 必须 true |
-| GET /api/ticket | Ticket[] | D | 固定 mock |
+| GET /api/ticket[?demandId=<id>] | Ticket[] | D | 无参数/精确 demo-demand 返回固定 mock；其他需求仅所属业主可读 |
+| POST /api/ticket | TicketCreateInput → Ticket | D | 当前业主为本人已发布及后续状态需求创建 open 工单，责任方 null；201/live |
+
+## 工单创建与读取
+
+`POST /api/ticket` 仅接收公共 `TicketCreateInput`：demandId、description、category。ID 非空且非纯空白，保留原值精确匹配；描述去首尾空白后 1–4000 字符；分类复用 quality/schedule/payment/attitude。拒绝所有额外字段（包括身份、id、状态、责任服务方和来源），正文最多 16 KiB，不接受查询参数。
+
+同源写入先校验实际业主会话，再于事务外读取正文；Serializable 写事务重验同一身份、当前角色、需求归属/状态。仅本人非演示需求的 published/contracted/in_progress/completed 可创建，draft 不可。最终 SQL 同时限制 ID、ownerId 和当前状态，输出在提交前校验、失败回滚。成功 201 `envelope(Ticket)`/live，服务端生成 ID，status=open、responsibleProviderId=null，不改变需求状态。live 只表示业主报告实际落库，不表示投诉属实、责任认定、派单、通知或售后完成。没有幂等键/内容去重，重复提交会创建独立工单；网络错误或 503 后先读取核实，不能自动重报。
+
+`GET /api/ticket?demandId=…` 仅接收恰好一个非空 demandId，拒绝未知/重复参数。在同一事务验证实际业主和需求归属，再按需求及当前 ownerId 查询 Ticket[]，按 id 升序（不表示时间顺序）；本人所有状态均可读，确实无工单为 200/live 空数组。他人与不存在需求统一 404/DEMAND_NOT_FOUND。公开需求详情不授予工单读取权限。
+
+无参数或精确 demo-demand 返回固定种子工单/mock，不读取可变数据库记录。存在业主 cookie 时仍需验证：坏/重复/过期/撤销均 401，角色变更 403，不回退匿名。无参数不会列出当前业主或全站的真实工单，C 现有管理演示页保持固定 mock。
+
+读写缺失/失效业主凭证、只有服务方凭证均为 401/UNAUTHENTICATED；当前账户角色不是 owner 或非同源写入为 403/FORBIDDEN。本人固定演示需求写入 409/DEMO_DEMAND_READ_ONLY，非法状态 409/INVALID_STATE；JSON/字段错误 400。数据库/事务/坏 DTO 返回中性 503/TICKET_UNAVAILABLE，不回退 mock 或空成功。所有响应 private, no-store、Vary: Cookie。接入使用共享 `apiPost(..., Ticket)` / `apiGet(..., Ticket.array())` 并显示来源；表单、管理授权、派单/解决、通知尚未实现。详见 `docs/requests/D-ticket-create.md`。
 
 ## GET /api/schedule
 
@@ -80,7 +93,7 @@ PR #74 已将 `handleQuoteSubmission` 的默认预检及事务会话 reader 接�
 完整决策见 `docs/requests/D-quote-idempotency.md`、`docs/requests/D-demo-provider-session.md`。已用真实演示 cookie 和隔离 SQLite 验证公开 POST；本次未做浏览器手工验收，业主公开 GET/页面读取仍未接通。
 
 ## 已预留、当前返回 501
-- POST /api/ticket、/api/inspect、/api/review：由 D 完成。ReviewInput 已预留；其他写入契约先补齐再让页面提交。POST /api/schedule 已实现首版计划创建，见上节；变更与验收仍未实现。
+- POST /api/inspect、/api/review：由 D 完成。ReviewInput 已预留；写入契约先补齐再让页面提交。POST /api/schedule 已实现首版计划创建，POST /api/ticket 已实现业主创建工单，见上节；排期变更与验收、工单派单与解决仍未实现。
 - POST /api/payment：已实现最小模拟确认动作，不做身份校验，任何调用方都可触发演示状态转换。输入为 `PaymentActionInput`，只允许 `pending → confirmed_demo` 一次转换；状态只保存在服务进程内，进程重启后恢复初始演示状态。成功返回 `Payment`，`meta.source` 为 `mock` 且 `simulated` 为 `true`；这不是支付接口，不代表真实付款、资金托管或数据库持久化。
 - 单需求详情 GET /api/demand/[id] 已建立；A 可使用返回的 ID 查询，未知 ID 返回 404。
 

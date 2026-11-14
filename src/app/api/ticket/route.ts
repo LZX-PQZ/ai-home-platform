@@ -1,4 +1,11 @@
-import { mockResponse, notImplemented } from "@/lib/api-response";
-import { tickets } from "@/lib/mock-data";
-export function GET() { return mockResponse(tickets); }
-export const POST=notImplemented;
+import { handleTicketCreate, handleTicketRead } from "@/lib/ticket";
+
+export const dynamic = "force-dynamic";
+
+export function GET(request: Request) {
+  return handleTicketRead(request);
+}
+
+export function POST(request: Request) {
+  return handleTicketCreate(request);
+}
