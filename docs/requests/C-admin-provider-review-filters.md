@@ -1,6 +1,6 @@
 # C：管理端评价汇总筛选
 
-基于 main `ee90b0e`，在 `/admin/provider-reviews` 补充公开目录内的关键词与评价样本筛选；不改变公共契约、接口、依赖或权限。
+基于 main `ee90b0e` 开始，交付前已同步 `161efb9`（A 的 #156），在 `/admin/provider-reviews` 补充公开目录内的关键词与评价样本筛选；不改变公共契约、接口、依赖或权限。
 
 ## 行为与验收
 
@@ -13,9 +13,9 @@
 ## 验证
 
 - 2026-11-14：定向回归 `node --import tsx --test tests/C-admin-provider-reviews.test.ts tests/C-admin-provider-review-filters.test.ts`，18/18 通过。覆盖组合筛选、字面匹配、未知/零样本、来源分离、空目录/无匹配、整批校验及 501/503 错误。
-- 全新临时隔离 SQLite 完成 `npm.cmd run db:setup` 后，`npm.cmd run check` 通过：964/964，lint、typecheck、boundaries 全部通过。
+- 全新临时隔离 SQLite 完成 `npm.cmd run db:setup` 后，首次 `npm.cmd run check` 为 964/964；同步 #156 后重新完整运行，最终 965/965，lint、typecheck、boundaries 全部通过。
 - `npm.cmd run build`、`npm.cmd run scope -- --role C --base origin/main`（5 个任务文件）、`git diff --check` 均通过。
-- `node scripts/run-production-smoke.mjs` 通过：13 个页面、32 个 GET 和 13 个 POST 基础场景，以及照片、履约、评价汇总与操作记录完整 HTTP 链路；runner 已停止自己的子进程。沿用合成账号/照片、演示认证及 mock 报价，live 报价仍仅为现有存储夹具。
+- `node scripts/run-production-smoke.mjs` 通过：13 个页面、32 个 GET 和 13 个 POST 基础场景，以及照片、履约、评价汇总与操作记录完整 HTTP 链路；同步 #156 后再次构建及完整冒烟也通过，runner 已停止自己的子进程。沿用合成账号/照片、演示认证及 mock 报价，live 报价仍仅为现有存储夹具。
 - Edge 实际访问生产页：live 默认 6 家、均无样本；`PROVIDER-A`（首尾空格）+ 已有评价无匹配，切换 mock 保留条件并显示 1/6、4.67/3 条；刷新保留条件且计算时间更新。清除保留 mock 来源；mock 已有评价 2/6、零样本 4/6、汇总未知 0/6，名称与城市筛选结果正确，整页重载恢复默认 live/全部。
 - 桌面和 390×844 窄屏验收通过，窄屏文档宽度与滚动宽度均为 375，无横向溢出；输入、样本选择及清除按钮可用。页面控制台无错误/警告。浏览器验收服务已停止，原 `.env` 和原数据库保留。
 
