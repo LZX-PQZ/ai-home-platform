@@ -33,6 +33,8 @@ macOS / Linux：使用 npm 而非 npm.cmd，使用 cp .env.example .env。
 访问 http://localhost:3000 。无 API key 也能启动。不要覆盖已有 .env。
 数据库仅本机使用，默认 prisma/dev.db，不提交、不跨成员同步。
 
+已有项目拉取包含 PR #81 的 main 后，也需要运行一次 `npm run db:setup`（PowerShell 使用 `npm.cmd run db:setup`），再重启应用。该变更新增 `Quote.source`；同步会保留已有记录，将历史报价来源保守回填为 `mock`，重复 seed 不覆盖现有记录。未同步的旧库查询报价可能因缺少该列而失败。使用现有 `.env` 即可，无需重新复制或重置数据库。
+
 ## 演示服务方登录
 
 在已有 `.env` 中设置 `DEMO_AUTH_ENABLED="true"`，运行 `npm.cmd run db:setup` 同步会话表与演示账号，再重启应用。点击导航下方的“演示服务方登录”，即可使用固定的 `provider-a` 演示身份；无需填写或提交真实账号密码。默认关闭，界面和接口均明确标记模拟来源。
