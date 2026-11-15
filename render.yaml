@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: ai-home-platform-preview
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm run db:setup && npm run start
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    disk:
+      name: app-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: file:/var/data/ai-home-platform.db
+      - key: AI_MODE
+        value: live
+      - key: DEMO_AUTH_ENABLED
+        value: "false"
+      - key: LLM_BASE_URL
+        value: https://nextpro.top/v1
+      - key: LLM_MODEL
+        value: deepseek-v4.1-flash
+      - key: LLM_TIMEOUT_MS
+        value: "30000"
+      - key: LLM_MAX_RETRIES
+        value: "1"
+      - key: LLM_API_KEY
+        sync: false
